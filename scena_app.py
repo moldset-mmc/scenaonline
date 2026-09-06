@@ -3090,6 +3090,8 @@ def run() -> None:
         page_title="SCENA — Моя Сцена", page_icon="✦", layout="wide",
         initial_sidebar_state="collapsed",
     )
+    if os.environ.get("SCENA_PREVIEW_ONLY") == "1":
+        st.caption("SCENA · Предпросмотр / Previzualizare / Preview · Данные временные; используйте тестовые контакты.")
     init_db(DB_PATH)
     expire_pending_requests(DB_PATH)
     apply_styles()

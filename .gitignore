@@ -1,4 +1,6 @@
 # Local data and credentials
+deploy/preview-credentials.json
+SCENA-PREVIEW-ACCESS.txt
 *.db
 *.db-*
 *.sqlite

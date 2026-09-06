@@ -1,0 +1,14 @@
+.git
+.venv
+venv
+__pycache__
+**/__pycache__
+tests
+qa
+*.db
+*.db-*
+*.log
+*.zip
+.env
+.env.*
+.streamlit/secrets.toml
