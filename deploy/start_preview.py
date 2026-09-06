@@ -5,7 +5,6 @@ launcher. Credentials are supplied privately at deployment time, never in Git.
 """
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 import shutil
@@ -24,12 +23,10 @@ def prepare_runtime(source: Path, runtime: Path) -> Path:
     return runtime
 
 
-def preview_password(source: Path, environment: dict[str, str]) -> str:
+def preview_password(environment: dict[str, str]) -> str | None:
     password = environment.get("SCENA_ADMIN_PASSWORD", "").strip()
     if not password:
-        private_file = source / "deploy/preview-credentials.json"
-        if private_file.is_file():
-            password = str(json.loads(private_file.read_text())["admin_password"])
+        return None
     if len(password) < 16:
         raise RuntimeError("A private preview administrator password is required.")
     return password
@@ -40,10 +37,13 @@ def main() -> None:
     if environment.get("VERCEL_ENV") == "production":
         raise RuntimeError("This launcher is for preview deployments only.")
     source = Path(__file__).resolve().parents[1]
-    password = preview_password(source, environment)
+    password = preview_password(environment)
     temporary_parent = Path(tempfile.mkdtemp(prefix="scena-preview-"))
     runtime = prepare_runtime(source, temporary_parent / "app")
-    environment["SCENA_ADMIN_PASSWORD"] = password
+    if password:
+        environment["SCENA_ADMIN_PASSWORD"] = password
+    else:
+        environment.pop("SCENA_ADMIN_PASSWORD", None)
     environment["SCENA_PREVIEW_ONLY"] = "1"
     environment["SCENA_DB_PATH"] = str(runtime / "scena_master.db")
     environment["PYTHONPATH"] = str(runtime)

@@ -923,10 +923,17 @@ def require_admin(locale: str) -> None:
     st.caption(ui("Заявки, график и настройки доступны только после проверки пароля."))
     configured = configured_admin_password()
     if not configured:
-        st.error(
-            ui("Пароль администратора не настроен. Запустите приложение через START-SCENA.cmd "
-            "или задайте переменную SCENA_ADMIN_PASSWORD.")
-        )
+        if os.environ.get("SCENA_PREVIEW_ONLY") == "1":
+            st.info({
+                "ru": "В этом предпросмотре открыты публичные страницы. Вход в кабинет закрыт.",
+                "ro": "Această previzualizare include paginile publice. Accesul la cont este închis.",
+                "en": "Public pages are available in this preview. Workspace access is closed.",
+            }.get(locale, "Workspace access is closed."))
+        else:
+            st.error(
+                ui("Пароль администратора не настроен. Запустите приложение через START-SCENA.cmd "
+                "или задайте переменную SCENA_ADMIN_PASSWORD.")
+            )
         st.markdown(f"{ui('[← Открыть публичную страницу](')}{page_url('scene', locale)})")
         st.stop()
     attempts = int(st.session_state.get("scena_admin_attempts", 0))
