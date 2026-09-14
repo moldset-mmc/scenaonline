@@ -35,7 +35,9 @@ def verify_services():
             receipt[access] = blob.put(key, data, access=access, token=os.environ['SCENA_'+access.upper()+'_BLOB_READ_WRITE_TOKEN'], content_type='image/png').url
     for access in ('private', 'public'):
         print('SCENA: verifying ' + access + ' storage', flush=True)
-        response = blob.get(receipt[access], access=access, token=os.environ['SCENA_'+access.upper()+'_BLOB_READ_WRITE_TOKEN'], use_cache=False)
+        # Consistent cache-bypass reads are supported only on private stores.
+        # Public probe paths are unique and never overwritten.
+        response = blob.get(receipt[access], access=access, token=os.environ['SCENA_'+access.upper()+'_BLOB_READ_WRITE_TOKEN'], use_cache=access == 'public')
         print('SCENA: ' + access + ' read status ' + str(response.status_code), flush=True)
         if response.status_code != 200 or hashlib.sha256(response.content).hexdigest() != receipt['sha256']:
             raise RuntimeError('Cloud storage round-trip verification failed.')
