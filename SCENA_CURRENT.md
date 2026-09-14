@@ -2,6 +2,8 @@
 
 The owner authorized completing and deploying the existing project. This release replaces the temporary launcher with durable storage and an authenticated cabinet. Production is deployed and the stable domain opens the public site and cabinet login. The receipt below distinguishes live checks from local tests.
 
+**Current limitation, 18:15 UTC:** the owner still reports severe loading delays. Fresh logs show repeated cold starts, upload HTTP 400 and generated-image HTTP 404. Streamlit session distribution across Vercel instances remains unresolved; the site must not yet be described as fully ready. See the second investigation in [PERFORMANCE.md](PERFORMANCE.md). The following cache/branding patch is a bounded correction, not architectural completion.
+
 ## Locations
 
 - Source: https://github.com/moldset-mmc/scenaonline ; production branch `main`.

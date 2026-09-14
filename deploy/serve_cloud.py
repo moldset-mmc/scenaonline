@@ -6,6 +6,7 @@ import html
 import hmac
 import json
 import os
+import re
 import secrets
 import time
 from urllib.parse import parse_qs, urlencode, urlsplit
@@ -21,6 +22,7 @@ BACKEND = 'http://127.0.0.1:8501'
 LOGIN_NONCE = '__Host-scena_login'
 _attempts = []
 HOP_HEADERS = {'connection', 'upgrade', 'keep-alive', 'transfer-encoding', 'content-length', 'proxy-connection'}
+IMMUTABLE_ASSET = re.compile(r'^/static/(?:js|css|media)/[^/]+\.[A-Za-z0-9_-]{8}\.(?:js|css|woff2?)$')
 
 
 class Health(tornado.web.RequestHandler):
@@ -126,6 +128,12 @@ class Proxy(tornado.web.RequestHandler):
                 self.add_header(name, value)
         if is_admin:
             self.set_header('Cache-Control', 'no-store')
+        elif (response.code == 200 and self.request.method in {'GET', 'HEAD'}
+              and IMMUTABLE_ASSET.fullmatch(self.request.path)
+              and 'Set-Cookie' not in response.headers):
+            # Browser max-age alone did not cache container responses on Vercel.
+            # Only content-hashed framework assets are shared between visitors.
+            self.set_header('Vercel-CDN-Cache-Control', 'public, max-age=31536000, immutable')
         self.finish(response.body or b'')
 
 

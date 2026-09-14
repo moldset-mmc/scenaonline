@@ -5,4 +5,5 @@ WORKDIR /opt/scena
 COPY requirements.txt requirements-cloud.txt ./
 RUN python -m pip install --no-cache-dir -r requirements-cloud.txt
 COPY . ./
+RUN python deploy/brand_frontend.py
 CMD ["python", "deploy/start_cloud.py"]

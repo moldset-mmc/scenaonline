@@ -33,6 +33,16 @@ class EchoSocket(websocket.WebSocketHandler):
         self.write_message(message, binary=isinstance(message, bytes))
 
 
+class FrameworkAsset(web.RequestHandler):
+    def get(self, filename):
+        if filename.startswith('missing'):
+            self.set_status(404)
+        if filename.startswith('cookie'):
+            self.set_cookie('fixture', 'private')
+        self.set_header('Content-Type', 'application/javascript')
+        self.write('/* immutable public framework asset */')
+
+
 class GatewayTests(AsyncHTTPTestCase):
     def setUp(self):
         self.environment = patch.dict(os.environ, {'SCENA_SESSION_SIGNING_KEY': 'ab'*32, 'SCENA_ADMIN_PASSWORD': 'fixture-secret'})
@@ -42,7 +52,7 @@ class GatewayTests(AsyncHTTPTestCase):
 
     def get_app(self):
         socket, port = bind_unused_port()
-        self.backend = httpserver.HTTPServer(web.Application([(r'/_stcore/stream', EchoSocket), (r'/.*', Echo)]))
+        self.backend = httpserver.HTTPServer(web.Application([(r'/_stcore/stream', EchoSocket), (r'/static/js/(.*)', FrameworkAsset), (r'/.*', Echo)]))
         self.backend.add_socket(socket)
         self.backend_patch = patch.object(serve_cloud, 'BACKEND', 'http://127.0.0.1:' + str(port))
         self.backend_patch.start()
@@ -69,6 +79,19 @@ class GatewayTests(AsyncHTTPTestCase):
         self.assertEqual(response.code, 503)
         self.assertEqual(response.headers['Retry-After'], '3')
         self.assertNotIn(b'Traceback', response.body)
+
+    def test_only_successful_immutable_public_assets_enter_shared_cache(self):
+        response = self.fetch('/static/js/index.Abc123_-.js')
+        self.assertEqual(response.code, 200)
+        self.assertIn('max-age=31536000', response.headers['Vercel-CDN-Cache-Control'])
+        for path in ('/', '/auth/login', '/static/js/index.js',
+                     '/static/js/missing.Abc123_-.js', '/static/js/cookie.Abc123_-.js'):
+            response = self.fetch(path)
+            self.assertNotIn('Vercel-CDN-Cache-Control', response.headers)
+        token = make_session()
+        response = self.fetch('/?page=admin', headers={'Cookie': COOKIE + '=' + token})
+        self.assertEqual(response.headers['Cache-Control'], 'no-store')
+        self.assertNotIn('Vercel-CDN-Cache-Control', response.headers)
 
     def test_login_uses_csrf_and_sets_secure_http_only_session(self):
         response = self.fetch('/auth/login')

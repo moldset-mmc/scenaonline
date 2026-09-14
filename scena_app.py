@@ -3107,7 +3107,7 @@ def run() -> None:
     global DB_PATH
     DB_PATH = Path(os.environ.get("SCENA_DB_PATH", APP_DIR / "scena_master.db"))
     st.set_page_config(
-        page_title="SCENA — Моя Сцена", page_icon="✦", layout="wide",
+        page_title="SCENA — Моя Сцена", layout="wide",
         initial_sidebar_state="collapsed",
     )
     if os.environ.get("SCENA_PREVIEW_ONLY") == "1":
