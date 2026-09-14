@@ -47,7 +47,14 @@ def main():
         connection.commit()
         os.environ['SCENA_SESSION_SIGNING_KEY'] = connection.execute("SELECT value FROM app_meta WHERE key='cloud_session_key'").fetchone()[0]
         from scena_cloud_auth import password_tag
-        connection.execute("INSERT INTO app_meta(key,value) VALUES ('cloud_auth_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (password_tag(),))
+        # A cold start of an old deployment must never reactivate its password.
+        deployment = os.environ.get('VERCEL_DEPLOYMENT_ID') or os.environ.get('VERCEL_URL')
+        marker = 'cloud_auth_deployment:' + deployment if deployment else None
+        connection.execute('BEGIN IMMEDIATE')
+        if not marker or not connection.execute('SELECT 1 FROM app_meta WHERE key=?', (marker,)).fetchone():
+            connection.execute("INSERT INTO app_meta(key,value) VALUES ('cloud_auth_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (password_tag(),))
+            if marker:
+                connection.execute('INSERT INTO app_meta(key,value) VALUES (?,?)', (marker, '1'))
         connection.commit()
     finally:
         connection.close()
@@ -60,7 +67,8 @@ def main():
         from scena_cloud_checks import verify_services
         try:
             report.update(verify_services())
-        except Exception:
+        except Exception as error:
+            print('SCENA: service check error type ' + type(error).__name__, flush=True)
             raise RuntimeError('SCENA durable service acceptance failed; inspect the configured database and Blob connections.') from None
     print('SCENA: durable services ready', flush=True)
     os.environ['SCENA_HEALTH_REPORT'] = json.dumps(report)

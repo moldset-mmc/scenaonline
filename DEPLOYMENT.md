@@ -1,3 +1,5 @@
+> Update 2026-09-14: durable Production support now exists. See [SCENA_CURRENT.md](SCENA_CURRENT.md) for the current release and live acceptance; the planning material below records earlier constraints.
+
 # Размещение SCENA
 
 Исходники SCENA Pilot V1.7. Состояние размещения обновлено 14 сентября 2026 года; актуальный чекпойнт: [SCENA_CURRENT.md](SCENA_CURRENT.md).

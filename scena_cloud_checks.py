@@ -36,11 +36,15 @@ def verify_services():
     for access in ('private', 'public'):
         print('SCENA: verifying ' + access + ' storage', flush=True)
         response = blob.get(receipt[access], access=access, token=os.environ['SCENA_'+access.upper()+'_BLOB_READ_WRITE_TOKEN'], use_cache=False)
+        print('SCENA: ' + access + ' read status ' + str(response.status_code), flush=True)
         if response.status_code != 200 or hashlib.sha256(response.content).hexdigest() != receipt['sha256']:
             raise RuntimeError('Cloud storage round-trip verification failed.')
-    response = httpx.get(receipt['private'], timeout=20)
+    print('SCENA: verifying private access denial', flush=True)
+    response = httpx.get(receipt['private'], timeout=20, follow_redirects=True)
+    print('SCENA: unauthenticated private status ' + str(response.status_code), flush=True)
     if response.status_code not in (401, 403, 404):
         raise RuntimeError('Private media access verification failed.')
+    print("SCENA: verifying database readback", flush=True)
     connection = connect(database)
     try:
         connection.execute("INSERT INTO app_meta(key,value) VALUES ('cloud_storage_probe',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (json.dumps(receipt),))
