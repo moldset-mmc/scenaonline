@@ -45,3 +45,7 @@ Git stores code and starter assets, not live records or uploaded originals. Expo
 - No application error appeared in the final browser console check. The browser extension still emitted its own metadata transmission error; this originates from a `chrome-extension://` content script and is not a SCENA application exception.
 
 This documentation-only commit triggers the same verified production code through the existing Git integration. Verify its subsequent deployment READY before final handoff. Future AI, Telegram, payments, individual accounts and email password recovery remain separate configurations/features.
+
+## Startup correction following owner feedback
+
+The owner reported very slow opening. Runtime logs confirmed an actual first-request 500 while the gateway raced Streamlit startup. This release waits for backend HTTP readiness, removes duplicate child migrations and repeated publication schema writes, and exposes safe startup stage timings. Local public-page SQL calls fell from 81 to 11; all 247 tests completed successfully with three existing skips. See [PERFORMANCE.md](PERFORMANCE.md). This is not a measured promise of a particular load time on the owner's device.

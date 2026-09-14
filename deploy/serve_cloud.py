@@ -115,7 +115,7 @@ class Proxy(tornado.web.RequestHandler):
         )
         try:
             response = await tornado.httpclient.AsyncHTTPClient().fetch(request, raise_error=False)
-        except tornado.httpclient.HTTPClientError:
+        except (tornado.httpclient.HTTPClientError, OSError):
             self.set_status(503)
             self.set_header('Retry-After', '3')
             self.finish('SCENA запускается. Обновите страницу через несколько секунд.')

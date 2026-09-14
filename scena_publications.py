@@ -44,29 +44,30 @@ def _defaults():
             "kind": "story", "frame_style": "auto", "frame_format": "portrait"}
 
 
-def initialize_publications(connection):
+def initialize_publications(connection, *, ensure_schema=True):
     """Additive, idempotent migration; caller owns the encompassing transaction."""
-    for key in ("installation_id", "owner_id"):
-        connection.execute("INSERT OR IGNORE INTO app_meta(key,value) VALUES (?,?)", (key, str(uuid.uuid4())))
-    connection.execute("INSERT OR IGNORE INTO app_meta(key,value) VALUES ('publications_schema_version','1')")
-    connection.execute("""CREATE TABLE IF NOT EXISTS publication_records (
-        post_id INTEGER PRIMARY KEY REFERENCES posts(id), public_id TEXT NOT NULL UNIQUE,
-        revision INTEGER NOT NULL, public_revision INTEGER NOT NULL DEFAULT 0,
-        status TEXT NOT NULL, draft_json TEXT NOT NULL, published_json TEXT,
-        updated_at TEXT NOT NULL)""")
-    connection.execute("""CREATE TABLE IF NOT EXISTS publication_versions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL REFERENCES posts(id),
-        revision INTEGER NOT NULL, snapshot_json TEXT NOT NULL, created_at TEXT NOT NULL,
-        UNIQUE(post_id,revision))""")
-    connection.execute("""CREATE TABLE IF NOT EXISTS publication_channel_drafts (
-        post_id INTEGER NOT NULL REFERENCES posts(id), channel TEXT NOT NULL,
-        data_json TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(post_id,channel))""")
-    connection.execute("""CREATE TABLE IF NOT EXISTS publication_deliveries (
-        id TEXT PRIMARY KEY, post_id INTEGER NOT NULL REFERENCES posts(id),
-        channel TEXT NOT NULL, snapshot_json TEXT NOT NULL, snapshot_hash TEXT NOT NULL,
-        status TEXT NOT NULL, result_json TEXT NOT NULL DEFAULT '{}',
-        created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
-        UNIQUE(post_id,channel,snapshot_hash))""")
+    if ensure_schema:
+        for key in ("installation_id", "owner_id"):
+            connection.execute("INSERT OR IGNORE INTO app_meta(key,value) VALUES (?,?)", (key, str(uuid.uuid4())))
+        connection.execute("INSERT OR IGNORE INTO app_meta(key,value) VALUES ('publications_schema_version','1')")
+        connection.execute("""CREATE TABLE IF NOT EXISTS publication_records (
+            post_id INTEGER PRIMARY KEY REFERENCES posts(id), public_id TEXT NOT NULL UNIQUE,
+            revision INTEGER NOT NULL, public_revision INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL, draft_json TEXT NOT NULL, published_json TEXT,
+            updated_at TEXT NOT NULL)""")
+        connection.execute("""CREATE TABLE IF NOT EXISTS publication_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL REFERENCES posts(id),
+            revision INTEGER NOT NULL, snapshot_json TEXT NOT NULL, created_at TEXT NOT NULL,
+            UNIQUE(post_id,revision))""")
+        connection.execute("""CREATE TABLE IF NOT EXISTS publication_channel_drafts (
+            post_id INTEGER NOT NULL REFERENCES posts(id), channel TEXT NOT NULL,
+            data_json TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(post_id,channel))""")
+        connection.execute("""CREATE TABLE IF NOT EXISTS publication_deliveries (
+            id TEXT PRIMARY KEY, post_id INTEGER NOT NULL REFERENCES posts(id),
+            channel TEXT NOT NULL, snapshot_json TEXT NOT NULL, snapshot_hash TEXT NOT NULL,
+            status TEXT NOT NULL, result_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+            UNIQUE(post_id,channel,snapshot_hash))""")
     cursor = connection.execute("SELECT p.* FROM posts p LEFT JOIN publication_records r ON r.post_id=p.id WHERE r.post_id IS NULL")
     names = [x[0] for x in cursor.description]
     for values in cursor.fetchall():
@@ -85,8 +86,12 @@ def _db(db_path):
     connection = database_connect(str(db_path), timeout=15)
     connection.row_factory = sqlite3.Row
     try:
+        ensure_schema = True
+        if getattr(connection, 'remote', False):
+            from scena_cloud_runtime import is_initialized
+            ensure_schema = not is_initialized(db_path)
         with connection:
-            initialize_publications(connection)
+            initialize_publications(connection, ensure_schema=ensure_schema)
         yield connection
     finally:
         connection.close()

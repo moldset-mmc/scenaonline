@@ -55,6 +55,35 @@ class CookieTests(unittest.TestCase):
             self.assertTrue(safe_next('//untrusted.example').startswith('/?page=admin'))
 
 
+class CloudInitializationTests(unittest.TestCase):
+    def test_publication_reads_keep_legacy_conversion_without_schema_writes(self):
+        from scena_cloud_runtime import initialize_application, _ready
+        from scena_core import add_post
+        from scena_publications import list_publications
+        import scena_database
+        with tempfile.TemporaryDirectory() as folder:
+            database = str(Path(folder) / 'cloud.db')
+            environment = {'SCENA_CLOUD': '1', 'SCENA_DB_PATH': database,
+                           'SCENA_TURSO_TURSO_DATABASE_URL': database,
+                           'SCENA_TURSO_TURSO_AUTH_TOKEN': 'fixture'}
+            with patch.dict(os.environ, environment):
+                initialize_application(database)
+                # Legacy writes still acquire their publication metadata on read.
+                post = add_post(database, title_ru='Тест', title_ro='Test',
+                                body_ru='Текст', body_ro='Text')
+                statements = []
+                original = scena_database._call
+                def record(function, *args, **kwargs):
+                    if function.__name__ == 'execute':
+                        statements.append(args[0].strip().upper())
+                    return original(function, *args, **kwargs)
+                with patch.object(scena_database, '_call', record):
+                    records = list_publications(database)
+                self.assertEqual([item['post_id'] for item in records], [post])
+                self.assertFalse(any(sql.startswith(('CREATE ', 'ALTER ')) for sql in statements))
+                _ready.discard(database)
+
+
 class DurableMediaTests(unittest.TestCase):
     def test_private_original_public_rendition_and_cache_recovery(self):
         from scena_media import initialize, persist, hydrate

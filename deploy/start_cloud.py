@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import json
+import http.client
 from pathlib import Path
 import secrets
 import signal
@@ -29,18 +30,42 @@ def configure(environment):
     environment['SCENA_APP_DIR'] = str(ROOT)
     environment['PYTHONPATH'] = str(ROOT)
     environment.pop('SCENA_PREVIEW_ONLY', None)
+    # A launcher must always initialize; only its child may inherit completion.
+    environment.pop('SCENA_INITIALIZED_DB', None)
     return environment
 
 
+def wait_for_backend(backend, *, port=8501, timeout=30):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline and backend.poll() is None:
+        connection = http.client.HTTPConnection('127.0.0.1', port, timeout=0.5)
+        try:
+            connection.request('GET', '/_stcore/health')
+            response = connection.getresponse()
+            if response.status == 200:
+                response.read()
+                return
+        except (OSError, http.client.HTTPException):
+            pass
+        finally:
+            connection.close()
+        time.sleep(0.05)
+    raise RuntimeError('SCENA application did not become ready before the startup deadline.')
+
+
 def main():
+    started = time.monotonic()
     os.environ.update(configure(dict(os.environ)))
     os.environ.pop('SCENA_PREVIEW_ONLY', None)
+    os.environ.pop('SCENA_INITIALIZED_DB', None)
     Path(os.environ['SCENA_DB_PATH']).parent.mkdir(parents=True, exist_ok=True)
     from scena_cloud_runtime import initialize_application
     from scena_database import connect
     from scena_core import get_settings, save_settings
     print('SCENA: initializing durable database', flush=True)
     initialize_application(os.environ['SCENA_DB_PATH'])
+    os.environ['SCENA_INITIALIZED_DB'] = os.environ['SCENA_DB_PATH']
+    database_ready = time.monotonic() - started
     connection = connect(os.environ['SCENA_DB_PATH'])
     try:
         connection.execute("INSERT OR IGNORE INTO app_meta(key,value) VALUES ('cloud_session_key',?)", (secrets.token_hex(32),))
@@ -71,26 +96,37 @@ def main():
             print('SCENA: service check error type ' + type(error).__name__, flush=True)
             raise RuntimeError('SCENA durable service acceptance failed; inspect the configured database and Blob connections.') from None
     print('SCENA: durable services ready', flush=True)
-    os.environ['SCENA_HEALTH_REPORT'] = json.dumps(report)
+    services_ready = time.monotonic() - started
     os.chdir(ROOT)
     backend = subprocess.Popen([
         sys.executable, '-m', 'streamlit', 'run', 'scena-master-standalone.py',
         '--server.address', '127.0.0.1', '--server.port', '8501',
         '--server.headless', 'true', '--server.enableStaticServing', 'false',
     ])
-    gateway = subprocess.Popen([sys.executable, 'deploy/serve_cloud.py'])
+    gateway = None
     def stop(*_):
         backend.terminate()
-        gateway.terminate()
+        if gateway is not None:
+            gateway.terminate()
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     try:
+        wait_for_backend(backend)
+        report['startup_seconds'] = {
+            'database_ready': round(database_ready, 3),
+            'services_ready': round(services_ready, 3),
+            'application_ready': round(time.monotonic() - started, 3),
+        }
+        os.environ['SCENA_HEALTH_REPORT'] = json.dumps(report)
+        print('SCENA: startup ' + json.dumps(report['startup_seconds']), flush=True)
+        gateway = subprocess.Popen([sys.executable, 'deploy/serve_cloud.py'])
         while backend.poll() is None and gateway.poll() is None:
             time.sleep(0.25)
     finally:
         stop()
         backend.wait(timeout=10)
-        gateway.wait(timeout=10)
+        if gateway is not None:
+            gateway.wait(timeout=10)
     raise SystemExit(backend.returncode or gateway.returncode or 0)
 
 

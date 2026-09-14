@@ -63,6 +63,13 @@ class GatewayTests(AsyncHTTPTestCase):
         response = self.fetch('/?page=admin', headers={'Cookie': COOKIE + '=' + token})
         self.assertEqual(response.body.decode(), token)
 
+    def test_unavailable_backend_returns_retryable_response(self):
+        self.backend.stop()
+        response = self.fetch('/')
+        self.assertEqual(response.code, 503)
+        self.assertEqual(response.headers['Retry-After'], '3')
+        self.assertNotIn(b'Traceback', response.body)
+
     def test_login_uses_csrf_and_sets_secure_http_only_session(self):
         response = self.fetch('/auth/login')
         cookies = SimpleCookie()

@@ -47,14 +47,18 @@ class RealStackTests(unittest.TestCase):
                                 log.seek(0)
                                 self.fail(log.read()[-4000:])
                             try:
-                                if client.get(base+'/_stcore/health').status_code == 200:
-                                    break
+                                response = client.get(base+'/_stcore/health')
                             except httpx.TransportError:
-                                pass
+                                time.sleep(.1)
+                                continue
+                            # The first accepted request must see a ready app.
+                            self.assertEqual(response.status_code, 200)
+                            break
                             time.sleep(.1)
                         else:
                             log.seek(0)
                             self.fail('Server startup failed: '+log.read()[-4000:])
+                        self.assertEqual(client.get(base+'/').status_code, 200)
                         response = client.get(base+'/auth/login')
                         cookies = SimpleCookie()
                         for value in response.headers.get_list('set-cookie'):
