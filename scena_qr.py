@@ -32,7 +32,8 @@ def qr_campaign_html(settings, page: str, locale: str, app_dir: Path) -> str:
     if page not in QR_SURFACES:
         raise ValueError('Unknown QR destination')
     image_path = Path(app_dir) / 'media' / 'qr-scenes' / f'{page}.png'
-    photo = 'data:image/png;base64,' + base64.b64encode(image_path.read_bytes()).decode('ascii')
+    from model_landing import image_uri
+    photo = image_uri(app_dir, image_path.relative_to(app_dir).as_posix())
     address = public_page_url(settings, page)
     code = 'data:image/png;base64,' + base64.b64encode(qr_png_bytes(address)).decode('ascii')
     x, y, size = QR_SURFACES[page]
@@ -61,7 +62,7 @@ dialog{{border:0;border-radius:10px;max-width:calc(100vw - 28px);padding:16px}}d
 
 
 def render_qr_campaigns(settings, locale: str, app_dir: Path) -> None:
-    import streamlit as st
+    from scena_ui import st
     from scena_i18n import tr
     st.subheader(tr(locale, 'Четыре приглашения в вашу Сцену', 'Patru invitații în Scena ta', 'Four invitations to your Scene'))
     st.caption(tr(locale, 'Выберите направление. QR-код на постере ведёт прямо на нужную страницу.',

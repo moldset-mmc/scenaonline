@@ -93,6 +93,14 @@ def resolve_media_path(app_dir: Path, value: object) -> Path | None:
 
 
 def data_uri_for_file(path: Path) -> str:
+    import os
+    if os.environ.get("SCENA_NATIVE_WEB") == "1":
+        from scena_web.media import assets, ROOT
+        resolved = path.resolve()
+        if resolved.is_relative_to(ROOT):
+            asset = assets().get(resolved.relative_to(ROOT).as_posix())
+            if asset:
+                return asset
     mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     payload = base64.b64encode(path.read_bytes()).decode("ascii")
     return f"data:{mime};base64,{payload}"
@@ -103,6 +111,10 @@ def image_uri(app_dir: Path, value: object) -> str | None:
     parsed = urlparse(candidate)
     if parsed.scheme in {"http", "https"}:
         return candidate
+    import os
+    if os.environ.get("SCENA_NATIVE_WEB") == "1":
+        from scena_web.media import reference
+        return reference(app_dir, candidate)
     path = resolve_media_path(app_dir, candidate)
     return data_uri_for_file(path) if path else None
 
@@ -188,7 +200,8 @@ def model_intro_from_settings(
         if not parsed.netloc or parsed.username or parsed.password:
             return None
     else:
-        path = resolve_media_path(app_dir, candidate)
+        import os
+        path = Path(candidate) if os.environ.get("SCENA_NATIVE_WEB") == "1" and image_uri(app_dir, candidate) else resolve_media_path(app_dir, candidate)
         if path is None or path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif"}:
             return None
     source = image_uri(app_dir, candidate)

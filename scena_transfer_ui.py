@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-import streamlit as st
+from scena_ui import st
 
 from scena_transfer import (
     TransferValidationError,

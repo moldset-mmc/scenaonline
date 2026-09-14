@@ -80,7 +80,7 @@ def _adapters(app_dir):
 
 
 def _conversation(db_path, channel, locale):
-    import streamlit as st
+    from scena_ui import st
     from scena_cabinet import list_support_messages
     messages = [item for item in list_support_messages(db_path) if item["channel"] in ({"assistant", "system"} if channel == "assistant" else {"support"})]
     for item in messages:
@@ -106,7 +106,7 @@ def _conversation(db_path, channel, locale):
 
 
 def render_assistant(db_path, app_dir, settings=None, locale="ru"):
-    import streamlit as st
+    from scena_ui import st
     from scena_cabinet import ask_scena_assistant, CabinetValidationError
     assistant, _ = _adapters(app_dir)
     st.caption(_t(locale, "AI по данным вашей Сцены", "AI bazat pe datele Scenei dvs.", "AI using your Scene data") if assistant.configured else _t(locale, "Подсказки SCENA · помощник по настройке", "Ghid SCENA · ajutor la configurare", "SCENA guide · setup help"))
@@ -133,7 +133,7 @@ def render_assistant(db_path, app_dir, settings=None, locale="ru"):
 
 
 def render_support(db_path, app_dir, locale="ru"):
-    import streamlit as st
+    from scena_ui import st
     from scena_cabinet import list_support_messages, submit_support_message, dispatch_support_notifications, sync_telegram_replies, CabinetValidationError
     _, telegram = _adapters(app_dir)
     st.write(_t(locale, "Расскажите, с чем нужна помощь, и выберите удобное место для ответа.", "Spuneți cu ce aveți nevoie de ajutor și alegeți unde preferați răspunsul.", "Tell us what you need help with and choose where you would like a reply."))

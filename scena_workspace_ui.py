@@ -1,7 +1,7 @@
 """SCENA stage direction and mobile workspace. Platform copy, never owner prose."""
 from html import escape
 from pathlib import Path
-import streamlit as st
+from scena_ui import st
 from model_landing import image_uri
 from scena_i18n import tr, localized_name
 from scena_design import render_stage_intro, public_model_image

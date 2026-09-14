@@ -277,7 +277,7 @@ def publish_model_design(db_path, design_id, app_dir, preview_hash, *, desktop_c
 
 
 def render_model_builder(db_path, settings, app_dir, locale='ru'):
-    import streamlit as st
+    from scena_ui import st
     from model_landing import build_model_landing_html
     from scena_cabinet import get_pro_status
     from scena_i18n import tr

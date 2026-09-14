@@ -139,7 +139,7 @@ def save_intro(db_path, app_dir, values, *, upload: bytes | None = None, expecte
 
 
 def render_intro_editor(db_path, app_dir, settings):
-    import streamlit as st
+    from scena_ui import st
     from scena_i18n import normalize_locale, translate_literaltext
     locale = normalize_locale(st.session_state.get("scena_ui_locale", "ru"))
     def ui(value):

@@ -226,7 +226,7 @@ def restore_version(db_path, version_id, *, now=None):
 
 
 def render_prompts(db_path, app_dir, settings, locale='ru'):
-    import streamlit as st
+    from scena_ui import st
     from scena_cabinet import get_pro_status
     idx = {'ru': 0, 'ro': 1, 'en': 2}.get(locale, 0)
     active = get_pro_status(db_path)['is_active']

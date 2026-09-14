@@ -61,7 +61,7 @@ def restore_cloud(data, db_path, app_dir):
 
 
 def render_cloud_restore(db_path, app_dir):
-    import streamlit as st
+    from scena_ui import st
     from scena_transfer import inspect_backup
     st.write('Восстановите настройки, записи и фотографии из личной резервной копии SCENA.')
     upload = st.file_uploader('Резервная копия SCENA (.zip)', type=['zip'], key='cloud_restore_upload')

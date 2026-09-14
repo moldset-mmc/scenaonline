@@ -11,7 +11,7 @@ from datetime import date, datetime, time
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
-import streamlit as st
+from scena_ui import st
 from PIL import Image, UnidentifiedImageError
 
 from model_landing import (
@@ -79,7 +79,7 @@ from scena_integrations import OpenAIResponsesAdapter, TelegramBotAdapter
 from scena_design import apply_editorial_styles, render_stage_intro, render_path_note, public_model_image
 
 
-APP_DIR = Path(__file__).resolve().parent
+APP_DIR = Path(os.environ.get("SCENA_APP_DIR", Path(__file__).resolve().parent))
 DB_PATH = Path(os.environ.get("SCENA_DB_PATH", APP_DIR / "scena_master.db"))
 MEDIA_DIR = APP_DIR / "media"
 MEDIA_DIR.mkdir(exist_ok=True)
@@ -702,6 +702,9 @@ def image_source(value: str) -> str | None:
     parsed = urlparse(candidate)
     if parsed.scheme in {"http", "https"}:
         return candidate
+    if os.environ.get("SCENA_NATIVE_WEB") == "1":
+        from scena_web.media import reference
+        return reference(APP_DIR, candidate)
     local_path = (APP_DIR / candidate).resolve()
     try:
         local_path.relative_to(APP_DIR)
@@ -918,7 +921,7 @@ def configured_admin_password() -> str | None:
 
 
 def require_admin(locale: str) -> None:
-    if os.environ.get('SCENA_CLOUD') == '1':
+    if os.environ.get('SCENA_CLOUD') == '1' or os.environ.get('SCENA_NATIVE_WEB') == '1':
         from scena_cloud_auth import valid_session
         authenticated = valid_session(st.context.headers.get('X-Scena-Session', ''))
         st.session_state['scena_admin_authenticated'] = authenticated
@@ -3046,7 +3049,7 @@ def render_admin(settings: dict[str, str], locale: str) -> None:
     with st.container(key="scena_admin_identity_actions"):
         _, exit_col = st.columns([5, 1])
         with exit_col:
-            if os.environ.get('SCENA_CLOUD') == '1':
+            if os.environ.get('SCENA_CLOUD') == '1' or os.environ.get('SCENA_NATIVE_WEB') == '1':
                 st.link_button(ui('Выйти'), '/auth/logout', width='stretch')
             elif st.button(ui("Выйти"), width="stretch"):
                 st.session_state["scena_admin_authenticated"] = False
@@ -3112,13 +3115,16 @@ def run() -> None:
     )
     if os.environ.get("SCENA_PREVIEW_ONLY") == "1":
         st.caption("SCENA · Предпросмотр / Previzualizare / Preview · Данные временные; используйте тестовые контакты.")
-    if os.environ.get('SCENA_CLOUD') == '1':
+    if os.environ.get('SCENA_CLOUD') == '1' or os.environ.get('SCENA_NATIVE_WEB') == '1':
         from scena_cloud_runtime import initialize_application
         initialize_application(DB_PATH)
     else:
         init_db(DB_PATH)
     from scena_media import hydrate
-    hydrate(APP_DIR)
+    if os.environ.get("SCENA_NATIVE_WEB") != "1":
+        hydrate(APP_DIR)
+    elif (str(st.query_params.get("page", "")) == "admin" or str(st.query_params.get("admin", "")) == "1") and (st.query_params.get("section") == "pages" or st.query_params.get("view") == "posts"):
+        hydrate(APP_DIR)
     expire_pending_requests(DB_PATH)
     apply_styles()
     apply_editorial_styles()

@@ -48,3 +48,7 @@ media/**
 !media/qr-scenes/scene.png
 !media/scena-v13/my-scena-hero.webp
 !media/scena-v13/professional-portrait.webp
+
+# Generated immutable assets are rebuilt from approved source files in Docker.
+public/scena-assets/
+scena_web/asset_manifest.json

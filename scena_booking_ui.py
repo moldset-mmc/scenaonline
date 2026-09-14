@@ -6,7 +6,7 @@ import html
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-import streamlit as st
+from scena_ui import st
 
 from scena_i18n import tr as _tr, content_text, localized_name, translate_literaltext
 

@@ -1,6 +1,6 @@
 """Shared editorial presentation; native forms remain accessible and functional."""
 from html import escape
-import streamlit as st
+from scena_ui import st
 from model_landing import image_uri, model_slides_from_settings
 
 

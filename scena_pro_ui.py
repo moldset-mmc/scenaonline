@@ -3,7 +3,7 @@ from __future__ import annotations
 import html
 from datetime import datetime
 from pathlib import Path
-import streamlit as st
+from scena_ui import st
 from model_landing import image_uri
 from scena_cabinet import CabinetValidationError, get_pro_status, list_pro_applications, submit_pro_application
 from scena_licensing import LicenseError, owner_id, redeem_code

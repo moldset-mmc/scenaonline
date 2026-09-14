@@ -81,6 +81,15 @@ def _identity(connection):
     return result
 
 
+def _remove_runtime_state(connection):
+    # Browser forms and temporary download/upload references are not owner data.
+    # Never put reusable sessions or encrypted provider settings into an archive.
+    for table in ('scena_web_forms', 'scena_web_objects'):
+        connection.execute('DROP TABLE IF EXISTS ' + table)
+    connection.execute("DELETE FROM app_meta WHERE key IN ('cloud_session_key','cloud_auth_version','cloud_native_schema')")
+    connection.commit()
+
+
 @contextmanager
 def _snapshot(db_path):
     from scena_database import cloud_database, snapshot_to_file
@@ -91,8 +100,7 @@ def _snapshot(db_path):
             connection = sqlite3.connect(snapshot_path)
             connection.row_factory = sqlite3.Row
             try:
-                connection.execute("DELETE FROM app_meta WHERE key IN ('cloud_session_key','cloud_auth_version')")
-                connection.commit()
+                _remove_runtime_state(connection)
                 if snapshot_path.stat().st_size > MAX_FILE_BYTES:
                     raise TransferValidationError('База превышает лимит переносимого пакета 128 МБ.')
                 yield connection, snapshot_path.read_bytes()
@@ -117,6 +125,7 @@ def _snapshot(db_path):
                         raise TransferValidationError("База занята. Завершите сохранение и повторите резервное копирование.")
 
                 source.backup(target, pages=256, progress=progress, sleep=0.05)
+                _remove_runtime_state(target)
                 target.row_factory = sqlite3.Row
                 yield target, snapshot_path.read_bytes()
             finally:

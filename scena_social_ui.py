@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import urlencode, urlsplit, urlunsplit
 from zipfile import ZIP_DEFLATED, ZipFile
 
-import streamlit as st
+from scena_ui import st
 
 from scena_publications import (
     PublicationValidationError, dispatch_delivery, get_channel_draft, get_delivery,

@@ -102,7 +102,7 @@ def _t(locale, ru, ro, en):
 
 
 def render_connections(db_path, app_dir: Path, locale: str = "ru") -> None:
-    import streamlit as st
+    from scena_ui import st
     from scena_cabinet import get_integration_health
     from scena_integrations import OpenAIResponsesAdapter, TelegramBotAdapter, IntegrationConfigurationError
     from scena_telegram_setup import TelegramSetupError

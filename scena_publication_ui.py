@@ -5,7 +5,7 @@ import html
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
-import streamlit as st
+from scena_ui import st
 from scena_i18n import localized_name, tr as translate
 
 from model_landing import image_uri, resolve_media_path
@@ -64,6 +64,9 @@ def safe_image(app_dir, value):
     parsed = urlsplit(value)
     if parsed.scheme in {'http', 'https'}:
         return value if parsed.hostname and not parsed.username and not parsed.password else None
+    import os
+    if os.environ.get("SCENA_NATIVE_WEB") == "1" and Path(value).suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}:
+        return image_uri(Path(app_dir), value)
     path = resolve_media_path(Path(app_dir), value)
     if path and path.suffix.lower() in {'.jpg', '.jpeg', '.png', '.webp'}:
         try:

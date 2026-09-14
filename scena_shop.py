@@ -120,6 +120,12 @@ def _is_pro(db):
 
 
 def local_photo(app_dir, value):
+    import os
+    if os.environ.get("SCENA_NATIVE_WEB") == "1":
+        from scena_web.context import current
+        from scena_web.media import reference
+        if not current.get().private:
+            return Path(app_dir) / str(value) if reference(app_dir, value) else None
     try:
         root = Path(app_dir).resolve()
         source = root / str(value)
@@ -520,7 +526,7 @@ def _owner(settings, locale):
 
 
 def _shop_style():
-    import streamlit as st
+    from scena_ui import st
     st.markdown('''<style>
     .shop-intro{padding:clamp(26px,5vw,64px);border-radius:26px;background:radial-gradient(ellipse at 94% 8%,#c6ae7540 0,transparent 47%),linear-gradient(115deg,#211e19,#373027);color:#faf7f0;margin:12px 0 26px;position:relative;overflow:hidden}
     .shop-intro::after{content:"";position:absolute;width:260px;height:260px;border:1px solid #cfb16e30;border-radius:50%;right:-70px;bottom:-150px;pointer-events:none}
@@ -552,7 +558,7 @@ def _reset_checkout(st):
 
 
 def _render_bag(db, locale):
-    import streamlit as st
+    from scena_ui import st
     cart = st.session_state.setdefault('shop_cart', {})
     if not cart:
         return
@@ -644,7 +650,7 @@ def _render_bag(db, locale):
 
 
 def render_shop(db_path, app_dir, settings, locale='ru'):
-    import streamlit as st
+    from scena_ui import st
     locale = locale if locale in LOCALES else 'ru'
     app_dir = Path(app_dir)
     _shop_style()
@@ -734,7 +740,7 @@ def _add_to_bag(st, product_id, locale):
 
 
 def render_shop_admin(db_path, app_dir, settings, locale='ru'):
-    import streamlit as st
+    from scena_ui import st
     locale = locale if locale in LOCALES else 'ru'
     app_dir = Path(app_dir)
     _shop_style()

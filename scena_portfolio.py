@@ -16,7 +16,7 @@ from contextlib import closing
 from pathlib import Path
 from typing import Mapping
 
-import streamlit as st
+from scena_ui import st
 from PIL import Image, UnidentifiedImageError
 
 from scena_core import DEFAULT_SETTINGS
@@ -58,6 +58,9 @@ def _media_path(app_dir: Path, value: object) -> Path | None:
 
 
 def _source(app_dir: Path, value: object) -> str | None:
+    if os.environ.get("SCENA_NATIVE_WEB") == "1":
+        from scena_web.media import reference
+        return reference(app_dir, value)
     path = _media_path(app_dir, value)
     if path is None:
         return None
