@@ -6,6 +6,7 @@ import hmac
 import os
 import re
 import sqlite3
+from scena_database import connect as database_connect
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
@@ -289,7 +290,7 @@ def _db_path(db_path: str | Path) -> Path:
 
 
 def _connect(db_path: str | Path) -> sqlite3.Connection:
-    connection = sqlite3.connect(_db_path(db_path), timeout=5)
+    connection = database_connect(_db_path(db_path), timeout=5)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     connection.execute("PRAGMA busy_timeout = 5000")

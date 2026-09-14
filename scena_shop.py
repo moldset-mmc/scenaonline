@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+from scena_database import connect as database_connect
 import tempfile
 import uuid
 import warnings
@@ -42,7 +43,7 @@ class ShopError(ValueError):
 
 
 def _connect(db):
-    con = sqlite3.connect(Path(db), timeout=15)
+    con = database_connect(Path(db), timeout=15)
     con.row_factory = sqlite3.Row
     con.execute('PRAGMA foreign_keys=ON')
     con.execute('PRAGMA busy_timeout=15000')
@@ -55,7 +56,8 @@ def _now():
 
 def init_shop(db_or_connection):
     """Additive migration. A supplied connection remains owned by the caller."""
-    own = not isinstance(db_or_connection, sqlite3.Connection)
+    from scena_database import is_connection
+    own = not is_connection(db_or_connection)
     con = _connect(db_or_connection) if own else db_or_connection
     try:
         text_columns = ','.join(f'{field} TEXT NOT NULL DEFAULT \'\'' for field in PRODUCT_FIELDS)
@@ -233,7 +235,12 @@ def save_product(db, app_dir, values, *, product_id=None, expected_revision=None
                     os.fsync(handle.fileno())
                 destination = folder / f'{uuid.uuid4().hex}.{extension}'
                 os.replace(temporary, destination)
+                from scena_media import persist
+                persist(destination, root, public=status == 'published', connection=con)
                 image = destination.relative_to(root).as_posix()
+            if status == 'published':
+                from scena_media import publish_reference
+                publish_reference(app_dir, image, connection=con)
             history = product_photo_history(app_dir, previous or {})
             if previous and previous.get('image') and previous['image'] != image and local_photo(app_dir, previous['image']):
                 history = [previous['image']] + [value for value in history if value != previous['image']]

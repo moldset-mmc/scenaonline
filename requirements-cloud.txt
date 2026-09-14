@@ -1,0 +1,4 @@
+-r requirements.txt
+libsql==0.1.11
+vercel==0.10.0
+tornado==6.5.8

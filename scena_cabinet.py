@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import re
 import sqlite3
+from scena_database import connect as database_connect
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -30,7 +31,7 @@ def _now(value: datetime | None = None) -> datetime:
 
 
 def _connect(db_path: str | Path) -> sqlite3.Connection:
-    connection = sqlite3.connect(Path(db_path), timeout=5)
+    connection = database_connect(Path(db_path), timeout=5)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     connection.execute("PRAGMA busy_timeout = 5000")

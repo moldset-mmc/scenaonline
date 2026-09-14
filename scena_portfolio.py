@@ -7,6 +7,7 @@ import io
 import json
 import os
 import sqlite3
+from scena_database import connect as database_connect
 import tempfile
 import uuid
 import warnings
@@ -175,7 +176,7 @@ def saved_originals(app_dir: Path) -> list[str]:
 
 def _persist_portfolio_slot(db_path: Path, prefix: str, slot: int, value: str) -> None:
     """Serialize the one-time default gallery materialization with slot updates."""
-    with closing(sqlite3.connect(db_path, timeout=5)) as connection:
+    with closing(database_connect(db_path, timeout=5)) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         with connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -226,6 +227,8 @@ def update_portfolio_slot(db_path: Path, app_dir: Path, kind: str, slot: int, *,
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(temporary, destination)
+            from scena_media import persist
+            persist(destination, app_dir, public=True)
             value = destination.relative_to(app_dir.resolve()).as_posix()
         _persist_portfolio_slot(db_path, prefix, slot, value)
     except Exception:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import html
 import sqlite3
+from scena_database import connect as database_connect
 import uuid
 from datetime import datetime, timezone
 
@@ -114,7 +115,7 @@ def initialize_prompts(connection):
 
 
 def _connect(db_path):
-    connection = sqlite3.connect(db_path, timeout=10)
+    connection = database_connect(db_path, timeout=10)
     connection.row_factory = sqlite3.Row
     connection.execute('PRAGMA foreign_keys=ON')
     return connection

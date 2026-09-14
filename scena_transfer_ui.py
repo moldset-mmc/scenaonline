@@ -160,6 +160,11 @@ def render_transfer_workspace(db_path, app_dir) -> None:
     with st.expander(ui('Сохранить свою Сцену'), expanded=True):
         _export_panel(Path(db_path), root, prefix, public=False)
     with st.expander(ui('Восстановить из резервной копии')):
-        _restore_panel(root, prefix)
+        from scena_database import cloud_database
+        if cloud_database(db_path):
+            from scena_cloud_restore import render_cloud_restore
+            render_cloud_restore(db_path, root)
+        else:
+            _restore_panel(root, prefix)
     with st.expander(ui('Подготовить материалы для будущей платформы')):
         _export_panel(Path(db_path), root, prefix, public=True)

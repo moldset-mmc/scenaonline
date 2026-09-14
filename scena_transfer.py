@@ -1,7 +1,8 @@
 """Portable, private local backups. Public interchange is deliberately separate.
 
 An archive is an owner-controlled data backup, never an executable installer.
-Checksums detect damage, not an untrusted sender. No network calls or credentials.
+Checksums detect damage, not an untrusted sender. Cloud exports recover media
+through authenticated storage; provider credentials and session keys are excluded.
 """
 
 from __future__ import annotations
@@ -38,6 +39,7 @@ BACKUP_TABLES = {
     "publication_records", "publication_versions", "publication_channel_drafts", "publication_deliveries",
     "shop_products", "shop_orders", "shop_order_items", "prompt_projects", "prompt_versions",
     "pro_code_redemptions", "support_reply_preferences", "model_designs",
+    "scena_media_files",
 }
 
 
@@ -81,6 +83,22 @@ def _identity(connection):
 
 @contextmanager
 def _snapshot(db_path):
+    from scena_database import cloud_database, snapshot_to_file
+    if cloud_database(db_path):
+        with tempfile.TemporaryDirectory(prefix='scena-cloud-snapshot-') as temp:
+            snapshot_path = Path(temp) / 'scena_master.db'
+            snapshot_to_file(db_path, snapshot_path)
+            connection = sqlite3.connect(snapshot_path)
+            connection.row_factory = sqlite3.Row
+            try:
+                connection.execute("DELETE FROM app_meta WHERE key IN ('cloud_session_key','cloud_auth_version')")
+                connection.commit()
+                if snapshot_path.stat().st_size > MAX_FILE_BYTES:
+                    raise TransferValidationError('База превышает лимит переносимого пакета 128 МБ.')
+                yield connection, snapshot_path.read_bytes()
+            finally:
+                connection.close()
+        return
     path = Path(db_path)
     if not path.is_file() or path.is_symlink():
         raise TransferValidationError("Выберите существующую базу SCENA.")
@@ -110,6 +128,8 @@ def _snapshot(db_path):
 
 def _read_media(media_dir):
     root = Path(media_dir)
+    from scena_media import hydrate
+    hydrate(root.parent, force=True)
     if root.is_symlink() or not root.is_dir():
         raise TransferValidationError("Папка media не найдена или является ссылкой.")
     payloads = {}

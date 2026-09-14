@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import re
 import sqlite3
+from scena_database import connect as database_connect
 import uuid
 from datetime import datetime, timezone
 
@@ -52,7 +53,7 @@ def parse_model_design(value):
 
 
 def init_model_builder(db_path):
-    with sqlite3.connect(db_path, timeout=15) as c:
+    with database_connect(db_path, timeout=15) as c:
         c.execute('''CREATE TABLE IF NOT EXISTS model_designs(
             id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, design_json TEXT NOT NULL,
             status TEXT NOT NULL CHECK(status IN ('draft','published','archived')) DEFAULT 'draft',
@@ -64,7 +65,7 @@ def init_model_builder(db_path):
 
 
 def _connection(db_path):
-    c = sqlite3.connect(db_path, timeout=15)
+    c = database_connect(db_path, timeout=15)
     c.row_factory = sqlite3.Row
     return c
 
@@ -206,6 +207,8 @@ def save_model_draft_photo(db_path, design_id, field, data, app_dir, expected_re
     try:
         with destination.open('xb') as handle:
             handle.write(data)
+        from scena_media import persist
+        persist(destination, root)
         update_model_snapshot(db_path, design_id, {field: destination.relative_to(root).as_posix()}, expected_revision)
     except Exception:
         destination.unlink(missing_ok=True)
@@ -265,6 +268,10 @@ def publish_model_design(db_path, design_id, app_dir, preview_hash, *, desktop_c
         c.execute("UPDATE model_designs SET status='archived' WHERE status='published'")
         c.execute("UPDATE model_designs SET status='published',published_at=?,updated_at=?,preview_hash='' WHERE id=?", (_now(), _now(), design_id))
         snapshot = _snapshot(json.loads(row['snapshot_json']))
+        from scena_media import publish_reference
+        for value in snapshot.values():
+            if str(value).startswith('media/'):
+                publish_reference(app_dir, value, connection=c)
         c.executemany('INSERT INTO profile_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', snapshot.items())
         c.execute("INSERT INTO profile_settings(key,value) VALUES('model_design_json',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (row['design_json'],))
 

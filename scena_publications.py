@@ -7,6 +7,7 @@ import ipaddress
 import json
 import re
 import sqlite3
+from scena_database import connect as database_connect
 import uuid
 import warnings
 from contextlib import contextmanager
@@ -81,7 +82,7 @@ def initialize_publications(connection):
 
 @contextmanager
 def _db(db_path):
-    connection = sqlite3.connect(str(db_path), timeout=15)
+    connection = database_connect(str(db_path), timeout=15)
     connection.row_factory = sqlite3.Row
     try:
         with connection:
@@ -191,6 +192,8 @@ def publish_local(db_path, post_id, expected_revision, *, media_root=None):
         if not any(snapshot[key] for key in DESTINATIONS.values()):
             raise PublicationValidationError("Выберите, где показать публикацию.")
         _validate_publication_image(snapshot, Path(media_root) if media_root else Path(db_path).resolve().parent)
+        from scena_media import publish_reference
+        publish_reference(Path(media_root) if media_root else Path(db_path).resolve().parent, snapshot['image_url'], connection=connection)
         connection.execute("UPDATE posts SET " + ",".join(key + "=?" for key in POST_FIELDS) + ",active=1 WHERE id=?", [snapshot[key] for key in POST_FIELDS] + [post_id])
         connection.execute("UPDATE publication_records SET public_revision=revision,status='published',published_json=draft_json,updated_at=? WHERE post_id=?", (_now(), post_id))
         return _editable(_record(connection, post_id))
@@ -351,6 +354,9 @@ def store_publication_image(app_dir, data, filename, *, frame_style="auto", fram
         output.write(data)
     with derivative.open("xb") as output:
         output.write(rendered)
+    from scena_media import persist
+    persist(original, base)
+    persist(derivative, base)
     return {"original_path": str(original), "image_path": str(derivative),
             "original_url": original.relative_to(base).as_posix(),
             "image_url": derivative.relative_to(base).as_posix(),
@@ -381,6 +387,8 @@ def restyle_publication_image(app_dir, original_image_path, *, frame_style="auto
     derivative = folder/"scena-publication.jpg"
     with derivative.open("xb") as output:
         output.write(rendered)
+    from scena_media import persist
+    persist(derivative, base)
     return {"image_url": derivative.relative_to(base).as_posix(), "original_image_path": original.relative_to(base).as_posix(),
             "frame_style": frame_style, "frame_format": frame_format}
 

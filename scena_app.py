@@ -787,6 +787,8 @@ def save_uploaded_images(selections: list[tuple[str, str, object]]) -> int:
                 os.replace(destination, backup)
             committed.append((destination, backup))
             os.replace(temporary, destination)
+            from scena_media import persist
+            persist(destination, APP_DIR, public=True)
         save_settings(DB_PATH, {key: relative for key, _, _, relative in staged})
     except Exception:
         for destination, backup in reversed(committed):
@@ -916,6 +918,15 @@ def configured_admin_password() -> str | None:
 
 
 def require_admin(locale: str) -> None:
+    if os.environ.get('SCENA_CLOUD') == '1':
+        from scena_cloud_auth import valid_session
+        authenticated = valid_session(st.context.headers.get('X-Scena-Session', ''))
+        st.session_state['scena_admin_authenticated'] = authenticated
+        if authenticated:
+            return
+        st.title(ui('Вход в кабинет'))
+        st.link_button(ui('Войти'), '/auth/login')
+        st.stop()
     if st.session_state.get("scena_admin_authenticated"):
         return
     render_header("admin", locale, admin=True)
@@ -3035,7 +3046,9 @@ def render_admin(settings: dict[str, str], locale: str) -> None:
     with st.container(key="scena_admin_identity_actions"):
         _, exit_col = st.columns([5, 1])
         with exit_col:
-            if st.button(ui("Выйти"), width="stretch"):
+            if os.environ.get('SCENA_CLOUD') == '1':
+                st.link_button(ui('Выйти'), '/auth/logout', width='stretch')
+            elif st.button(ui("Выйти"), width="stretch"):
                 st.session_state["scena_admin_authenticated"] = False
                 st.rerun()
 
@@ -3099,7 +3112,13 @@ def run() -> None:
     )
     if os.environ.get("SCENA_PREVIEW_ONLY") == "1":
         st.caption("SCENA · Предпросмотр / Previzualizare / Preview · Данные временные; используйте тестовые контакты.")
-    init_db(DB_PATH)
+    if os.environ.get('SCENA_CLOUD') == '1':
+        from scena_cloud_runtime import initialize_application
+        initialize_application(DB_PATH)
+    else:
+        init_db(DB_PATH)
+    from scena_media import hydrate
+    hydrate(APP_DIR)
     expire_pending_requests(DB_PATH)
     apply_styles()
     apply_editorial_styles()

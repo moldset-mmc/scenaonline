@@ -5,6 +5,7 @@ import base64
 import hashlib
 import json
 import sqlite3
+from scena_database import connect as database_connect
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -29,7 +30,7 @@ def _now(now=None):
 
 
 def owner_id(db_path) -> str:
-    with sqlite3.connect(db_path) as connection:
+    with database_connect(db_path) as connection:
         row = connection.execute("SELECT value FROM app_meta WHERE key='owner_id'").fetchone()
     if not row:
         raise LicenseError("Не найден номер вашего профиля. Перезапустите SCENA.")
@@ -99,7 +100,7 @@ def redeem_code(db_path, app_dir, code: str, *, now=None) -> dict:
     except (InvalidSignature, ValueError, TypeError, KeyError, AttributeError) as exc:
         raise LicenseError("Код не прошёл проверку. Скопируйте его целиком из сообщения SCENA.") from exc
     digest = hashlib.sha256(token.encode()).hexdigest()
-    with sqlite3.connect(db_path, timeout=10) as connection:
+    with database_connect(db_path, timeout=10) as connection:
         connection.row_factory = sqlite3.Row
         connection.execute('BEGIN IMMEDIATE')
         initialize_licensing(connection)

@@ -14,6 +14,9 @@ from scena_transfer import MAX_TOTAL_BYTES, TransferValidationError, inspect_bac
 # Explicit distribution files only. Never copy credentials, databases, archives,
 # environment folders, user scripts, QA/customer exports or repository metadata.
 APPLICATION_FILES = (
+    "scena_database.py", "scena_media.py", "scena_cloud_auth.py", "scena_cloud_runtime.py",
+    "scena_cloud_restore.py",
+    "scena_cloud_checks.py",
     "scena_app.py", "scena_core.py", "scena_cabinet.py", "scena_integrations.py",
     "scena_publications.py", "scena_publication_ui.py", "scena_social.py", "scena_social_ui.py",
     "scena_transfer.py", "scena_transfer_ui.py", "scena_restore.py", "model_landing.py",

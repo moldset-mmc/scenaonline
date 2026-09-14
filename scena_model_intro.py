@@ -5,6 +5,7 @@ import io
 import os
 from pathlib import Path
 import sqlite3
+from scena_database import connect as database_connect
 import tempfile
 import uuid
 import warnings
@@ -119,8 +120,10 @@ def save_intro(db_path, app_dir, values, *, upload: bytes | None = None, expecte
                 os.fsync(handle.fileno())
             destination = folder / f'{uuid.uuid4().hex}.{extension}'
             os.replace(temporary, destination)
+            from scena_media import persist
+            persist(destination, app_dir, public=merged['model_intro_enabled'] == '1')
             updates['model_intro_image'] = destination.relative_to(app_dir.resolve()).as_posix()
-        with sqlite3.connect(db_path, timeout=15) as connection:
+        with database_connect(db_path, timeout=15) as connection:
             connection.execute('BEGIN IMMEDIATE')
             actual = dict(connection.execute('SELECT key,value FROM profile_settings'))
             if expected is not None and any(actual.get(k, default) != expected.get(k, default) for k, default in DEFAULT_INTRO_SETTINGS.items()):

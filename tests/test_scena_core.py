@@ -66,7 +66,9 @@ class ScenaCoreTestCase(unittest.TestCase):
         )
 
         self.assertEqual([service_request_id, invitation_id, application_id], [1, 2, 3])
-        rows = list_requests(self.db_path)
+        from unittest.mock import patch
+        with patch("scena_core._now", return_value=now):
+            rows = list_requests(self.db_path)
         self.assertEqual(
             [row["request_type"] for row in rows],
             ["model_application", "model_invitation", "service_request"],
