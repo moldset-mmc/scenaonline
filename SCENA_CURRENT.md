@@ -1,6 +1,6 @@
 # SCENA — durable production release, 2026-09-14
 
-The owner authorized completing and deploying the existing project. This release replaces the temporary launcher with durable storage and an authenticated cabinet. Live acceptance is pending deployment of this commit; do not interpret local tests as production evidence.
+The owner authorized completing and deploying the existing project. This release replaces the temporary launcher with durable storage and an authenticated cabinet. Production is deployed and the stable domain opens the public site and cabinet login. The receipt below distinguishes live checks from local tests.
 
 ## Locations
 
@@ -23,7 +23,7 @@ The owner authorized completing and deploying the existing project. This release
 
 ## Verification before publication
 
-245 tests completed in the native libSQL test configuration: OK, three existing skips. This includes eight cloud tests covering transactions, media cache loss, backup/restore, cookie expiry/rotation, HTTP/WS authentication, and the actual production launcher with Streamlit navigation. Cloud service probes still need to pass on Vercel.
+245 tests completed in the native libSQL test configuration: OK, three existing skips. This includes eight cloud tests covering transactions, media cache loss, backup/restore, cookie expiry/rotation, HTTP/WS authentication, and the actual production launcher with Streamlit navigation. Cloud service probes also passed on Vercel; see the live receipt below.
 
 ## Operations and limits
 
@@ -32,3 +32,16 @@ Use the stable domain for future updates. GitHub `main` triggers the existing Ve
 [Пароль и восстановление](CABINET-ACCESS.md). The current product has one owner cabinet. Individual user accounts and email password recovery are not implemented. Telegram, AI and payment integrations require their own configuration; creating the three storage resources does not enable them.
 
 Git stores code and starter assets, not live records or uploaded originals. Export private backups through the cabinet. No paid upgrade, new provider, real email, or real customer submission is included in this release.
+
+## Live acceptance receipt — 2026-09-14, 17:19 UTC
+
+- GitHub `main`: `11549a353fd193e8fddea8cd51ed5cfc8c80ec95` before this documentation update.
+- Vercel deployment `dpl_JKwShkMfGhq7GCaKeWXfGXd2ZLEc`, target Production, state READY, all three project aliases attached without error.
+- `https://scenaonline.vercel.app/` returned HTTP 200. A fresh browser tab rendered the complete public profile in English; switching to Russian rendered the Russian profile and navigation.
+- The visible cabinet link opened `/auth/login` with the password field and «Войти» button. The owner's password was not submitted by the agent in the live browser. Authenticated navigation through the actual gateway and Streamlit server passed in the local integration test.
+- `/healthz` returned HTTP 200, status `ok`, database/public_storage/private_storage `verified`, private_access `blocked_without_token`, and previous_probe_recovered `true`. Observed boot ID `57dbc08c41a28019`. Runtime logs confirmed both Blob reads returned 200 and unauthenticated private access returned 403.
+- A 4×4 public probe image was independently opened in the browser and loaded at its correct dimensions. Checks use only tiny synthetic probe images and a rolled-back database record; no customer forms were submitted.
+- Two cloud compatibility faults were fixed using actual runtime evidence: Turso Cloud rejects `PRAGMA busy_timeout`; Vercel consistent cache-bypass Blob reads apply to private stores, not public stores. Both are now handled explicitly.
+- No application error appeared in the final browser console check. The browser extension still emitted its own metadata transmission error; this originates from a `chrome-extension://` content script and is not a SCENA application exception.
+
+This documentation-only commit triggers the same verified production code through the existing Git integration. Verify its subsequent deployment READY before final handoff. Future AI, Telegram, payments, individual accounts and email password recovery remain separate configurations/features.
