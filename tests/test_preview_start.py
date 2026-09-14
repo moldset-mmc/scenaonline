@@ -12,6 +12,13 @@ class PreviewIsolationTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             preview_password({"SCENA_ADMIN_PASSWORD": "short"})
 
+    def test_owner_can_set_temporary_eight_character_preview_password(self):
+        self.assertEqual(
+            preview_password({"SCENA_ADMIN_PASSWORD": "demo-key"}), "demo-key"
+        )
+        with self.assertRaises(RuntimeError):
+            preview_password({"SCENA_ADMIN_PASSWORD": "seven77"})
+
     def test_runtime_excludes_owner_database_and_secrets(self):
         with tempfile.TemporaryDirectory() as folder:
             source = Path(folder) / "source"
@@ -32,7 +39,9 @@ class PreviewIsolationTests(unittest.TestCase):
             self.assertFalse((runtime / "deploy/preview-credentials.json").exists())
 
     def test_production_cannot_start_temporary_preview(self):
-        with patch.dict("os.environ", {"VERCEL_ENV": "production"}, clear=True):
+        with patch.dict("os.environ", {
+            "VERCEL_ENV": "production", "SCENA_ADMIN_PASSWORD": "demo-key"
+        }, clear=True):
             with self.assertRaisesRegex(RuntimeError, "preview"):
                 main()
 

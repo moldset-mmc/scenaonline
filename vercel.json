@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "checkpoint/scena-hosting-2026-09-14": false
+    }
+  }
+}

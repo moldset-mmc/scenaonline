@@ -27,8 +27,10 @@ def preview_password(environment: dict[str, str]) -> str | None:
     password = environment.get("SCENA_ADMIN_PASSWORD", "").strip()
     if not password:
         return None
-    if len(password) < 16:
-        raise RuntimeError("A private preview administrator password is required.")
+    # A temporary eight-character password is allowed in this isolated preview.
+    # main() still rejects production; never embed a default password.
+    if len(password) < 8:
+        raise RuntimeError("The private preview password must contain at least 8 characters.")
     return password
 
 
