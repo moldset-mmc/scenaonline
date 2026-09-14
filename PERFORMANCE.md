@@ -57,3 +57,16 @@ This bounded patch explicitly allows Vercel's CDN to cache only successful conte
 The container build also sets the initial HTML title to SCENA and the app retains the default crown favicon accepted by the owner. This is branding, not a performance remedy.
 
 **Remaining blocker:** uploads and generated media require session affinity/shared runtime storage, or a different web implementation. The current patch does not solve that architectural issue. Full public-page load time on the owner's device remains unmeasured. Do not call the entire launch complete based on `/healthz`, an HTTP 200, or local single-process tests.
+
+## Publication receipt — 18:23 UTC
+
+- Production commit `8550e9613b8ed878473f77c6fee1d744450a9c4e`, tree `d49aa92571769ac8259d3442629561f4e078c337`, deployment `dpl_6WsMq1tnbnJKAu4XcbBNKMDK4vBU`: READY, stable alias `scenaonline.vercel.app`.
+- Six targeted gateway/real-Streamlit integration tests passed. A temporary copy of the installed initial HTML verified title replacement is idempotent and preserves the crown favicon reference and all 68 preload links.
+- Root HTTP 200 now contains `<title>SCENA — Моя Сцена</title>` before script execution. A fresh real browser rendered the saved name «Маша Бараночникова» and public navigation. Its favicon remains `./favicon.png`.
+- `/healthz`: HTTP 200, commit `8550e96...`, database/public/private storage verified, previous persistent probe recovered, private access blocked without token. Observed application-ready timing 3.76 seconds; not a page-load measurement.
+- Normal anonymous HTTP reads of the same JS asset at 18:21:38 and 18:22:10 produced MISS then HIT (age 32). Vercel runtime logs independently classify the second as `info/static`, cache HIT, instead of `info/serverless`. CDN delivery is demonstrated.
+- Measurement limitation: connector fetches kept returning MISS because they use a deployment-protection access flow. Those earlier reads are not a controlled anonymous baseline. The old immutable deployment URL redirects anonymous traffic to Vercel authentication, so no before/after full-page or speed percentage is claimed. Direct HTTP timing here also includes approximately nine seconds in the workspace TLS/proxy path and cannot represent the owner's browser.
+
+Retain the explicit immutable-asset cache policy based on demonstrated public CDN delivery, while keeping the larger architecture issue open. The next implementation decision must address process-local Streamlit sessions and transient upload/media registries. Ordinary stateless web pages/API on the existing Vercel project would preserve its stable address and current Turso/Blob resources; retaining Streamlit requires compatible session routing and process lifetime. No migration, new hosting service or paid plan has been created.
+
+This receipt is saved on `checkpoint/scena-performance-2026-09-14` with automatic deployment disabled for that branch. Production `main` remains `8550e9613b8ed878473f77c6fee1d744450a9c4e`.

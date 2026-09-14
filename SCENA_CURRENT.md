@@ -4,6 +4,8 @@ The owner authorized completing and deploying the existing project. This release
 
 **Current limitation, 18:15 UTC:** the owner still reports severe loading delays. Fresh logs show repeated cold starts, upload HTTP 400 and generated-image HTTP 404. Streamlit session distribution across Vercel instances remains unresolved; the site must not yet be described as fully ready. See the second investigation in [PERFORMANCE.md](PERFORMANCE.md). The following cache/branding patch is a bounded correction, not architectural completion.
 
+**Latest production receipt, 18:23 UTC:** `main` is `8550e9613b8ed878473f77c6fee1d744450a9c4e`, Vercel `dpl_6WsMq1tnbnJKAu4XcbBNKMDK4vBU` is READY on the stable domain. Initial HTML now says SCENA, the accepted crown remains, and ordinary anonymous HTTP plus runtime logs confirm immutable-asset CDN HIT. Public page and durable service checks pass. Full browser load time and the multi-instance cabinet/upload problem remain unresolved. Detailed evidence and measurement caveats are in `PERFORMANCE.md`. This diagnostic checkpoint branch does not auto-deploy or change production `main`.
+
 ## Locations
 
 - Source: https://github.com/moldset-mmc/scenaonline ; production branch `main`.
