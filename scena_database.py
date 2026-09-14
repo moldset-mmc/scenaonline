@@ -109,7 +109,8 @@ class Cursor:
 
 
 class Connection:
-    def __init__(self, native):
+    def __init__(self, native, *, remote=False):
+        self.remote = remote
         self.native, self.row_factory = native, None
         self._closed = False
 
@@ -180,7 +181,7 @@ def connect(database, timeout=5, **kwargs):
         native = _call(libsql.connect, url, auth_token=token, timeout=timeout)
     else:
         native = _call(libsql.connect, str(database), timeout=timeout, **kwargs)
-    return Connection(native)
+    return Connection(native, remote=remote)
 
 
 def snapshot_to_file(database, destination):

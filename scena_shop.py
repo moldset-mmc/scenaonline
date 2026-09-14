@@ -46,7 +46,8 @@ def _connect(db):
     con = database_connect(Path(db), timeout=15)
     con.row_factory = sqlite3.Row
     con.execute('PRAGMA foreign_keys=ON')
-    con.execute('PRAGMA busy_timeout=15000')
+    if not getattr(con, 'remote', False):
+        con.execute('PRAGMA busy_timeout=15000')
     return con
 
 
