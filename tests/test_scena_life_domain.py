@@ -1,5 +1,6 @@
 """Isolated regression tests: no live database, network, credentials or clients."""
 import concurrent.futures
+from contextlib import contextmanager
 import json
 from pathlib import Path
 import sqlite3
@@ -11,12 +12,22 @@ from scena_web.domain_migration import migrate_public_origin, NEW_ORIGIN, MIGRAT
 PRODUCTION = {"VERCEL": "1", "VERCEL_ENV": "production"}
 
 
+@contextmanager
+def _test_database(path):
+    connection = sqlite3.connect(path)
+    try:
+        with connection:
+            yield connection
+    finally:
+        connection.close()
+
+
 class DomainMigrationTests(unittest.TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory()
         self.addCleanup(self.folder.cleanup)
         self.database = str(Path(self.folder.name) / "test.db")
-        with sqlite3.connect(self.database) as db:
+        with _test_database(self.database) as db:
             db.executescript("""
                 CREATE TABLE profile_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                 CREATE TABLE app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -34,11 +45,11 @@ class DomainMigrationTests(unittest.TestCase):
             ])
 
     def read(self, sql, params=()):
-        with sqlite3.connect(self.database) as db:
+        with _test_database(self.database) as db:
             return db.execute(sql, params).fetchall()
 
     def set_origin(self, value):
-        with sqlite3.connect(self.database) as db:
+        with _test_database(self.database) as db:
             db.execute("UPDATE profile_settings SET value=? WHERE key='public_base_url'", (value,))
 
     def run_migration(self, environment=None):
@@ -82,13 +93,13 @@ class DomainMigrationTests(unittest.TestCase):
             self.set_origin(value)
             self.assertEqual(self.run_migration(), "skipped_unexpected_origin")
             self.assertEqual(dict(self.read("SELECT key,value FROM profile_settings"))["public_base_url"], value)
-        with sqlite3.connect(self.database) as db:
+        with _test_database(self.database) as db:
             db.execute("DELETE FROM profile_settings WHERE key='public_base_url'")
         self.assertEqual(self.run_migration(), "skipped_unexpected_origin")
         self.assertEqual(self.read("SELECT * FROM app_meta"), [])
 
     def test_receipt_failure_rolls_back_setting_and_cache(self):
-        with sqlite3.connect(self.database) as db:
+        with _test_database(self.database) as db:
             db.execute("CREATE TRIGGER reject_receipt BEFORE INSERT ON app_meta BEGIN SELECT RAISE(ABORT,'test rollback'); END")
         with self.assertRaises(sqlite3.IntegrityError):
             self.run_migration()
@@ -102,11 +113,11 @@ class DomainMigrationTests(unittest.TestCase):
         self.assertEqual(results.count("already_recorded"), 7)
         self.assertEqual(self.read("SELECT version FROM cache_revision"), [(1,)])
 
-    def test_redirect_is_exact_host_only(self):
+    def test_platform_configuration_preserves_existing_setting(self):
         config = json.loads((Path(__file__).resolve().parents[1] / "vercel.json").read_text())
         self.assertEqual(config["git"]["deploymentEnabled"]["checkpoint/scena-hosting-2026-09-14"], False)
-        self.assertEqual(config["redirects"], [{"source": "/:path*", "has": [{"type": "host", "value": "scenaonline.vercel.app"}],
-                                               "destination": "https://scena.life/:path*", "permanent": True}])
+        self.assertNotIn("redirects", config)
+
 
 
 if __name__ == "__main__":

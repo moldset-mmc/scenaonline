@@ -12,5 +12,5 @@ else:
     if not os.environ.get('SCENA_ADMIN_PASSWORD') or not os.environ.get('SCENA_DB_PATH'):
         raise RuntimeError('A test database and test password are required')
 os.environ['SCENA_NATIVE_WEB']='1'
-from scena_web.server import serve
+from scena_web.domain_redirect import serve
 if __name__=='__main__':asyncio.run(serve())
