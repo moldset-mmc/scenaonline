@@ -3037,6 +3037,21 @@ ADMIN_VIEW_COPY = {
 
 def render_admin_navigation(locale: str, section: str, view: str) -> None:
     section_keys = tuple(key for key in ADMIN_SECTIONS if key != "home")
+    if os.environ.get("SCENA_NATIVE_WEB") == "1":
+        def links(items, active, target_section=None):
+            result = []
+            for key, title in items:
+                destination = page_url('admin', locale, section=target_section or key,
+                    view=key if target_section else next(iter(ADMIN_VIEWS.get(key, {})), ''))
+                result.append('<a data-cabinet-nav href="' + html.escape(destination, quote=True) + '"' +
+                    (' aria-current="page"' if key == active else '') + '>' + html.escape(ui(title)) + '</a>')
+            return '<nav class="scena-admin-tabs">' + ''.join(result) + '</nav>'
+        with st.container(key="scena_admin_main_nav"):
+            st.markdown(links([(key, ADMIN_SECTIONS[key]) for key in section_keys], section), unsafe_allow_html=True)
+        if section in ADMIN_VIEWS:
+            with st.container(key="scena_admin_subnav"):
+                st.markdown(links(ADMIN_VIEWS[section].items(), view, section), unsafe_allow_html=True)
+        return
     with st.container(key="scena_admin_main_nav"):
         selected_section = st.segmented_control(
             ui("Раздел кабинета"),

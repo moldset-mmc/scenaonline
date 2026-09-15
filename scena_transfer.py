@@ -86,10 +86,13 @@ def _remove_runtime_state(connection):
     # Never put reusable sessions or encrypted provider settings into an archive.
     for (name,) in connection.execute("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'scena_web_invalidate_%'").fetchall():
         connection.execute('DROP TRIGGER "' + name.replace('"', '""') + '"')
-    for table in ('scena_web_forms', 'scena_web_objects', 'scena_web_pages', 'scena_web_page_revision'):
+    for table in ('scena_web_forms', 'scena_web_objects', 'scena_web_pages', 'scena_web_page_revision', 'shop_telegram_connection'):
         connection.execute('DROP TABLE IF EXISTS ' + table)
     connection.execute("DELETE FROM app_meta WHERE key IN ('cloud_session_key','cloud_auth_version','cloud_native_schema')")
     connection.commit()
+    # A snapshot may inherit WAL mode. Flush stripped runtime/credential tables
+    # before reading the main database file into the portable archive.
+    connection.execute('PRAGMA wal_checkpoint(TRUNCATE)').fetchall()
 
 
 @contextmanager
@@ -345,7 +348,7 @@ def _public_media_refs(value):
     references = set()
     if isinstance(value, dict):
         for key, item in value.items():
-            if key in ("image", "image_url", "avatar_url", "scene_hero_image", "professional_hero_image") or key.endswith("_image") or re.fullmatch(r"(?:beauty|model)_image_(?:[1-9]|1[0-2])", key):
+            if key in ("image", "image_2", "image_3", "image_url", "avatar_url", "scene_hero_image", "professional_hero_image") or key.endswith("_image") or re.fullmatch(r"(?:beauty|model)_image_(?:[1-9]|1[0-2])", key):
                 if isinstance(item, str) and item:
                     references.add(item)
             elif isinstance(item, (dict, list)):

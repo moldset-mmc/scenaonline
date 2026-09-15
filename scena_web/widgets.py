@@ -146,7 +146,7 @@ class WebUI:
     def text_input(self, label, value='', key=None, type='default', max_chars=None, disabled=False, placeholder=None,
                    label_visibility='visible', help=None, **_):
         identity, value = current.get().register('text', label, key, value, disabled=disabled, max_chars=max_chars or 20000)
-        inner = '<input' + attributes(id=identity, name=identity, value=value, type='password' if type=='password' else 'text',
+        inner = '<input' + attributes(id=identity, name=identity, value='' if type=='password' else value, type='password' if type=='password' else 'text',
             maxlength=max_chars, placeholder=placeholder, disabled='' if disabled else None, data_auto='1' if not current.get().group else None) + '>'
         self._label(identity, label, inner, 'TextInput', help, label_visibility)
         return value or ''

@@ -72,6 +72,9 @@ def init_shop(db_or_connection):
             created_at TEXT NOT NULL, updated_at TEXT NOT NULL)''')
         if 'photo_history' not in {row[1] for row in con.execute('PRAGMA table_info(shop_products)')}:
             con.execute("ALTER TABLE shop_products ADD COLUMN photo_history TEXT NOT NULL DEFAULT '[]'")
+        for field in ('image_2', 'image_3'):
+            if field not in {row[1] for row in con.execute('PRAGMA table_info(shop_products)')}:
+                con.execute(f"ALTER TABLE shop_products ADD COLUMN {field} TEXT NOT NULL DEFAULT ''")
         con.execute('''CREATE TABLE IF NOT EXISTS shop_orders (
             id TEXT PRIMARY KEY, reference TEXT NOT NULL UNIQUE,
             request_key TEXT NOT NULL UNIQUE, request_hash TEXT NOT NULL,
@@ -91,6 +94,8 @@ def init_shop(db_or_connection):
             product_revision INTEGER NOT NULL, PRIMARY KEY(order_id,product_id))''')
         con.execute('CREATE INDEX IF NOT EXISTS idx_shop_products_status ON shop_products(status,updated_at)')
         con.execute('CREATE INDEX IF NOT EXISTS idx_shop_orders_status ON shop_orders(status,created_at)')
+        from scena_shop_telegram import initialize as initialize_telegram
+        initialize_telegram(con)
         if own:
             con.commit()
     finally:
@@ -171,7 +176,9 @@ def product_photo_history(app_dir, product):
         values = json.loads(product.get('photo_history', '[]'))
     except (TypeError, ValueError):
         return []
-    return [value for value in values if isinstance(value, str) and local_photo(app_dir, value)] if isinstance(values, list) else []
+    from scena_media import saved_files
+    available = set(saved_files(app_dir, 'media/shop'))
+    return [value for value in values if isinstance(value, str) and value in available] if isinstance(values, list) else []
 
 
 def list_products(db, *, public=False):
@@ -180,13 +187,13 @@ def list_products(db, *, public=False):
     return [dict(row) for row in rows]
 
 
-def save_product(db, app_dir, values, *, product_id=None, expected_revision=None, upload=None):
+def save_product(db, app_dir, values, *, product_id=None, expected_revision=None, upload=None, extra_uploads=None):
     """Save with compare-and-swap; failed edits cannot leave replacement photos."""
     previous = get_product(db, product_id) if product_id else None
     if product_id and previous is None:
         raise ShopError('missing')
     merged = {**{field: '' for field in PRODUCT_FIELDS}, **(previous or {}), **values}
-    allowed = set(PRODUCT_FIELDS) | {'price', 'status', 'image'}
+    allowed = set(PRODUCT_FIELDS) | {'price', 'status', 'image', 'image_2', 'image_3'}
     if any(key not in allowed for key in values):
         raise ShopError('fields')
     status = str(merged.get('status', 'draft'))
@@ -210,13 +217,21 @@ def save_product(db, app_dir, values, *, product_id=None, expected_revision=None
         raise ShopError('name')
     if status == 'published' and any(not clean[field] for field in PRODUCT_FIELDS):
         raise ShopError('translations')
-    image = str(merged.get('image', '')).strip()
-    extension = _photo_extension(upload) if upload is not None else None
-    if upload is None and image and not local_photo(app_dir, image):
+    photo_fields = ('image', 'image_2', 'image_3')
+    photos = {field:str(merged.get(field, '')).strip() for field in photo_fields}
+    if extra_uploads is not None and (not isinstance(extra_uploads, dict) or set(extra_uploads) - {'image_2', 'image_3'}):
+        raise ShopError('fields')
+    uploads = dict(extra_uploads or {})
+    if upload is not None:
+        uploads['image'] = upload
+    extensions = {field:_photo_extension(data) for field,data in uploads.items()}
+    for field, value in photos.items():
+        if field not in uploads and value and not local_photo(app_dir, value):
+            raise ShopError('photo_missing')
+    if status == 'published' and not (photos['image'] or uploads.get('image')):
         raise ShopError('photo_missing')
-    if status == 'published' and not (image or upload):
-        raise ShopError('photo_missing')
-    destination = temporary = None
+    destinations = []
+    temporary = None
     product_id = str(product_id or uuid.uuid4())
     try:
         with _connect(db) as con:
@@ -230,7 +245,7 @@ def save_product(db, app_dir, values, *, product_id=None, expected_revision=None
                 membership = con.execute("SELECT status,expires_at FROM pro_subscriptions WHERE owner_key='master'").fetchone()
                 if not membership or membership['status'] not in ('trial', 'active') or datetime.fromisoformat(membership['expires_at']) <= datetime.now(timezone.utc):
                     raise ShopError('pro')
-            if upload is not None:
+            for field, content in uploads.items():
                 root = Path(app_dir).resolve()
                 folder = (root / 'media' / 'shop').resolve()
                 folder.relative_to(root)
@@ -239,23 +254,28 @@ def save_product(db, app_dir, values, *, product_id=None, expected_revision=None
                 descriptor, filename = tempfile.mkstemp(prefix='.upload-', dir=folder)
                 temporary = Path(filename)
                 with os.fdopen(descriptor, 'wb') as handle:
-                    handle.write(upload)
+                    handle.write(content)
                     handle.flush()
                     os.fsync(handle.fileno())
-                destination = folder / f'{uuid.uuid4().hex}.{extension}'
+                destination = folder / f'{uuid.uuid4().hex}.{extensions[field]}'
                 os.replace(temporary, destination)
+                destinations.append(destination)
                 from scena_media import persist
                 persist(destination, root, public=status == 'published', connection=con)
-                image = destination.relative_to(root).as_posix()
+                photos[field] = destination.relative_to(root).as_posix()
             if status == 'published':
                 from scena_media import publish_reference
-                publish_reference(app_dir, image, connection=con)
+                for photo in photos.values():
+                    if photo:
+                        publish_reference(app_dir, photo, connection=con)
             history = product_photo_history(app_dir, previous or {})
-            if previous and previous.get('image') and previous['image'] != image and local_photo(app_dir, previous['image']):
-                history = [previous['image']] + [value for value in history if value != previous['image']]
-            history = [value for value in history if value != image]
-            fields = list(PRODUCT_FIELDS) + ['price_cents', 'image', 'photo_history', 'status', 'updated_at']
-            data = [clean[field] for field in PRODUCT_FIELDS] + [price_cents, image, json.dumps(history), status, _now()]
+            for field in photo_fields:
+                old = (previous or {}).get(field, '')
+                if old and old not in photos.values() and old not in history:
+                    history.insert(0, old)
+            history = [value for value in history if value not in photos.values()]
+            fields = list(PRODUCT_FIELDS) + ['price_cents', *photo_fields, 'photo_history', 'status', 'updated_at']
+            data = [clean[field] for field in PRODUCT_FIELDS] + [price_cents, *(photos[field] for field in photo_fields), json.dumps(history), status, _now()]
             if previous:
                 con.execute('UPDATE shop_products SET ' + ','.join(f'{field}=?' for field in fields) + ',revision=revision+1 WHERE id=?', data + [product_id])
             else:
@@ -264,7 +284,7 @@ def save_product(db, app_dir, values, *, product_id=None, expected_revision=None
     except Exception:
         if temporary:
             temporary.unlink(missing_ok=True)
-        if destination:
+        for destination in destinations:
             destination.unlink(missing_ok=True)
         raise
     return get_product(db, product_id)
@@ -364,6 +384,7 @@ def create_order(db, cart, contacts, *, reviewed_quote, request_key, locale='ru'
         for item in quote['items']:
             con.execute('''INSERT INTO shop_order_items (order_id,product_id,quantity,unit_price_cents,name_ru,name_ro,name_en,recommendation_ru,recommendation_ro,recommendation_en,product_revision)
                 VALUES(?,?,?,?,?,?,?,?,?,?,?)''', (order_id, item['id'], item['quantity'], item['price_cents'], *(item[f'{field}_{lang}'] for field in ('name', 'recommendation') for lang in LOCALES), item['revision']))
+        con.execute("UPDATE shop_orders SET telegram_status='queued' WHERE id=?", (order_id,))
         return _order(con, order_id)
 
 
@@ -398,12 +419,22 @@ def public_shop_data(connection):
     settings = dict(connection.execute('SELECT key,value FROM profile_settings'))
     if settings.get('shop_enabled', '1') != '1':
         return []
-    columns = ('id',) + PRODUCT_FIELDS + ('price_cents', 'currency', 'image', 'updated_at')
-    cursor = connection.execute('SELECT ' + ','.join(columns) + " FROM shop_products WHERE status='published' ORDER BY id")
+    columns = ('id',) + PRODUCT_FIELDS + ('price_cents', 'currency', 'image', 'image_2', 'image_3', 'updated_at')
+    available = {row[1] for row in connection.execute('PRAGMA table_info(shop_products)')}
+    selection = [field if field in available else "'' AS " + field for field in columns]
+    cursor = connection.execute('SELECT ' + ','.join(selection) + " FROM shop_products WHERE status='published' ORDER BY id")
     return [dict(zip(columns, row)) for row in cursor]
 
 
 _TEXT = {
+    'photo_2': ('Фото 2 — дополнительно', 'Foto 2 — opțional', 'Photo 2 — optional'),
+    'photo_3': ('Фото 3 — дополнительно', 'Foto 3 — opțional', 'Photo 3 — optional'),
+    'remove_photo': ('Убрать эту фотографию', 'Elimină această fotografie', 'Remove this photo'),
+    'gallery_hint': ('До трёх фотографий товара. Первая — обложка; остальные можно переключать в крупном просмотре.', 'Până la trei fotografii. Prima este coperta; celelalte se pot schimba în vizualizarea mărită.', 'Up to three photos. The first is the cover; switch between the others in the expanded view.'),
+    'photo_count': ('Фото', 'Fotografie', 'Photo'),
+    'close_photo': ('Закрыть просмотр', 'Închide vizualizarea', 'Close viewer'),
+    'previous_photo': ('Предыдущее фото', 'Fotografia precedentă', 'Previous photo'),
+    'next_photo': ('Следующее фото', 'Fotografia următoare', 'Next photo'),
     'title': ('Личный Market', 'Market personal', 'Personal Market'),
     'owner_edit': ('Вещи, которым я доверяю', 'Lucruri în care am încredere', 'Things I believe in'),
     'owner_note': ('Личный выбор специалиста', 'Selecția personală a specialistului', 'Personally chosen by your expert'),
@@ -538,8 +569,8 @@ def _shop_style():
     .shop-intro .shop-owner{font-size:14px;color:#c8b38e;margin-top:24px;border-top:1px solid #d5c19235;padding-top:20px}
     div[class*="st-key-shop_card_"]{background:radial-gradient(ellipse at 100% 0,#cbb88818,transparent 65%),#fffdf8;border:1px solid #deceb2;border-radius:22px;padding:20px;height:100%}
     div[class*="st-key-shop_card_"] [data-testid="stImage"]{width:100%!important}
-    div[class*="st-key-shop_card_"] [data-testid="stImage"] img{height:270px!important;object-fit:contain;width:100%!important;border-radius:14px;background:#f1ede4}
-    div[class*="st-key-shop_card_"] h3{font-family:Georgia,serif!important;font-weight:400!important;font-size:25px!important;overflow-wrap:anywhere}
+    div[class*="st-key-shop_card_"] [data-testid="stImage"] img{height:180px!important;object-fit:contain;width:100%!important;border-radius:14px;background:#f1ede4}
+    div[class*="st-key-shop_card_"] h3{font-family:Georgia,serif!important;font-weight:400!important;font-size:19px!important;overflow-wrap:anywhere}
     .shop-price{font-size:21px;font-weight:650;color:#32291c;margin:10px 0}
     .shop-recommendation{background:linear-gradient(130deg,#d5c19629,#e9e4d31a);border-left:3px solid #ad8a46;border-radius:0 18px 18px 0;padding:22px 25px;margin:20px 0;white-space:pre-line;line-height:1.65;overflow-wrap:anywhere}
     .shop-review{padding:22px;background:linear-gradient(130deg,#e5d9bd60,#fffaf3);border:1px solid #d4be90;border-radius:20px;margin:12px 0}
@@ -550,8 +581,60 @@ def _shop_style():
     [data-testid="stTabs"]:has([class*="st-key-shop_admin_"]) button[role="tab"]{min-height:48px;padding:10px 18px}
     [data-testid="stTabs"]:has([class*="st-key-shop_admin_"]) button[role="tab"] p{font-size:16px!important}
     div[class*="st-key-shop_"] input,div[class*="st-key-shop_"] textarea{font-size:16px!important}
-    @media(max-width:600px){.shop-intro{border-radius:18px}.shop-intro p{font-size:16px}div[class*="st-key-shop_card_"]{padding:16px}div[class*="st-key-shop_card_"] [data-testid="stImage"] img{height:260px!important}.shop-review{padding:18px}}
+    @media(max-width:600px){.shop-intro{border-radius:18px}.shop-intro p{font-size:16px}div[class*="st-key-shop_card_"]{padding:16px}div[class*="st-key-shop_card_"] [data-testid="stImage"] img{height:150px!important}.shop-review{padding:18px}}
     </style>''', unsafe_allow_html=True)
+
+
+def product_photos(product):
+    return list(dict.fromkeys(str(product.get(field, '')).strip() for field in ('image','image_2','image_3') if product.get(field)))
+
+
+def _render_product_photos(app_dir, product, locale, *, compact=False):
+    from scena_ui import st
+    photos = product_photos(product)
+    if not photos:
+        return
+    if os.environ.get('SCENA_NATIVE_WEB') != '1':
+        selected = photos[0]
+        if not compact and len(photos) > 1:
+            index = st.pills(_t('photo_count',locale), list(range(len(photos))), default=0,
+                format_func=lambda i: str(i+1), key='shop_photo_'+product['id'])
+            selected = photos[index or 0]
+        if path := local_photo(app_dir, selected):
+            st.image(str(path), width='stretch')
+        return
+    from scena_web.media import reference
+    sources = [source for photo in photos if (source := reference(app_dir, photo))]
+    if not sources:
+        return
+    title = product[f'name_{locale}']
+    data = {'images':sources, 'title':title, 'price':money(product['price_cents']),
+        'description':product[f'description_{locale}'], 'recommendation':product[f'recommendation_{locale}'],
+        'close':_t('close_photo',locale), 'previous':_t('previous_photo',locale), 'next':_t('next_photo',locale)}
+    encoded = html.escape(json.dumps(data,ensure_ascii=False,separators=(',',':')),quote=True)
+    markup = '<div class="shop-gallery-inline' + (' shop-gallery-compact' if compact else '') + '">'
+    markup += '<button type="button" class="shop-photo-open" data-shop-gallery="'+encoded+'" aria-label="'+html.escape(title,quote=True)+'">'
+    markup += '<img class="shop-cover" src="'+html.escape(sources[0],quote=True)+'" alt="'+html.escape(title,quote=True)+'" width="600" height="700" loading="lazy" decoding="async">'
+    if len(sources)>1:
+        markup += '<span class="shop-photo-count">1 / '+str(len(sources))+'</span>'
+    markup += '</button>'
+    if not compact and len(sources)>1:
+        markup += '<div class="shop-photo-thumbs">' + ''.join('<button type="button" data-shop-thumbnail="'+str(i)+'" aria-label="'+html.escape(_t('photo_count',locale),quote=True)+' '+str(i+1)+'"><img src="'+html.escape(src,quote=True)+'" alt="" width="64" height="64" loading="lazy"></button>' for i,src in enumerate(sources)) + '</div>'
+    st.markdown(markup+'</div>',unsafe_allow_html=True)
+
+
+def _render_product_card(app_dir, product, locale):
+    from scena_ui import st
+    with st.container(key='shop_card_' + product['id']):
+        _render_product_photos(app_dir,product,locale,compact=True)
+        st.caption(product[f'category_{locale}'])
+        st.subheader(product[f'name_{locale}'])
+        st.markdown(f'<p class="shop-price">{money(product["price_cents"])}</p>', unsafe_allow_html=True)
+        if st.button(_t('details', locale), key='shop_open_' + product['id'], width='stretch'):
+            st.session_state['shop_product'] = product['id']
+            st.rerun()
+        if st.button(_t('add', locale), key='shop_add_' + product['id'], type='primary', width='stretch'):
+            _add_to_bag(st, product['id'], locale)
 
 
 def _reset_checkout(st):
@@ -637,6 +720,8 @@ def _render_bag(db, locale):
     if st.button(_t('final', locale), type='primary', width='stretch', key='shop_final_confirm'):
         try:
             order = create_order(db, dict(cart), person, reviewed_quote=review['fingerprint'], request_key=st.session_state['shop_request'], locale=locale)
+            from scena_shop_telegram import dispatch
+            dispatch(db, order_id=order['id'])
             st.session_state['shop_receipt'] = {'reference': order['reference'], 'total_cents': order['total_cents']}
             st.session_state['shop_cart'] = {}
             st.session_state.pop('shop_checkout', None)
@@ -694,8 +779,7 @@ def render_shop(db_path, app_dir, settings, locale='ru'):
                 st.rerun()
             photo_column, text_column = st.columns([1.05, 1], gap='large')
             with photo_column:
-                if path := local_photo(app_dir, detail['image']):
-                    st.image(str(path), width='stretch')
+                _render_product_photos(app_dir,detail,locale)
             with text_column:
                 st.caption(detail[f'category_{locale}'])
                 st.subheader(detail[f'name_{locale}'])
@@ -711,21 +795,15 @@ def render_shop(db_path, app_dir, settings, locale='ru'):
             filtered = [product for product in products if (not category or product[f'category_{locale}'] == category) and (not query.strip() or query.casefold().strip() in (product[f'name_{locale}'] + ' ' + product[f'description_{locale}'] + ' ' + product[f'category_{locale}']).casefold())]
             if not filtered:
                 st.info(_t('none', locale))
-            for offset in range(0, len(filtered), 2):
-                cols = st.columns(2, gap='medium')
-                for col, product in zip(cols, filtered[offset:offset + 2]):
-                    with col, st.container(key='shop_card_' + product['id']):
-                        if path := local_photo(app_dir, product['image']):
-                            st.image(str(path), width='stretch')
-                        st.caption(product[f'category_{locale}'])
-                        st.subheader(product[f'name_{locale}'])
-                        st.write(product[f'recommendation_{locale}'][:220] + ('…' if len(product[f'recommendation_{locale}']) > 220 else ''))
-                        st.markdown(f'<p class="shop-price">{money(product["price_cents"])}</p>', unsafe_allow_html=True)
-                        if st.button(_t('details', locale), key='shop_open_' + product['id'], width='stretch'):
-                            st.session_state['shop_product'] = product['id']
-                            st.rerun()
-                        if st.button(_t('add', locale), key='shop_add_' + product['id'], type='primary', width='stretch'):
-                            _add_to_bag(st, product['id'], locale)
+            if os.environ.get('SCENA_NATIVE_WEB') == '1':
+                with st.container(key='shop_catalog'):
+                    for product in filtered:
+                        _render_product_card(app_dir,product,locale)
+            else:
+                for offset in range(0,len(filtered),3):
+                    for column,product in zip(st.columns(3,gap='medium'),filtered[offset:offset+3]):
+                        with column:
+                            _render_product_card(app_dir,product,locale)
         _render_bag(db_path, locale)
 
 
@@ -774,6 +852,15 @@ def render_shop_admin(db_path, app_dir, settings, locale='ru'):
                 upload = st.file_uploader(_t('photo_label', locale), type=['jpg', 'jpeg', 'png', 'webp'])
                 st.caption(_t('photo_hint', locale))
                 values = {}
+                extras = {}
+                st.caption(_t('gallery_hint', locale))
+                for number in (2, 3):
+                    field = f'image_{number}'
+                    if source.get(field) and (path := local_photo(app_dir, source[field])):
+                        st.image(str(path), width=150)
+                    extras[field] = st.file_uploader(_t(f'photo_{number}', locale), type=['jpg','jpeg','png','webp'], key=f'shop_extra_{selected or "new"}_{rev}_{number}')
+                    if source.get(field) and st.checkbox(_t('remove_photo',locale) + f' · {number}', key=f'shop_remove_{selected}_{rev}_{number}'):
+                        values[field] = ''
                 history = product_photo_history(app_dir, source)
                 if history:
                     restore = st.selectbox(_t('photo_restore', locale), [''] + history, format_func=lambda value: _t('photo_current',locale) if not value else f'{_t("photo_version",locale)} {history.index(value) + 1}')
@@ -802,7 +889,7 @@ def render_shop_admin(db_path, app_dir, settings, locale='ru'):
                     try:
                         if values['status'] == 'published' and not reviewed:
                             raise ShopError('translations')
-                        saved = save_product(db_path, app_dir, values, product_id=selected or None, expected_revision=source.get('revision'), upload=upload.getvalue() if upload else None)
+                        saved = save_product(db_path, app_dir, values, product_id=selected or None, expected_revision=source.get('revision'), upload=upload.getvalue() if upload else None, extra_uploads={field:photo.getvalue() for field,photo in extras.items() if photo})
                         st.session_state.pop(source_key, None)
                         st.session_state['shop_admin_select_next'] = saved['id']
                         st.session_state['shop_admin_notice'] = _t('saved', locale)
@@ -837,6 +924,7 @@ def render_shop_admin(db_path, app_dir, settings, locale='ru'):
                 st.write(f'{_t("preferred",locale)} {_t(order["preferred_contact"],locale)}')
                 if order['note']:
                     st.write(order['note'])
+                st.caption('Telegram: ' + {'sent':'отправлено', 'queued':'ожидает отправки', 'retry':'нужна повторная отправка', 'sending':'отправляется', 'skipped':'заказ до подключения уведомлений'}.get(order.get('telegram_status'), 'ожидает отправки'))
                 with st.form('shop_order_status_' + order['id'] + '_' + str(order['revision'])):
                     status = st.selectbox(_t('order_status', locale), ORDER_STATES, index=ORDER_STATES.index(order['status']), format_func=lambda value: _t(value, locale))
                     if st.form_submit_button(_t('status_save', locale)):
@@ -847,6 +935,8 @@ def render_shop_admin(db_path, app_dir, settings, locale='ru'):
                         except ShopError as exc:
                             st.error(_error(exc, locale))
     with settings_tab, st.container(key='shop_admin_storefront'):
+        from scena_shop_telegram import render_settings as render_telegram_settings
+        render_telegram_settings(db_path, locale)
         with st.form('shop_storefront_settings'):
             updates = {'shop_enabled': '1' if st.checkbox(_t('shop_visible', locale), value=settings.get('shop_enabled', '1') == '1') else '0'}
             for language, tab in zip(LOCALES, st.tabs(['RU', 'RO', 'EN'])):

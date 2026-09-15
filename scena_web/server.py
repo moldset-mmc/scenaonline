@@ -77,6 +77,14 @@ def render_page(ctx, previous=None, values=None, files=None):
         current.reset(token)
 
 
+def validate_action(ctx, previous, values, files):
+    token = current.set(ctx)
+    try:
+        apply(ctx, previous, values, files)
+    finally:
+        current.reset(token)
+
+
 class Base(tornado.web.RequestHandler):
     async def prepare(self):
         await asyncio.to_thread(bootstrap.initialize)
@@ -134,7 +142,7 @@ class Page(Base):
     async def post(self):
         self.require_origin()
         try:
-            previous=await asyncio.to_thread(storage.load_form,self.get_body_argument('_token',''),self.browser_id,consume=True)
+            previous=await asyncio.to_thread(storage.load_form,self.get_body_argument('_token',''),self.browser_id)
             query=Query(previous['query'])
             if query.get('page')=='admin' or query.get('admin')=='1':self.require_owner()
             values={k:self.get_body_arguments(k) for k in self.request.body_arguments}
@@ -168,7 +176,11 @@ class Page(Base):
             ctx=RenderContext(previous['state'],query,self.context_headers(),session_id=self.browser_id,
                 action=values.get('_action',[''])[0],submitted=True,private=self.owner)
             ctx.fragment = query.get('page') == 'booking' and self.request.headers.get('X-Scena-Fragment') == 'booking'
-            await self.output(ctx,previous['widgets'],values,uploaded)
+            await asyncio.to_thread(validate_action,ctx,previous['widgets'],values,uploaded)
+            # Invalid fields leave the form usable. Only a validated action can
+            # consume its token, immediately before any domain mutation.
+            await asyncio.to_thread(storage.load_form,self.get_body_argument('_token',''),self.browser_id,consume=True)
+            await self.output(ctx)
         except (ValueError,KeyError,IndexError) as error:
             raise tornado.web.HTTPError(409,reason=str(error) if isinstance(error,ValueError) else 'Обновите страницу и повторите действие.') from None
 

@@ -25,7 +25,7 @@ APPLICATION_FILES = (
     "scena_design.py", "scena_booking_ui.py", "scena_portfolio.py", "scena_pro_ui.py",
     "scena_telegram_setup.py", "CONNECT-TELEGRAM.cmd", "TELEGRAM-SETUP.md",
     "scena_model_intro.py", "scena_i18n.py", "scena_workspace_ui.py",
-    "scena_shop.py", "scena_prompts.py", "scena_licensing.py", "scena_pro_operator.py", "PRO-OPERATOR.cmd",
+    "scena_shop.py", "scena_shop_telegram.py", "scena_prompts.py", "scena_licensing.py", "scena_pro_operator.py", "PRO-OPERATOR.cmd",
     "PRO-RENEWAL-SETUP.md", "PROMPT-LIBRARY-GUIDE.md", "config/pro-issuer-public.pem", "scena_qr.py", "scena_model_builder.py",
     "scena_help_ui.py", "scena_connect_setup.py", "CONNECT-AI.cmd", "CONNECTIONS.md",
     "requirements.txt", "README.md", ".streamlit/config.toml",

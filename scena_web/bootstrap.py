@@ -28,7 +28,7 @@ def initialize():
         Path(database).parent.mkdir(parents=True,exist_ok=True)
         revision=hashlib.sha256(b''.join((ROOT/name).read_bytes() for name in (
             'scena_core.py','scena_cabinet.py','scena_publications.py','scena_shop.py',
-            'scena_prompts.py','scena_licensing.py','scena_web/storage.py','scena_web/page_cache.py'))).hexdigest()
+            'scena_prompts.py','scena_licensing.py','scena_shop_telegram.py','scena_web/storage.py','scena_web/page_cache.py'))).hexdigest()
         try:
             with connect(database) as db:
                 metadata=dict(db.execute("SELECT key,value FROM app_meta WHERE key IN ('cloud_native_schema','cloud_session_key')").fetchall())

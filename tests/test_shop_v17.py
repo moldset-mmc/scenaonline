@@ -61,6 +61,39 @@ class ShopTests(unittest.TestCase):
         self.assertEqual(get_product(self.db, self.product['id']), self.product)
         self.assertTrue(get_settings(self.db)['master_name'])
 
+    def test_three_photos_survive_text_edits_and_individual_removal(self):
+        second, third = self.make_photo('navy'), self.make_photo('tan')
+        product = save_product(self.db, self.root, {}, product_id=self.product['id'], expected_revision=1,
+            extra_uploads={'image_2':second,'image_3':third})
+        self.assertEqual((self.root / product['image_2']).read_bytes(), second)
+        self.assertEqual((self.root / product['image_3']).read_bytes(), third)
+        edited = save_product(self.db,self.root,{'name_en':'Three photos'},product_id=product['id'],expected_revision=2)
+        for key in ('image','image_2','image_3'):
+            self.assertEqual(edited[key],product[key])
+        removed = save_product(self.db,self.root,{'image_2':''},product_id=product['id'],expected_revision=3)
+        self.assertEqual(removed['image_2'],'')
+        self.assertEqual(removed['image_3'],product['image_3'])
+        self.assertTrue((self.root / product['image_2']).is_file())
+        self.assertIn(product['image_2'],removed['photo_history'])
+        with sqlite3.connect(self.db) as con:
+            self.assertEqual(public_shop_data(con)[0]['image_3'],product['image_3'])
+
+    def test_bad_extra_or_fourth_photo_cannot_partially_save(self):
+        for extras in ({'image_2':self.photo,'image_3':b'invalid'}, {'image_4':self.photo}):
+            with self.assertRaises(ShopError):
+                save_product(self.db,self.root,{},product_id=self.product['id'],expected_revision=1,extra_uploads=extras)
+        self.assertEqual(get_product(self.db,self.product['id']),self.product)
+        self.assertEqual(len(list((self.root/'media/shop').iterdir())),1)
+
+    def test_gallery_migration_keeps_legacy_main_photo(self):
+        with sqlite3.connect(self.db) as con:
+            con.execute('ALTER TABLE shop_products DROP COLUMN image_2')
+            con.execute('ALTER TABLE shop_products DROP COLUMN image_3')
+        init_shop(self.db)
+        product = get_product(self.db,self.product['id'])
+        self.assertEqual(product['image'],self.product['image'])
+        self.assertEqual((product['image_2'],product['image_3']),('',''))
+
     def test_price_precision_rejects_nonfinite_rounding_and_negative(self):
         self.assertEqual(price_to_cents('259,75'), 25975)
         self.assertEqual(price_to_cents('0.01'), 1)

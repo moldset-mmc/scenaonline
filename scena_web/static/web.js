@@ -1,5 +1,6 @@
 (() => {
   let busy = false;
+  let pendingNavigation = null;
   const status = (message, failed = false) => {
     const node = document.getElementById('scena-operation');
     node.hidden = !message; node.textContent = message; node.dataset.failed = String(failed);
@@ -35,11 +36,19 @@
     status('Сохраняю…');
     const focus = document.activeElement?.id;
     const scroll = window.scrollY;
-    const data = new FormData(form);
+    const trigger = button || [...form.elements].find(field => field.name === changed);
+    const group = trigger?.closest('fieldset[data-form-key]') || null;
+    const fields = [...form.elements].filter(field => (field.closest('fieldset[data-form-key]') || null) === group);
+    const names = new Set(fields.map(field => field.name));
+    const data = new URLSearchParams();
+    for (const [name, value] of new FormData(form)) {
+      if (typeof value === 'string' && (name === '_token' || names.has(name))) data.append(name, value);
+    }
+    let completed = false;
     if (button?.name) data.set(button.name, button.value);
     if (changed) data.set('_changed', changed);
     try {
-      for (const input of form.querySelectorAll('input[type=file]')) {
+      for (const input of fields.filter(field => field.type === 'file')) {
         data.delete(input.name);
         if (!input.files.length) continue;
         const descriptors = [];
@@ -86,8 +95,9 @@
       history.replaceState(null,'',destination);
       window.scrollTo(0,scroll);
       if (focus) document.getElementById(focus)?.focus({preventScroll:true});
-      for (const input of document.querySelectorAll('input[type=file]')) input.value = '';
+      for (const field of fields.filter(field => field.type === 'file')) { const input = document.getElementById(field.id); if (input?.type === 'file') input.value = ''; }
       status('');
+      completed = true;
       let meter = document.getElementById('scena-performance');
       if (!meter) { meter = document.createElement('div'); meter.id = 'scena-performance'; meter.hidden = true; document.body.append(meter); }
       meter.dataset.lastInteraction = JSON.stringify({ms:Math.round(performance.now()-started),
@@ -95,7 +105,11 @@
         serverTiming:response.headers.get('Server-Timing')});
     } catch (error) {
       status(error.message,true);
-    } finally { busy = false; }
+    } finally {
+      busy = false;
+      const destination = pendingNavigation; pendingNavigation = null;
+      if (completed && destination) window.location.assign(destination);
+    }
   }
   const escapeHTML = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const monthOffset = (month, delta) => { const d = new Date(month + '-01T12:00:00Z'); d.setUTCMonth(d.getUTCMonth()+delta); return d.toISOString().slice(0,7); };
@@ -159,12 +173,68 @@
     const meter=document.getElementById('scena-performance');
     if (meter) meter.dataset.lastInteraction=JSON.stringify({ms:Math.round(performance.now()-started),mode:'booking-local',networkRequests:0});
   }, true);
+  document.addEventListener('click', event => {
+    const link = event.target.closest('a[data-cabinet-nav]');
+    if (!link || !busy || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault(); pendingNavigation = link.href;
+  });
   document.addEventListener('submit', event => {
     if (event.target.id !== 'scena-page') return;
     event.preventDefault(); submit(event.target,event.submitter);
   });
   document.addEventListener('change', event => {
     if (event.target.dataset.auto === '1') submit(event.target.form,null,event.target.name);
+  });
+  function openProductGallery(button) {
+    const data = JSON.parse(button.dataset.shopGallery);
+    if (!data.images?.length) return;
+    let index = Number(button.dataset.shopIndex || 0);
+    let dialog = document.getElementById('scena-product-viewer');
+    if (dialog) dialog.remove();
+    dialog = document.createElement('dialog'); dialog.id = 'scena-product-viewer'; dialog.className = 'shop-product-dialog';
+    dialog.setAttribute('aria-labelledby','scena-product-title');
+    dialog.innerHTML = '<button type="button" class="shop-dialog-close">×</button><div class="shop-dialog-grid"><div><img class="shop-dialog-image" alt=""><div class="shop-dialog-arrows"><button type="button" data-gallery-prev>‹</button><span aria-live="polite"></span><button type="button" data-gallery-next>›</button></div><div class="shop-photo-thumbs"></div></div><div class="shop-dialog-copy"><h2 id="scena-product-title"></h2><p class="shop-price"></p><p class="shop-dialog-description"></p><p class="shop-dialog-recommendation"></p></div></div>';
+    dialog.querySelector('.shop-dialog-close').setAttribute('aria-label',data.close);
+    dialog.querySelector('[data-gallery-prev]').setAttribute('aria-label',data.previous);
+    dialog.querySelector('[data-gallery-next]').setAttribute('aria-label',data.next);
+    dialog.querySelector('h2').textContent = data.title;
+    dialog.querySelector('.shop-price').textContent = data.price;
+    dialog.querySelector('.shop-dialog-description').textContent = data.description;
+    dialog.querySelector('.shop-dialog-recommendation').textContent = data.recommendation;
+    const thumbs=dialog.querySelector('.shop-photo-thumbs');
+    data.images.forEach((src,i)=>{
+      const thumb=document.createElement('button');thumb.type='button';thumb.setAttribute('aria-label',data.title+' · '+(i+1));
+      const img=document.createElement('img');img.src=src;img.alt='';img.width=56;img.height=56;thumb.append(img);
+      thumb.addEventListener('click',()=>show(i));thumbs.append(thumb);
+    });
+    function show(next) {
+      index=(next+data.images.length)%data.images.length;
+      const image=dialog.querySelector('.shop-dialog-image');image.src=data.images[index];image.alt=data.title+' · '+(index+1);
+      dialog.querySelector('.shop-dialog-arrows span').textContent=(index+1)+' / '+data.images.length;
+      [...thumbs.children].forEach((thumb,i)=>thumb.setAttribute('aria-pressed',String(i===index)));
+    }
+    dialog.querySelector('.shop-dialog-arrows').hidden=data.images.length<2;thumbs.hidden=data.images.length<2;
+    dialog.querySelector('.shop-dialog-close').addEventListener('click',()=>dialog.close());
+    dialog.querySelector('[data-gallery-prev]').addEventListener('click',()=>show(index-1));
+    dialog.querySelector('[data-gallery-next]').addEventListener('click',()=>show(index+1));
+    dialog.addEventListener('keydown',event=>{if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();show(index+(event.key==='ArrowRight'?1:-1));}});
+    dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});
+    dialog.addEventListener('close',()=>{button.focus({preventScroll:true});dialog.remove();},{once:true});
+    document.body.append(dialog);show(index);dialog.showModal();
+  }
+  document.addEventListener('click',event=>{
+    const thumb=event.target.closest('[data-shop-thumbnail]');
+    if(thumb){
+      const gallery=thumb.closest('.shop-gallery-inline'),button=gallery.querySelector('[data-shop-gallery]');
+      const data=JSON.parse(button.dataset.shopGallery),index=Number(thumb.dataset.shopThumbnail);
+      if(!data.images[index])return;
+      button.dataset.shopIndex=String(index);button.querySelector('img').src=data.images[index];
+      const counter=button.querySelector('.shop-photo-count');if(counter)counter.textContent=(index+1)+' / '+data.images.length;
+      return;
+    }
+    let button=event.target.closest('[data-shop-gallery]');
+    if(!button && !event.target.closest('button,a,input,select,textarea'))button=event.target.closest('[class*="st-key-shop_card_"]')?.querySelector('[data-shop-gallery]');
+    if(button){event.preventDefault();openProductGallery(button);}
   });
   const selectTab = tab => {
     const list = tab.closest('[role=tablist]');

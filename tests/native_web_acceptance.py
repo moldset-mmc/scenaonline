@@ -79,6 +79,21 @@ async def main():
                     elif w['kind']=='multiple':result[identity]=[str(w['options'].index(v)) for v in value]
                     else:result[identity]=value.isoformat() if hasattr(value,'isoformat') else str(value or '')
                 return result
+            # A validation error must not consume the form and strand the editor.
+            schedule_path='/?page=admin&lang=ru&section=work&view=schedule'
+            fresh,_=await request(schedule_path,owner=True)
+            old_token,_=form(fresh)
+            invalid,_=await request(schedule_path,owner=True,data=payload(fresh,'Сохранить график',{'Шаг слотов, мин.':1}))
+            assert invalid.code==409,invalid.body
+            load_form(old_token,sid)
+            corrected,_=await request(schedule_path,owner=True,data=payload(fresh,'Сохранить график'))
+            assert corrected.code==200,corrected.body
+            assert 'data-cabinet-nav' in corrected.body.decode()
+            scene_view,_=await request('/?page=admin&lang=ru&section=pages&view=scene',owner=True)
+            model_view,_=await request('/?page=admin&lang=ru&section=pages&view=model',owner=True)
+            assert scene_view.code==model_view.code==200
+            assert 'data-cabinet-nav' in model_view.body.decode()
+            print('PASS corrected save reuses unconsumed form; cabinet navigation is independent GET',flush=True)
             # Ready HTML is reused across replicas, then invalidated by edits.
             scene='/?page=scene&lang=ru'
             await request(scene)
@@ -186,6 +201,55 @@ async def main():
             with Image.open(fixture/settings['avatar_url']) as saved_image:
                 assert saved_image.size==(1200,1000) and saved_image.format=='WEBP'
             print('PASS image >3MB uploaded across instances and saved by existing image pipeline',flush=True)
+            # Save two extra photos through separate registered upload fields.
+            from scena_shop import PRODUCT_FIELDS, save_product, get_product, list_orders
+            tiny=io.BytesIO();Image.new('RGB',(600,700),'tan').save(tiny,format='PNG');photo=tiny.getvalue()
+            product=save_product(os.environ['SCENA_DB_PATH'],fixture,
+                {**{key:'Gallery fixture '+key for key in PRODUCT_FIELDS},'price':'100','status':'published'},upload=photo)
+            market='/?page=admin&lang=ru&section=pages&view=shop'
+            response,_=await request(market,owner=True)
+            response,_=await request(market,owner=True,data=payload(response,None,{'Какой товар редактируем?':product['id']},changed='Какой товар редактируем?'))
+            token,saved=form(response);data=payload(response,'Сохранить товар')
+            for number in (2,3):
+                identity=next(k for k,w in saved['widgets'].items() if w['kind']=='file' and w['label']==f'Фото {number} — дополнительно')
+                chunk=await client.fetch(HTTPRequest(urls[0]+'/scena-upload',method='POST',headers={'Cookie':cookie,'Origin':urls[0],'X-Scena-Form':token,'X-Scena-Field':identity,'Content-Type':'application/octet-stream'},body=photo),raise_error=False)
+                assert chunk.code==200,chunk.body
+                data['_upload_'+identity]=json.dumps([{'refs':[json.loads(chunk.body)['id']],'name':f'extra{number}.png','mime':'image/png','size':len(photo)}])
+            response,_=await request(market,owner=True,data=data,instance=1)
+            assert response.code==200,response.body
+            updated=get_product(os.environ['SCENA_DB_PATH'],product['id'])
+            assert len({updated[key] for key in ('image','image_2','image_3')})==3
+            for key in ('image','image_2','image_3'):assert (fixture/updated[key]).read_bytes()==photo
+            shop,_=await request('/?page=shop&lang=ru')
+            assert b'shop-gallery-compact' in shop.body and b'data-shop-gallery' in shop.body and b'1 / 3' in shop.body
+            print('PASS native owner uploads 3 photos across instances; compact public gallery retains originals',flush=True)
+            # Bind only the fixture owner's Telegram and intercept all bot calls.
+            import scena_shop_telegram as tg
+            bot_token='123456789:'+('a'*32)
+            save_settings(os.environ['SCENA_DB_PATH'],{'telegram_url':'@fixtureowner'})
+            with patch.dict(os.environ,{'SCENA_TELEGRAM_CREDENTIAL_KEY':'native-fixture-only-key'}):
+                response,_=await request(market,owner=True)
+                with patch.object(tg.TelegramBotAdapter,'_call',return_value={'is_bot':True,'username':'FixtureBot'}):
+                    response,_=await request(market,owner=True,data=payload(response,'Получить код подключения',{'Токен бота из @BotFather':bot_token}))
+                assert response.code==200 and bot_token.encode() not in response.body,response.body
+                pending=tg.connection_status(os.environ['SCENA_DB_PATH'])['pending']
+                update=[{'message':{'text':pending['code'],'date':time.time(),'chat':{'id':501,'type':'private','username':'fixtureowner'},'from':{'id':501,'is_bot':False}}}]
+                with patch.object(tg.TelegramBotAdapter,'_call',return_value=update):
+                    response,_=await request(market,owner=True,data=payload(response,'Код отправлен — подключить Telegram'))
+                assert response.code==200 and tg.connection_status(os.environ['SCENA_DB_PATH'])['connected']
+                shop,_=await request('/?page=shop&lang=ru',data=payload(shop,'В корзину'))
+                shop,_=await request('/?page=shop&lang=ru',data=payload(shop,'Перейти к оформлению'))
+                shop,_=await request('/?page=shop&lang=ru',data=payload(shop,'Проверить заказ',{'Ваше имя':'Fixture buyer','Телефон':'+37360000111','Согласна на обработку контактов для этого заказа':True}))
+                data=payload(shop,'Подтвердить заказ')
+                with patch.object(tg.TelegramBotAdapter,'_call',return_value={'message_id':123}) as sender:
+                    receipt,_=await request('/?page=shop&lang=ru',data=data,instance=1)
+                assert receipt.code==200,receipt.body
+                sender.assert_called_once()
+                assert sender.call_args.args[0]=='sendMessage' and sender.call_args.args[1]['chat_id']=='501'
+                assert list_orders(os.environ['SCENA_DB_PATH'])[0]['telegram_status']=='sent'
+                duplicate,_=await request('/?page=shop&lang=ru',data=data)
+                assert duplicate.code==409
+            print('PASS native Telegram binding and checkout: one committed order, one lead to verified owner',flush=True)
             # Create a public inquiry; do not call any configured external sender.
             inquiry='/?page=join-model&lang=ru'
             response,_=await request(inquiry)
