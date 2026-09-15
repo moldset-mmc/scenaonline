@@ -52,6 +52,8 @@ def _media_path(app_dir: Path, value: object) -> Path | None:
         path.relative_to(media)
     except (ValueError, OSError):
         return None
+    from scena_media import ensure_local
+    ensure_local(app_dir, path.relative_to(root))
     if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"} or not path.is_file():
         return None
     return path
@@ -166,15 +168,8 @@ def _validate_original(data: bytes) -> tuple[str, tuple[int, int]]:
 
 def saved_originals(app_dir: Path) -> list[str]:
     """Only this editor's retained originals are offered for reuse."""
-    folder = (app_dir / "media" / "portfolio").resolve()
-    try:
-        folder.relative_to(app_dir.resolve())
-    except ValueError:
-        return []
-    if not folder.is_dir():
-        return []
-    files = [path for path in folder.iterdir() if not path.is_symlink() and _media_path(app_dir, path) is not None]
-    return [path.relative_to(app_dir.resolve()).as_posix() for path in sorted(files, key=lambda path: (path.stat().st_mtime_ns, path.name), reverse=True)]
+    from scena_media import saved_files
+    return saved_files(app_dir, "media/portfolio")
 
 
 def _persist_portfolio_slot(db_path: Path, prefix: str, slot: int, value: str) -> None:
@@ -213,7 +208,8 @@ def update_portfolio_slot(db_path: Path, app_dir: Path, kind: str, slot: int, *,
         if existing_image is not None:
             if existing_image not in saved_originals(app_dir):
                 raise ValueError("Эта фотография недоступна. Выберите другой сохранённый оригинал.")
-            _validate_original((app_dir / existing_image).read_bytes())
+            from scena_media import ensure_local
+            _validate_original(ensure_local(app_dir, existing_image).read_bytes())
             value = existing_image
         elif data is not None:
             extension, _ = _validate_original(data)
@@ -276,7 +272,7 @@ def render_portfolio_editor(db_path: Path, app_dir: Path, settings: Mapping[str,
     chosen = None
     if originals:
         with st.expander(f"{ui('Выбрать из сохранённых фотографий · ')}{len(originals)}"):
-            labels = {value: f"{ui('Фотография ')}{index + 1} · {datetime.fromtimestamp((app_dir / value).stat().st_mtime).strftime('%d.%m.%Y %H:%M')}" for index, value in enumerate(originals)}
+            labels = {value: f"{ui('Фотография ')}{index + 1} · {Path(value).name[:16]}" for index, value in enumerate(originals)}
             chosen = st.selectbox(ui('Сохранённый оригинал'), originals, format_func=lambda value: labels[value], key=f"{key}_saved_original")
             st.image(str(app_dir / chosen), width=240)
             reuse = st.button(f"{ui('Использовать в кадре ')}{selected}", key=f"{key}_reuse_{selected}")

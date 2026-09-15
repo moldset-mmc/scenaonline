@@ -59,17 +59,16 @@ def _local_image(app_dir: Path, value: str) -> Path | None:
         media.relative_to(app_dir.resolve())
         candidate = (app_dir / value).resolve()
         candidate.relative_to(media)
+        from scena_media import ensure_local
+        ensure_local(app_dir, value)
         return candidate if candidate.is_file() else None
     except (ValueError, OSError):
         return None
 
 
 def saved_portraits(app_dir: Path) -> list[str]:
-    folder = app_dir / 'media' / 'model-intro'
-    if not folder.is_dir() or folder.is_symlink():
-        return []
-    return [p.relative_to(app_dir).as_posix() for p in sorted(folder.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
-            if p.is_file() and not p.is_symlink() and p.suffix.lower() in {'.jpg', '.png', '.webp'}]
+    from scena_media import saved_files
+    return saved_files(app_dir, "media/model-intro")
 
 
 def save_intro(db_path, app_dir, values, *, upload: bytes | None = None, expected=None):

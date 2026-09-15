@@ -84,7 +84,9 @@ def _identity(connection):
 def _remove_runtime_state(connection):
     # Browser forms and temporary download/upload references are not owner data.
     # Never put reusable sessions or encrypted provider settings into an archive.
-    for table in ('scena_web_forms', 'scena_web_objects'):
+    for (name,) in connection.execute("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'scena_web_invalidate_%'").fetchall():
+        connection.execute('DROP TRIGGER "' + name.replace('"', '""') + '"')
+    for table in ('scena_web_forms', 'scena_web_objects', 'scena_web_pages', 'scena_web_page_revision'):
         connection.execute('DROP TABLE IF EXISTS ' + table)
     connection.execute("DELETE FROM app_meta WHERE key IN ('cloud_session_key','cloud_auth_version','cloud_native_schema')")
     connection.commit()

@@ -12,7 +12,7 @@ from scena_i18n import tr as _tr, content_text, localized_name, translate_litera
 
 from scena_core import (
     CHISINAU, RequestValidationError, create_service_request,
-    generate_available_slots, list_services,
+    generate_available_slots, generate_availability_range, list_services,
 )
 
 
@@ -65,7 +65,7 @@ def _move_month(value: str) -> None:
     st.session_state["booking_month"] = value
 
 
-def _calendar(db_path: Path, service_id: int, locale: str, now: datetime, last_day: date) -> None:
+def _calendar(db_path: Path, service_id: int, locale: str, now: datetime, last_day: date, availability: dict) -> None:
     today = now.date()
     selected = _day(st.session_state.get("booking_date"), today)
     if not today <= selected <= last_day:
@@ -91,17 +91,17 @@ def _calendar(db_path: Path, service_id: int, locale: str, now: datetime, last_d
                     column.markdown('<div class="scena-calendar-blank" aria-hidden="true"></div>', unsafe_allow_html=True)
                     continue
                 valid = today <= candidate <= last_day
-                free = bool(generate_available_slots(db_path, service_id, candidate.isoformat(), now=now)) if valid else False
+                free = bool(availability.get(candidate.isoformat())) if valid else False
                 label = str(candidate.day) + (" ·" if free and candidate != selected else "")
-                availability = _tr(locale, "есть свободное время", "ore disponibile") if free else _tr(locale, "свободного времени нет", "nu sunt ore disponibile")
-                column.button(label, key=f"booking_day_{candidate.isoformat()}", type="primary" if candidate == selected else "secondary", disabled=not valid, help=f"{_date_label(candidate.isoformat(), locale)} — {availability}", on_click=_choose_day, args=(candidate.isoformat(),), width="stretch")
+                availability_label = _tr(locale, "есть свободное время", "ore disponibile") if free else _tr(locale, "свободного времени нет", "nu sunt ore disponibile")
+                column.button(label, key=f"booking_day_{candidate.isoformat()}", type="primary" if candidate == selected else "secondary", disabled=not valid, help=f"{_date_label(candidate.isoformat(), locale)} — {availability_label}", on_click=_choose_day, args=(candidate.isoformat(),), width="stretch")
         st.caption(_tr(locale, "Точка рядом с датой — есть свободное время.", "Un punct lângă dată indică ore disponibile."))
 
 
-def _time_blocks(db_path: Path, service_id: int, locale: str, now: datetime, last_day: date) -> list[str]:
+def _time_blocks(db_path: Path, service_id: int, locale: str, now: datetime, last_day: date, availability: dict) -> list[str]:
     selected = st.session_state["booking_date"]
     st.markdown(f'<h3 class="scena-booking-date">{html.escape(_date_label(selected, locale))}</h3>', unsafe_allow_html=True)
-    slots = generate_available_slots(db_path, service_id, selected, now=now)
+    slots = availability.get(selected, [])
     if st.session_state.get("booking_time") not in slots:
         st.session_state.pop("booking_time", None)
     if not slots:
@@ -109,7 +109,7 @@ def _time_blocks(db_path: Path, service_id: int, locale: str, now: datetime, las
         candidate = date.fromisoformat(selected) + timedelta(days=1)
         nearest = None
         while candidate <= last_day:
-            if generate_available_slots(db_path, service_id, candidate.isoformat(), now=now):
+            if availability.get(candidate.isoformat()):
                 nearest = candidate.isoformat()
                 break
             candidate += timedelta(days=1)
@@ -233,6 +233,15 @@ def render_booking(db_path: str | Path, app_dir: str | Path, settings: dict[str,
     .st-key-booking_morning button,.st-key-booking_afternoon button {padding:8px!important;min-height:44px}
     @media(max-width:640px){.st-key-booking_calendar{padding:.65rem!important}.st-key-booking_calendar [data-testid="stHorizontalBlock"]{gap:3px!important}.st-key-booking_calendar button{min-height:40px}.st-key-booking_calendar button p{font-size:14px!important}}
     </style>""", unsafe_allow_html=True)
+    with st.container(key="booking_flow"):
+        render_booking_flow(db_path, app_dir, settings, locale)
+
+
+def render_booking_flow(db_path, app_dir, settings, locale):
+    """The interactive booking region, also rendered independently over HTTP."""
+    if settings.get("professional_published", "1") != "1":
+        st.info(_tr(locale, "Запись сейчас недоступна. Загляните немного позже.", "Programarea nu este disponibilă acum. Reveniți puțin mai târziu."))
+        return
     if st.session_state.get("booking_receipt"):
         receipt = st.session_state["booking_receipt"]
         st.success(_tr(locale, f"Спасибо! Заявка №{receipt['id']} принята. Мастер свяжется с вами, чтобы подтвердить встречу.", f"Mulțumim! Cererea #{receipt['id']} a fost primită. Specialistul vă va contacta pentru a confirma întâlnirea."))
@@ -273,12 +282,13 @@ def render_booking(db_path: str | Path, app_dir: str | Path, settings: dict[str,
         st.caption(description)
     now = datetime.now(CHISINAU)
     last_day = now.date() + timedelta(days=int(settings.get("booking_horizon_days", "90")))
+    availability = generate_availability_range(db_path, selected_service, now.date().isoformat(), last_day.isoformat(), now=now)
     day_column, time_column = st.columns([1.05, 1], gap="large")
     with day_column:
         st.markdown('<h3 class="scena-booking-date">'+html.escape(_tr(locale, "2. Выберите день и время", "2. Alegeți ziua și ora", "2. Choose a day and time"))+'</h3>',unsafe_allow_html=True)
-        _calendar(db_path, selected_service, locale, now, last_day)
+        _calendar(db_path, selected_service, locale, now, last_day, availability)
     with time_column:
-        slots = _time_blocks(db_path, selected_service, locale, now, last_day)
+        slots = _time_blocks(db_path, selected_service, locale, now, last_day, availability)
     chosen_time = st.session_state.get("booking_time")
     if chosen_time in slots:
         st.caption(f"{_name(item, locale)} · {_date_label(st.session_state['booking_date'], locale)} · {chosen_time}")

@@ -11,7 +11,7 @@ import secrets
 import time
 from urllib.parse import urlencode, urlsplit, quote
 import tornado.web
-from . import bootstrap, storage, media
+from . import bootstrap, storage, media, page_cache
 from .context import RenderContext, Query, current, Rerun, Stop, FormError
 from .forms import apply
 from scena_cloud_auth import COOKIE, valid_session
@@ -31,7 +31,17 @@ def render_page(ctx, previous=None, values=None, files=None):
         for attempt in range(8):
             ctx.reset()
             try:
-                scena_app.run()
+                if ctx.fragment:
+                    from scena_core import get_settings
+                    from scena_booking_ui import render_booking_flow
+                    from scena_web.widgets import st
+                    settings = get_settings(os.environ['SCENA_DB_PATH'])
+                    locale = scena_app.detected_locale(settings)
+                    ctx.state['scena_ui_locale'] = locale
+                    with st.container(key='booking_flow'):
+                        render_booking_flow(Path(os.environ['SCENA_DB_PATH']), Path(os.environ.get('SCENA_APP_DIR', ROOT)), settings, locale)
+                else:
+                    scena_app.run()
                 break
             except Rerun:
                 ctx.action=''
@@ -42,6 +52,9 @@ def render_page(ctx, previous=None, values=None, files=None):
         else:
             raise RuntimeError('Page did not settle')
         form_token=storage.save_form(ctx.session_id,ctx.state,ctx.query,ctx.widgets) if ctx.widgets else ''
+        if ctx.fragment:
+            response = {'fragment': '.st-key-booking_flow', 'html': ctx.root.children[0].render(), 'token': form_token}
+            return response, ctx.url, bool(ctx.widgets), round((time.monotonic()-started)*1000,1)
         resources=media.assets()
         css=resources.get('scena_web/static/web.css','')
         js=resources.get('scena_web/static/web.js','')
@@ -52,7 +65,7 @@ def render_page(ctx, previous=None, values=None, files=None):
         # The existing scene markup supplies dimensions; the first visible image
         # is prioritized rather than competing with every below-fold photograph.
         body=re.sub(r'(<img\b[^>]*)(>)',lambda m:m[1].replace('loading="lazy"','loading="eager"')+' fetchpriority="high"'+m[2],body,count=1)
-        document=f'''<!doctype html><html lang="{html.escape(ctx.query.get('lang','ru'))}" data-scena-runtime="native-html"><head>
+        document=f'''<!doctype html><html lang="{html.escape(ctx.state.get('scena_ui_locale',ctx.query.get('lang','ru')))}" data-scena-runtime="native-html"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(ctx.title)}</title>
 <link rel="icon" href="{favicon}"><link rel="stylesheet" href="{css}"><style>{styles}</style><script>{measure}</script><script src="{js}" defer></script></head>
 <body><div class="stApp" data-testid="stApp"><main class="stMain" data-testid="stMain"><div class="block-container stMainBlockContainer" data-testid="stMainBlockContainer">
@@ -100,6 +113,17 @@ class Page(Base):
         query=Query({k:self.get_query_argument(k) for k in self.request.query_arguments})
         if (query.get('page')=='admin' or query.get('admin')=='1') and not self.owner:
             self.redirect('/auth/login?'+urlencode({'next':self.request.uri}));return
+        self.cache_key = page_cache.key(query, self.request.headers.get('Accept-Language', 'ru').split(',')[0]) if not self.owner else None
+        if self.cache_key:
+            started = time.monotonic()
+            self.cache_version, saved = await asyncio.to_thread(page_cache.lookup, self.cache_key)
+            if saved:
+                self.set_header('Content-Type', 'text/html; charset=utf-8')
+                self.set_header('X-Scena-Page-Cache', 'HIT')
+                self.set_header('X-Scena-Runtime', 'native-html')
+                self.set_header('Server-Timing', f'page-cache;dur={(time.monotonic()-started)*1000:.1f}')
+                self.set_header('X-Scena-URL', saved[1])
+                self.finish(saved[0]);return
         await self.output(RenderContext({},query,self.context_headers(),session_id=self.browser_id,private=self.owner))
 
     def context_headers(self):
@@ -143,21 +167,25 @@ class Page(Base):
                     uploaded[identity]=files if widget['multiple'] else files[0]
             ctx=RenderContext(previous['state'],query,self.context_headers(),session_id=self.browser_id,
                 action=values.get('_action',[''])[0],submitted=True,private=self.owner)
+            ctx.fragment = query.get('page') == 'booking' and self.request.headers.get('X-Scena-Fragment') == 'booking'
             await self.output(ctx,previous['widgets'],values,uploaded)
         except (ValueError,KeyError,IndexError) as error:
             raise tornado.web.HTTPError(409,reason=str(error) if isinstance(error,ValueError) else 'Обновите страницу и повторите действие.') from None
 
     async def output(self,ctx,previous=None,values=None,files=None):
         document,url,interactive,elapsed=await asyncio.to_thread(render_page,ctx,previous,values,files)
-        self.set_header('Content-Type','text/html; charset=utf-8')
+        self.set_header('Content-Type','application/json; charset=utf-8' if ctx.fragment else 'text/html; charset=utf-8')
         self.set_header('Server-Timing',f'render;dur={elapsed}')
         self.set_header('X-Scena-URL',url)
         self.set_header('X-Scena-Runtime','native-html')
         if interactive:self.remember_browser()
         # No cookie/form token/personal state is ever stored in a shared cache.
         if not interactive and not self.owner and self.request.method=='GET':
-            self.set_header('Cache-Control','public, max-age=0, must-revalidate')
-            self.set_header('Vercel-CDN-Cache-Control','public, max-age=15, stale-while-revalidate=15')
+            if getattr(self, 'cache_key', None):
+                await asyncio.to_thread(page_cache.save, self.cache_key, self.cache_version, document, url)
+                self.set_header('X-Scena-Page-Cache', 'MISS')
+            # Shared DB snapshots are immediately invalidated by content edits.
+            # Do not layer an independently stale CDN HTML cache above them.
         self.finish(document)
 
 

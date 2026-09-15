@@ -89,6 +89,9 @@ def resolve_media_path(app_dir: Path, value: object) -> Path | None:
         path.relative_to(app_dir.resolve())
     except ValueError:
         return None
+    if path.is_relative_to(app_dir.resolve() / "media"):
+        from scena_media import ensure_local
+        ensure_local(app_dir, candidate)
     return path if path.is_file() else None
 
 

@@ -36,6 +36,8 @@ def initialize():
             name TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL,
             sha256 TEXT NOT NULL, location TEXT NOT NULL, expires REAL NOT NULL)''')
         db.execute('CREATE INDEX IF NOT EXISTS scena_web_forms_expiry ON scena_web_forms(expires)')
+        from .page_cache import initialize as initialize_page_cache
+        initialize_page_cache(db)
 
 
 def cipher():

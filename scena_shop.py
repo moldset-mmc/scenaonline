@@ -132,6 +132,8 @@ def local_photo(app_dir, value):
         target = source.resolve()
         target.relative_to((root / 'media').resolve())
         target.relative_to(root)
+        from scena_media import ensure_local
+        ensure_local(root, value)
         if target.suffix.lower() not in ('.png', '.jpg', '.jpeg', '.webp') or not target.is_file() or source.is_symlink():
             return None
         return target

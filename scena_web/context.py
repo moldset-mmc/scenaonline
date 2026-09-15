@@ -66,6 +66,7 @@ class RenderContext:
     action: str = ''
     submitted: bool = False
     private: bool = False
+    fragment: bool = False
     title: str = 'SCENA — Моя Сцена'
     widgets: dict = field(default_factory=dict)
     counts: dict = field(default_factory=dict)

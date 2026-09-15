@@ -95,18 +95,25 @@ def persist(path, app_dir, *, public=False, connection=None):
             connection.close()
 
 
-def hydrate(app_dir, *, force=False):
-    """Rebuild missing cache files from the shared manifest after a restart."""
+def hydrate(app_dir, *, force=False, paths=None):
+    """Fetch selected originals; a full hydration is reserved for backup/restore."""
     if not cloud_database():
         return
     from vercel import blob
     root = Path(app_dir).resolve()
     with _lock:
-        if not force and time.monotonic() - _last_refresh.get(str(root), 0) < 2:
+        cache_key = (str(root), tuple(sorted(str(p) for p in paths)) if paths is not None else None)
+        if not force and time.monotonic() - _last_refresh.get(cache_key, 0) < 2:
             return
         connection = connect(_database())
         try:
-            rows = connection.execute('SELECT path,private_url,sha256,bytes FROM scena_media_files').fetchall()
+            if paths is None:
+                rows = connection.execute('SELECT path,private_url,sha256,bytes FROM scena_media_files').fetchall()
+            else:
+                relative_paths = [_relative(root, root / str(path)) for path in paths]
+                if not relative_paths:
+                    return
+                rows = connection.execute('SELECT path,private_url,sha256,bytes FROM scena_media_files WHERE path IN (' + ','.join('?' for _ in relative_paths) + ')', relative_paths).fetchall()
         finally:
             connection.close()
         for relative, url, digest, size in rows:
@@ -128,9 +135,35 @@ def hydrate(app_dir, *, force=False):
                 os.replace(temporary, path)
             finally:
                 Path(temporary).unlink(missing_ok=True)
-        _last_refresh[str(root)] = time.monotonic()
+        _last_refresh[cache_key] = time.monotonic()
+
+
+def ensure_local(app_dir, value):
+    """Materialize just the original requested by an editor or export operation."""
+    path = Path(app_dir) / str(value)
+    if cloud_database():
+        hydrate(app_dir, paths=[value])
+    return path
+
+
+def saved_files(app_dir, folder):
+    """List original references without downloading their bytes."""
+    root = Path(app_dir).resolve()
+    directory = (root / folder).resolve()
+    _relative(root, directory / 'placeholder')
+    local = {p.relative_to(root).as_posix() for p in directory.glob('*') if p.is_file() and not p.is_symlink() and p.suffix.lower() in {'.jpg', '.jpeg', '.png', '.webp'}}
+    if cloud_database():
+        with connect(_database()) as db:
+            rows = db.execute('SELECT path FROM scena_media_files WHERE path LIKE ?', (folder.rstrip('/') + '/%',)).fetchall()
+        for (relative,) in rows:
+            path = root / relative
+            _relative(root, path)
+            if path.parent == directory and path.suffix.lower() in {'.jpg', '.jpeg', '.png', '.webp'}:
+                local.add(relative)
+    return sorted(local, reverse=True)
 
 
 def publish_reference(app_dir, relative, *, connection=None):
     if cloud_database() and str(relative).startswith('media/'):
-        persist(Path(app_dir) / str(relative), app_dir, public=True, connection=connection)
+        path = ensure_local(app_dir, relative)
+        persist(path, app_dir, public=True, connection=connection)

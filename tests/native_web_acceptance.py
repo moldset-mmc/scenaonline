@@ -79,6 +79,55 @@ async def main():
                     elif w['kind']=='multiple':result[identity]=[str(w['options'].index(v)) for v in value]
                     else:result[identity]=value.isoformat() if hasattr(value,'isoformat') else str(value or '')
                 return result
+            # Ready HTML is reused across replicas, then invalidated by edits.
+            scene='/?page=scene&lang=ru'
+            await request(scene)
+            cached,_=await request(scene,instance=1)
+            assert cached.headers.get('X-Scena-Page-Cache')=='HIT'
+            assert b'name="_token" value=""' in cached.body
+            assert 'Set-Cookie' not in cached.headers
+            from scena_core import get_settings, save_settings, schedule_periods
+            save_settings(os.environ['SCENA_DB_PATH'], {'master_name_ru':'Cache invalidation fixture'})
+            refreshed,_=await request(scene,instance=1)
+            assert 'Cache invalidation fixture' in refreshed.body.decode()
+            assert refreshed.headers.get('X-Scena-Page-Cache')=='MISS'
+            print('PASS saved public HTML reused across instances and invalidated by content edits',flush=True)
+            # Save a single weekday, then a single date through real form validation.
+            schedule='/?page=admin&lang=ru&section=work&view=schedule'
+            response,_=await request(schedule,owner=True)
+            response,_=await request(schedule,owner=True,data=payload(response,None,{'День недели':2},changed='День недели'))
+            response,_=await request(schedule,owner=True,data=payload(response,'Сохранить только этот день',{'Выходной день':False,'Работа с':'10:00','Работа до':'12:00','Есть перерыв':False}),instance=1)
+            assert response.code==200,response.body
+            overrides=json.loads(get_settings(os.environ['SCENA_DB_PATH'])['schedule_day_hours'])
+            assert overrides=={'2':[['10:00','12:00']]},overrides
+            response,_=await request(schedule,owner=True,data=payload(response,None,{'Что настроить':'date'},changed='Что настроить'))
+            from datetime import date, timedelta
+            selected_date=date.today()+timedelta(days=2)
+            untouched=selected_date+timedelta(days=1)
+            periods_before=schedule_periods(os.environ['SCENA_DB_PATH'],untouched.isoformat())
+            response,_=await request(schedule,owner=True,data=payload(response,None,{'Дата для изменения':selected_date},changed='Дата для изменения'),instance=1)
+            response,_=await request(schedule,owner=True,data=payload(response,'Сохранить только этот день',{'Выходной день':False,'Работа с':'14:00','Работа до':'16:00','Есть перерыв':False}))
+            assert response.code==200,response.body
+            assert [(a.isoformat(),b.isoformat()) for a,b in schedule_periods(os.environ['SCENA_DB_PATH'],selected_date.isoformat())]==[('14:00:00','16:00:00')]
+            assert periods_before==schedule_periods(os.environ['SCENA_DB_PATH'],untouched.isoformat())
+            response,_=await request(schedule,owner=True,data=payload(response,'Вернуть общий график для этого дня'))
+            assert response.code==200
+            print('PASS individual weekday/date save and reset across instances, adjacent day preserved',flush=True)
+            # The AJAX booking branch must not invoke the full page renderer.
+            response,_=await request('/?page=booking&lang=ru')
+            _,saved=form(response)
+            service=next(w for w in saved['widgets'].values() if w.get('key')=='booking_service')
+            from unittest.mock import patch
+            data=payload(response,None,{service['label']:service['options'][0]},changed=service['label'])
+            with patch('scena_app.run',side_effect=AssertionError('Full page rendered for booking interaction')):
+                fragment,_=await request('/?page=booking&lang=ru',data=data,headers={'X-Scena-Fragment':'booking'},instance=1)
+            assert fragment.code==200,fragment.body
+            part=json.loads(fragment.body)
+            assert part['fragment']=='.st-key-booking_flow' and 'booking_calendar' in part['html']
+            assert '<html' not in part['html'] and 'scena-footer' not in part['html']
+            load_form(part['token'],sid)
+            full,_=await request('/?page=booking&lang=ru&service='+str(service['options'][0]))
+            print('PASS booking fragment without whole-page render; bytes',len(full.body),'->',len(fragment.body),flush=True)
             path='/?page=admin&lang=ru&section=pages&view=scene'
             response,_=await request(path,owner=True)
             _,saved=form(response)

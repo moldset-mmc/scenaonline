@@ -4,9 +4,34 @@
     const node = document.getElementById('scena-operation');
     node.hidden = !message; node.textContent = message; node.dataset.failed = String(failed);
   };
+  // Retain unchanged DOM nodes (especially images/iframes) and patch only changes.
+  function patch(current, next) {
+    if (current.isEqualNode(next)) return;
+    if (current.nodeType !== next.nodeType || current.nodeName !== next.nodeName) {
+      current.replaceWith(next.cloneNode(true)); return;
+    }
+    if (current.nodeType !== Node.ELEMENT_NODE) { current.textContent = next.textContent; return; }
+    const open = current.tagName === 'DETAILS' && current.open;
+    for (const attr of [...current.attributes]) if (!next.hasAttribute(attr.name)) current.removeAttribute(attr.name);
+    for (const attr of next.attributes) if (current.getAttribute(attr.name) !== attr.value) current.setAttribute(attr.name, attr.value);
+    if (open) current.open = true;
+    let index = 0;
+    while (index < next.childNodes.length || index < current.childNodes.length) {
+      const old = current.childNodes[index], fresh = next.childNodes[index];
+      if (!fresh) { old.remove(); continue; }
+      if (!old) current.append(fresh.cloneNode(true)); else patch(old, fresh);
+      index++;
+    }
+    if (current.tagName === 'INPUT' && current.type !== 'file') {
+      current.value = next.value; current.checked = next.checked;
+    }
+    if (current.tagName === 'TEXTAREA') current.value = next.value;
+    if (current.tagName === 'SELECT') [...current.options].forEach((option, i) => { option.selected = next.options[i]?.selected || false; });
+  }
   async function submit(form, button, changed) {
     if (busy) return;
     busy = true;
+    const started = performance.now();
     status('Сохраняю…');
     const focus = document.activeElement?.id;
     const scroll = window.scrollY;
@@ -34,24 +59,40 @@
         data.set('_upload_' + input.name, JSON.stringify(descriptors));
       }
       status('Сохраняю…');
-      const response = await fetch(form.action, {method:'POST',body:data,credentials:'same-origin'});
+      const headers = form.querySelector('.st-key-booking_flow') ? {'X-Scena-Fragment':'booking'} : {};
+      const response = await fetch(form.action, {method:'POST',body:data,credentials:'same-origin',headers});
       const text = await response.text();
       if (!response.ok) {
         const error = new DOMParser().parseFromString(text,'text/html');
         throw new Error(error.querySelector('main p')?.textContent || 'Не удалось сохранить. Обновите страницу и повторите действие.');
       }
-      const next = new DOMParser().parseFromString(text,'text/html');
-      document.title = next.title;
-      // Styles may change when the cabinet changes the page theme.
-      const oldStyles = document.head.querySelectorAll('style');
-      oldStyles.forEach(node => node.remove());
-      next.head.querySelectorAll('style').forEach(node => document.head.append(node));
-      document.body.replaceWith(next.body);
+      if (response.headers.get('Content-Type')?.includes('application/json')) {
+        const payload = JSON.parse(text);
+        const target = form.querySelector(payload.fragment);
+        if (!target) throw new Error('Обновите страницу и повторите действие.');
+        const template = document.createElement('template'); template.innerHTML = payload.html;
+        patch(target, template.content.firstElementChild);
+        form.elements._token.value = payload.token;
+      } else {
+        const next = new DOMParser().parseFromString(text,'text/html');
+        document.title = next.title;
+        const oldStyles = [...document.head.querySelectorAll('style')];
+        const newStyles = [...next.head.querySelectorAll('style')];
+        newStyles.forEach((style, index) => oldStyles[index] ? patch(oldStyles[index], style) : document.head.append(style.cloneNode(true)));
+        oldStyles.slice(newStyles.length).forEach(style => style.remove());
+        patch(document.body, next.body);
+      }
       const destination = response.headers.get('X-Scena-URL') || form.action;
       history.replaceState(null,'',destination);
       window.scrollTo(0,scroll);
       if (focus) document.getElementById(focus)?.focus({preventScroll:true});
+      for (const input of document.querySelectorAll('input[type=file]')) input.value = '';
       status('');
+      let meter = document.getElementById('scena-performance');
+      if (!meter) { meter = document.createElement('div'); meter.id = 'scena-performance'; meter.hidden = true; document.body.append(meter); }
+      meter.dataset.lastInteraction = JSON.stringify({ms:Math.round(performance.now()-started),
+        mode:headers['X-Scena-Fragment'] || 'dom-patch', bytes:new TextEncoder().encode(text).length,
+        serverTiming:response.headers.get('Server-Timing')});
     } catch (error) {
       status(error.message,true);
     } finally { busy = false; }

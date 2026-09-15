@@ -377,6 +377,9 @@ def managed_original(app_dir, relative):
     base = Path(app_dir).resolve()
     original = (base/str(relative)).resolve()
     root = base/"media"/"publications"
+    if original.is_relative_to(root):
+        from scena_media import ensure_local
+        ensure_local(base, relative)
     if root.is_symlink() or not original.is_relative_to(root) or not original.is_file() or original.name not in {"original.jpg", "original.png", "original.webp"}:
         raise PublicationValidationError("Оригинал фотографии удалён. Загрузите фотографию заново.")
     if original.stat().st_size > 20*1024*1024:
@@ -409,6 +412,9 @@ def _validate_publication_image(snapshot, media_root):
     derivative = (base / snapshot["image_url"]).resolve()
     if not original.is_relative_to(base / "media") or not derivative.is_relative_to(base / "media"):
         raise PublicationValidationError("Фотография должна находиться в медиатеке этой установки.")
+    from scena_media import ensure_local
+    ensure_local(base, snapshot["original_image_path"])
+    ensure_local(base, snapshot["image_url"])
     if not original.is_file() or not derivative.is_file():
         raise PublicationValidationError("Фотография удалена. Выберите замену перед публикацией.")
     try:

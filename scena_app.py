@@ -2669,11 +2669,70 @@ def render_services_admin(settings: dict[str, str]) -> None:
                     )
 
 
+def render_individual_schedule(settings):
+    from scena_core import save_weekday_hours, save_date_hours, schedule_periods, _working_periods, CHISINAU
+    from datetime import datetime, timedelta
+    locale = st.session_state.get("scena_ui_locale", "ru")
+    def label(ru, ro, en):
+        return tr(locale, ru, ro, en)
+    st.subheader(label("Часы для отдельного дня", "Ore pentru o singură zi", "Hours for an individual day"))
+    st.caption(label("День недели — повторяющийся график. Конкретная дата — разовое изменение, которое заменяет часы только этой даты.",
+        "Ziua săptămânii — program recurent. O dată concretă — modificare doar pentru acea dată.",
+        "A weekday repeats every week. A specific date overrides hours for that date only."))
+    scope = st.radio(label("Что настроить", "Ce configurăm", "What to edit"), ["weekday", "date"],
+        format_func=lambda v: label("День недели", "Ziua săptămânii", "Weekday") if v == "weekday" else label("Конкретную дату", "O dată concretă", "Specific date"),
+        key="schedule_individual_scope", horizontal=True)
+    today = datetime.now(CHISINAU).date()
+    if scope == "weekday":
+        names = [ui(v) for v in ("Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье")]
+        selected = st.selectbox(label("День недели", "Ziua săptămânii", "Weekday"), list(range(7)), format_func=lambda v: names[v], key="schedule_individual_weekday")
+        target = today + timedelta(days=(selected - today.weekday()) % 7)
+        periods = _working_periods(None, target, settings, [])
+        identity = "weekday_" + str(selected)
+    else:
+        selected = st.date_input(label("Дата для изменения", "Data modificării", "Date to edit"), value=today, min_value=today, key="schedule_individual_date")
+        periods = schedule_periods(DB_PATH, selected.isoformat())
+        identity = "date_" + selected.isoformat()
+    st.caption(label("Сейчас: ", "Acum: ", "Current: ") + (", ".join(a.strftime("%H:%M") + "–" + b.strftime("%H:%M") for a, b in periods) if periods else label("выходной", "zi liberă", "closed")))
+    with st.form("individual_" + identity):
+        closed = st.checkbox(label("Выходной день", "Zi liberă", "Day off"), value=not periods)
+        cols = st.columns(2)
+        start = cols[0].time_input(label("Работа с", "Program de la", "Work from"), value=periods[0][0] if periods else time(9))
+        end = cols[1].time_input(label("Работа до", "Program până la", "Work until"), value=periods[-1][1] if periods else time(18))
+        pause = st.checkbox(label("Есть перерыв", "Cu pauză", "Include a break"), value=len(periods) > 1)
+        cols = st.columns(2)
+        pause_start = cols[0].time_input(label("Начало перерыва", "Începutul pauzei", "Break starts"), value=periods[0][1] if len(periods) > 1 else time(13))
+        pause_end = cols[1].time_input(label("Конец перерыва", "Sfârșitul pauzei", "Break ends"), value=periods[1][0] if len(periods) > 1 else time(14))
+        save = st.form_submit_button(label("Сохранить только этот день", "Salvează doar această zi", "Save this day only"), type="primary")
+        reset = st.form_submit_button(label("Вернуть общий график для этого дня", "Restabilește programul general", "Restore the regular schedule"))
+    if save or reset:
+        try:
+            function = save_weekday_hours if scope == "weekday" else save_date_hours
+            function(DB_PATH, selected if scope == "weekday" else selected.isoformat(),
+                start_time=start.strftime("%H:%M"), end_time=end.strftime("%H:%M"),
+                break_start=pause_start.strftime("%H:%M") if pause else "",
+                break_end=pause_end.strftime("%H:%M") if pause else "", closed=closed, reset=reset)
+        except RequestValidationError as exc:
+            st.error(ui(str(exc)))
+        else:
+            # Drop only this form's stale defaults after a successful save/reset.
+            if os.environ.get("SCENA_NATIVE_WEB") == "1":
+                from scena_web.context import current
+                ctx = current.get()
+                for key, widget in ctx.widgets.items():
+                    if widget.get("group") == "individual_" + identity:
+                        ctx.state.get("_web_values", {}).pop(key, None)
+            rerun_admin_with_success(label("Изменён только выбранный день. Остальное расписание сохранено.",
+                "Doar ziua selectată a fost modificată. Restul programului a fost păstrat.",
+                "Only the selected day changed. The rest of the schedule is preserved."))
+
+
 def render_schedule_admin(settings: dict[str, str]) -> None:
     weekday_labels = {0: "Понедельник", 1: "Вторник", 2: "Среда", 3: "Четверг", 4: "Пятница", 5: "Суббота", 6: "Воскресенье"}
     selected_days = [int(value) for value in settings["schedule_weekdays"].split(",") if value.strip().isdigit()]
     with st.form("schedule_form"):
         st.subheader(ui("Регулярный график"))
+        st.caption(tr(st.session_state.get("scena_ui_locale", "ru"), "Общие часы. Индивидуальные настройки дня ниже имеют приоритет.", "Ore generale. Setările individuale de mai jos au prioritate.", "Regular hours. Individual day settings below take precedence."))
         weekdays = st.multiselect(ui('Рабочие дни'), list(weekday_labels), default=selected_days, format_func=lambda value: ui(weekday_labels[value]))
         cols = st.columns(4)
         with cols[0]:
@@ -2708,6 +2767,7 @@ def render_schedule_admin(settings: dict[str, str]) -> None:
             rerun_admin_with_success(
                 "График сохранён; кнопки времени пересчитаны автоматически."
             )
+    render_individual_schedule(get_settings(DB_PATH) if schedule_submit else settings)
     st.subheader(ui("Выходные и дополнительные часы"))
     with st.form("exception_form"):
         exception_date = st.date_input(ui("Дата"), min_value=date.today())
@@ -3123,9 +3183,8 @@ def run() -> None:
     from scena_media import hydrate
     if os.environ.get("SCENA_NATIVE_WEB") != "1":
         hydrate(APP_DIR)
-    elif (str(st.query_params.get("page", "")) == "admin" or str(st.query_params.get("admin", "")) == "1") and (st.query_params.get("section") == "pages" or st.query_params.get("view") == "posts"):
-        hydrate(APP_DIR)
-    expire_pending_requests(DB_PATH)
+    if str(st.query_params.get("page", "")) == "admin" or str(st.query_params.get("admin", "")) == "1":
+        expire_pending_requests(DB_PATH)
     apply_styles()
     apply_editorial_styles()
     settings = get_settings(DB_PATH)

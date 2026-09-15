@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import json
 import os
 import re
 import sqlite3
@@ -1414,37 +1415,24 @@ def _working_periods(
     connection: sqlite3.Connection,
     target: date,
     settings: Mapping[str, str],
+    exceptions=None,
 ) -> list[tuple[time, time]]:
-    exceptions = connection.execute(
-        """
-        SELECT kind, start_time, end_time FROM schedule_exceptions
-        WHERE exception_date = ? ORDER BY id
-        """,
-        (target.isoformat(),),
-    ).fetchall()
-    if any(row["kind"] == "closed" for row in exceptions):
-        regular: list[tuple[time, time]] = []
-    else:
-        weekdays = {
-            int(value)
-            for value in settings.get("schedule_weekdays", "").split(",")
-            if value.strip().isdigit()
-        }
-        regular = []
-        if target.weekday() in weekdays:
-            start = _parse_hhmm(settings["schedule_start"])
-            end = _parse_hhmm(settings["schedule_end"])
-            break_start = settings.get("schedule_break_start", "").strip()
-            break_end = settings.get("schedule_break_end", "").strip()
-            if break_start and break_end:
-                pause_start = _parse_hhmm(break_start)
-                pause_end = _parse_hhmm(break_end)
-                if start < pause_start < pause_end < end:
-                    regular.extend(((start, pause_start), (pause_end, end)))
-                else:
-                    regular.append((start, end))
-            else:
-                regular.append((start, end))
+    if exceptions is None:
+        exceptions = connection.execute(
+            """SELECT kind, start_time, end_time FROM schedule_exceptions
+            WHERE exception_date = ? ORDER BY id""",
+            (target.isoformat(),),
+        ).fetchall()
+    overrides = json.loads(settings.get("schedule_day_hours", "{}"))
+    custom = overrides.get(str(target.weekday()))
+    weekdays = {int(v) for v in settings.get("schedule_weekdays", "").split(",") if v.strip().isdigit()}
+    regular = []
+    if not any(row["kind"] == "closed" for row in exceptions):
+        if custom is not None:
+            regular = [(_parse_hhmm(a), _parse_hhmm(b)) for a, b in custom]
+        elif target.weekday() in weekdays:
+            regular = _hours_periods(settings["schedule_start"], settings["schedule_end"],
+                settings.get("schedule_break_start", ""), settings.get("schedule_break_end", ""))
     extras: list[tuple[time, time]] = []
     for row in exceptions:
         if row["kind"] == "extra":
@@ -1494,89 +1482,133 @@ def expire_pending_requests(
         return _expire_pending(connection, moment)
 
 
-def _available_slots(
-    connection: sqlite3.Connection,
-    service_id: int,
-    target_date: str,
-    now: datetime,
-) -> list[str]:
+def _hours_periods(start_time, end_time, break_start="", break_end=""):
+    start, end = _parse_hhmm(start_time), _parse_hhmm(end_time)
+    if start >= end:
+        raise RequestValidationError("Начало рабочего дня должно быть раньше окончания.")
+    if bool(break_start) != bool(break_end):
+        raise RequestValidationError("Укажите начало и конец перерыва.")
+    if break_start and break_end:
+        pause_start, pause_end = _parse_hhmm(break_start), _parse_hhmm(break_end)
+        if not start < pause_start < pause_end < end:
+            raise RequestValidationError("Перерыв должен находиться внутри рабочего дня.")
+        return [(start, pause_start), (pause_end, end)]
+    return [(start, end)]
+
+
+def save_weekday_hours(db_path, weekday, *, start_time="", end_time="", break_start="", break_end="", closed=False, reset=False):
+    if weekday not in range(7):
+        raise RequestValidationError("Выберите день недели.")
+    periods = [] if closed or reset else _hours_periods(start_time, end_time, break_start, break_end)
+    with _connect(db_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        settings = _connection_settings(connection)
+        overrides = json.loads(settings.get("schedule_day_hours", "{}"))
+        if reset:
+            overrides.pop(str(weekday), None)
+        else:
+            overrides[str(weekday)] = [[a.strftime("%H:%M"), b.strftime("%H:%M")] for a, b in periods]
+        connection.execute("INSERT INTO profile_settings(key,value) VALUES ('schedule_day_hours',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (json.dumps(overrides),))
+
+
+def save_date_hours(db_path, target_date, *, start_time="", end_time="", break_start="", break_end="", closed=False, reset=False):
+    _parse_date(target_date)
+    periods = [] if closed or reset else _hours_periods(start_time, end_time, break_start, break_end)
+    with _connect(db_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute("DELETE FROM schedule_exceptions WHERE exception_date=?", (target_date,))
+        if not reset:
+            # Existing closed + extra semantics replace the regular day atomically.
+            connection.execute("INSERT INTO schedule_exceptions(exception_date,kind,start_time,end_time,note) VALUES (?,'closed','','','Индивидуальные часы')", (target_date,))
+            connection.executemany("INSERT INTO schedule_exceptions(exception_date,kind,start_time,end_time,note) VALUES (?,'extra',?,?,'Индивидуальные часы')",
+                [(target_date, a.strftime("%H:%M"), b.strftime("%H:%M")) for a, b in periods])
+
+
+def schedule_periods(db_path, target_date):
+    with _connect(db_path) as connection:
+        return _working_periods(connection, _parse_date(target_date), _connection_settings(connection))
+
+
+def _availability_data(connection, service_id, first, last, now):
     service = _service_row(connection, service_id)
+    settings = _connection_settings(connection)
+    _expire_pending(connection, now)
+    reserved = connection.execute("""SELECT slot_start, slot_block_end FROM requests
+        WHERE status IN ('Ожидает подтверждения', 'Связались', 'Подтверждена')
+        AND slot_start != '' AND slot_block_end != ''
+        AND slot_start < ? AND slot_block_end > ?""",
+        (datetime.combine(last + timedelta(days=1), time.min, CHISINAU).isoformat(),
+         datetime.combine(first, time.min, CHISINAU).isoformat())).fetchall()
+    blocked = [(datetime.fromisoformat(row["slot_start"]), datetime.fromisoformat(row["slot_block_end"])) for row in reserved]
+    rows = connection.execute("SELECT exception_date,kind,start_time,end_time FROM schedule_exceptions WHERE exception_date BETWEEN ? AND ? ORDER BY id", (first.isoformat(), last.isoformat())).fetchall()
+    exceptions = {}
+    for row in rows:
+        exceptions.setdefault(row["exception_date"], []).append(row)
+    return service, settings, blocked, exceptions
+
+
+def _slots_from_data(connection, target, now, data):
+    service, settings, blocked, exceptions = data
     if service["kind"] != "appointment":
         return []
-    target = _parse_date(target_date)
-    settings = _connection_settings(connection)
     horizon = _setting_int(settings, "booking_horizon_days", 1)
-    lead = _setting_int(settings, "minimum_lead_hours", 0)
-    interval = _setting_int(settings, "slot_interval_minutes", 1)
-    earliest = now + timedelta(hours=lead)
     if target < now.date() or target > now.date() + timedelta(days=horizon):
         return []
-
-    _expire_pending(connection, now)
-    reserved = connection.execute(
-        """
-        SELECT slot_start, slot_block_end FROM requests
-        WHERE status IN ('Ожидает подтверждения', 'Связались', 'Подтверждена')
-          AND slot_start != '' AND slot_block_end != ''
-        """
-    ).fetchall()
-    blocked = [
-        (
-            datetime.fromisoformat(row["slot_start"]),
-            datetime.fromisoformat(row["slot_block_end"]),
-        )
-        for row in reserved
-    ]
-
-    duration = timedelta(minutes=int(service["duration"]))
-    buffer_time = timedelta(minutes=int(service["buffer_minutes"]))
-    step = timedelta(minutes=interval)
-    slots: list[str] = []
-    for period_start, period_end in _working_periods(connection, target, settings):
-        candidate = datetime.combine(target, period_start, CHISINAU)
-        period_finish = datetime.combine(target, period_end, CHISINAU)
-        while candidate + duration + buffer_time <= period_finish:
-            block_end = candidate + duration + buffer_time
-            overlaps = any(
-                candidate < existing_end and block_end > existing_start
-                for existing_start, existing_end in blocked
-            )
-            if candidate >= earliest and not overlaps:
+    earliest = now + timedelta(hours=_setting_int(settings, "minimum_lead_hours", 0))
+    duration = timedelta(minutes=int(service["duration"]) + int(service["buffer_minutes"]))
+    step = timedelta(minutes=_setting_int(settings, "slot_interval_minutes", 1))
+    slots = []
+    for start, end in _working_periods(connection, target, settings, exceptions.get(target.isoformat(), [])):
+        candidate = datetime.combine(target, start, CHISINAU)
+        finish = datetime.combine(target, end, CHISINAU)
+        while candidate + duration <= finish:
+            if candidate >= earliest and not any(candidate < b and candidate + duration > a for a, b in blocked):
                 slots.append(candidate.strftime("%H:%M"))
             candidate += step
     return slots
 
 
-def generate_available_slots(
-    db_path: str | Path,
-    service_id: int,
-    target_date: str,
-    *,
-    now: datetime | None = None,
-) -> list[str]:
+def _available_slots(connection, service_id, target_date, now):
+    target = _parse_date(target_date)
+    return _slots_from_data(connection, target, now, _availability_data(connection, service_id, target, target, now))
+
+
+def generate_available_slots(db_path, service_id, target_date, *, now=None):
     moment = _now(now)
     with _connect(db_path) as connection:
         return _available_slots(connection, service_id, target_date, moment)
 
 
-def list_available_dates(
-    db_path: str | Path,
-    service_id: int,
-    *,
-    now: datetime | None = None,
-    limit: int = 21,
-) -> list[str]:
+def generate_availability_range(db_path, service_id, first_date, last_date, *, now=None):
+    """One connection and five reads for a day, a month or the booking horizon.
+
+    This is a fresh render snapshot. Booking still rechecks the chosen slot
+    inside create_service_request's write transaction to prevent double booking.
+    """
     moment = _now(now)
-    settings = get_settings(db_path)
-    horizon = _setting_int(settings, "booking_horizon_days", 1)
-    result: list[str] = []
-    for offset in range(horizon + 1):
-        candidate = (moment.date() + timedelta(days=offset)).isoformat()
-        if generate_available_slots(db_path, service_id, candidate, now=moment):
-            result.append(candidate)
-            if len(result) >= limit:
-                break
-    return result
+    first, last = _parse_date(first_date), _parse_date(last_date)
+    if last < first or (last - first).days > 366:
+        raise RequestValidationError("Проверьте период расписания.")
+    with _connect(db_path) as connection:
+        data = _availability_data(connection, service_id, first, last, moment)
+        return {(first + timedelta(days=i)).isoformat(): _slots_from_data(connection, first + timedelta(days=i), moment, data)
+                for i in range((last - first).days + 1)}
+
+
+def list_available_dates(db_path, service_id, *, now=None, limit=21):
+    moment = _now(now)
+    with _connect(db_path) as connection:
+        # The upper bound covers the supported horizon; settings are loaded once.
+        data = _availability_data(connection, service_id, moment.date(), moment.date() + timedelta(days=365), moment)
+        horizon = _setting_int(data[1], "booking_horizon_days", 1)
+        result = []
+        for offset in range(horizon + 1):
+            candidate = moment.date() + timedelta(days=offset)
+            if _slots_from_data(connection, candidate, moment, data):
+                result.append(candidate.isoformat())
+                if len(result) >= limit:
+                    break
+        return result
 
 
 def add_schedule_exception(

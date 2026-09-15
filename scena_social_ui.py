@@ -51,6 +51,9 @@ def _branded_path(app_dir, relative):
     base = Path(app_dir).resolve()
     path = (base / str(relative)).resolve()
     folder = base / "media" / "publications"
+    if path.is_relative_to(folder):
+        from scena_media import ensure_local
+        ensure_local(base, relative)
     if not path.is_relative_to(folder) or path.name != "scena-publication.jpg" or not path.is_file():
         raise PublicationValidationError("Сначала загрузите фотографию в редакторе публикации: SCENA подготовит отдельную версию с лейблом.")
     if path.stat().st_size > 20 * 1024 * 1024:
