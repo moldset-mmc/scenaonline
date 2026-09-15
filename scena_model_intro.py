@@ -9,9 +9,11 @@ from scena_database import connect as database_connect
 import tempfile
 import uuid
 import warnings
+from scena_intro_qr import DEFAULT_QR_SETTINGS, validate_qr
 
 
 DEFAULT_INTRO_SETTINGS = {
+    **DEFAULT_QR_SETTINGS,
     'model_intro_enabled': '1',
     'model_intro_image': 'media/qr-scenes/model.png',
     'model_intro_title_ru': 'За каждым образом — я.',
@@ -79,6 +81,7 @@ def save_intro(db_path, app_dir, values, *, upload: bytes | None = None, expecte
     current = {key: settings.get(key, default) for key, default in DEFAULT_INTRO_SETTINGS.items()}
     updates = {key: str(value).strip() for key, value in values.items() if key in DEFAULT_INTRO_SETTINGS}
     merged = {**current, **updates}
+    validate_qr(merged)
     for key in ('model_intro_enabled', 'model_intro_translations_approved'):
         if merged[key] not in {'0', '1'}:
             raise ValueError('Проверьте настройки визитки.')
@@ -153,6 +156,8 @@ def render_intro_editor(db_path, app_dir, settings):
     revision = st.session_state.get(key + '_revision', 0)
     st.subheader(ui('Знакомство — первая страница Model'))
     st.caption(ui('Здесь можно рассказать о себе, увлечениях, поездках и идее ваших образов. Посетитель сначала знакомится с вами, затем сам открывает показ.'))
+    from scena_intro_qr import render_qr_editor
+    render_qr_editor(db_path, app_dir, settings, locale)
     values = {}
     with st.form(f'{key}_{revision}'):
         values['model_intro_enabled'] = '1' if st.checkbox(ui('Начинать Model со знакомства'), value=source['model_intro_enabled'] == '1') else '0'
@@ -197,6 +202,8 @@ def render_intro_editor(db_path, app_dir, settings):
             st.session_state[key + '_source'] = {k: saved[k] for k in DEFAULT_INTRO_SETTINGS}
             st.session_state[key + '_revision'] = revision + 1
             st.session_state[key + '_notice'] = 'Визитка сохранена.'
+            st.session_state.pop('scena_intro_qr_editor', None)
+            st.session_state['scena_intro_qr_editor_revision'] = st.session_state.get('scena_intro_qr_editor_revision', 0) + 1
             st.rerun()
     if st.button(ui('Обновить редактор'), key=key + '_reload'):
         st.session_state.pop(key + '_source', None)

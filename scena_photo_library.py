@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 import re
 import tempfile
 import uuid
+from contextlib import nullcontext
 
 from scena_database import connect, cloud_database
 from scena_i18n import tr
@@ -127,7 +128,7 @@ def _references(value):
             yield from _references(item)
 
 
-def catalog(db, app_dir, locale='ru'):
+def catalog(db, app_dir, locale='ru', *, include_trashed=False, connection=None):
     files = _files(db, app_dir)
     aliases = {}
     for path in files:
@@ -157,7 +158,7 @@ def catalog(db, app_dir, locale='ru'):
                 for key in ('uses', 'history'):
                     items[original][key].extend(use for use in previous[key] if use not in items[original][key])
         return set(_references(snapshot))
-    with connect(db) as con:
+    with (nullcontext(connection) if connection is not None else connect(db)) as con:
         settings = dict(con.execute('SELECT key,value FROM profile_settings').fetchall())
         products = _rows(con, 'SELECT * FROM shop_products ORDER BY updated_at DESC,id')
         for item in _targets(settings, products, locale):
@@ -183,7 +184,29 @@ def catalog(db, app_dir, locale='ru'):
             for key in ('design_json', 'snapshot_json'):
                 for path in set(_references(json.loads(row[key] or '{}'))):
                     mark(path, tr(locale, f'Оформление Model №{row["id"]}', f'Design Model {row["id"]}', f'Model design {row["id"]}'), 'model', historical=row['status'] != 'draft')
-    return sorted(items.values(), key=lambda item: (not bool(item['uses']), item['uses'][0]['label'] if item['uses'] else item['name'], item['path']))
+    for item in items.values():
+        # A restored page/version can reuse an original. It becomes visible again.
+        item['trashed'] = bool(settings.get('photo_trash:' + item['id'])) and not item['uses']
+    return sorted((item for item in items.values() if include_trashed or not item['trashed']), key=lambda item: (not bool(item['uses']), item['uses'][0]['label'] if item['uses'] else item['name'], item['path']))
+
+
+def trash_photo(db, app_dir, relative):
+    """Remove an unused photo from the catalog, preserving recoverable originals."""
+    _safe_path(app_dir, relative)
+    with connect(db) as con:
+        con.execute('BEGIN IMMEDIATE')
+        item = next((row for row in catalog(db, app_dir, include_trashed=True, connection=con) if row['path'] == relative), None)
+        if not item:
+            raise ValueError('Фотография не найдена. Обновите каталог.')
+        if item['uses']:
+            raise ValueError('Фото используется. Сначала замените или уберите его со всех страниц.')
+        con.execute('INSERT INTO profile_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', ('photo_trash:' + item['id'], relative))
+
+
+def restore_photo(db, app_dir, relative):
+    _safe_path(app_dir, relative)
+    with connect(db) as con:
+        con.execute('DELETE FROM profile_settings WHERE key=?', ('photo_trash:' + photo_id(relative),))
 
 
 def original_path(db, app_dir, relative):
@@ -230,6 +253,9 @@ def assign_photo(db, app_dir, target_id, relative, expected_version):
     with connect(db) as con:
         con.execute('BEGIN IMMEDIATE')
         settings = dict(con.execute('SELECT key,value FROM profile_settings').fetchall())
+        if settings.get('photo_trash:' + photo_id(relative)):
+            if not any(row['path'] == relative and row['uses'] for row in catalog(db, app_dir, include_trashed=True, connection=con)):
+                raise ValueError('Фото в корзине. Сначала восстановите его.')
         products = _rows(con, 'SELECT * FROM shop_products')
         item = next((item for item in _targets(settings, products) if item['id'] == target_id), None)
         if item is None or item['version'] != expected_version:

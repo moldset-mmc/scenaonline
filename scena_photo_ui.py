@@ -5,7 +5,7 @@ from pathlib import Path
 
 from scena_i18n import tr, translate_literaltext
 from scena_mobile_ui import cabinet_url
-from scena_photo_library import catalog, targets, photo_id, upload_photo, assign_photo, original_path
+from scena_photo_library import catalog, targets, photo_id, upload_photo, assign_photo, original_path, trash_photo, restore_photo
 from scena_ui import st
 
 
@@ -55,10 +55,10 @@ def render_photo_library(db, app_dir, locale):
     st.markdown('<style>' + (Path(__file__).parent / 'scena_web/static/photos.css').read_text() + '</style>', unsafe_allow_html=True)
     group_labels = {'all': text('Все фото', 'Toate fotografiile', 'All photos'), 'scene': text('Моя Сцена', 'Scena mea', 'My Scene'),
                     'professional': 'Professional', 'model': 'Model', 'shop': 'Market', 'posts': text('Публикации', 'Publicații', 'Posts'),
-                    'saved': text('Сохранённые', 'Salvate', 'Saved')}
+                    'saved': text('Сохранённые', 'Salvate', 'Saved'), 'trash': text('Корзина', 'Coș', 'Trash')}
     if message := st.session_state.pop('photo_notice', None):
         st.success(message)
-    rows = catalog(db, app_dir, locale)
+    rows = catalog(db, app_dir, locale, include_trashed=True)
     destinations = targets(db, locale)
     by_target = {item['id']: item for item in destinations}
     chosen = next((row for row in rows if row['id'] == st.query_params.get('photo')), None)
@@ -90,6 +90,14 @@ def render_photo_library(db, app_dir, locale):
         src = _source(app_dir, chosen['path'])
         title = chosen['uses'][0]['label'] if chosen['uses'] else chosen['name']
         st.markdown('<figure class="scena-photo-preview"><img src="' + escape(src, quote=True) + '" alt="' + escape(title, quote=True) + '"></figure>', unsafe_allow_html=True)
+        if chosen['trashed']:
+            st.info(text('Фото в корзине. Восстановите его, чтобы снова использовать.', 'Fotografia este în coș. Restabiliți-o pentru a o folosi din nou.', 'This photo is in Trash. Restore it to use it again.'))
+            with st.form('photo_restore_' + chosen['id']):
+                restore = st.form_submit_button(text('Восстановить фото', 'Restabilește fotografia', 'Restore photo'), type='primary')
+            if restore:
+                restore_photo(db, app_dir, chosen['path'])
+                _complete(locale, chosen['path'], text('Фото восстановлено.', 'Fotografia a fost restabilită.', 'Photo restored.'))
+            return
         st.subheader(text('Где используется', 'Unde este folosită', 'Where it is used'))
         if chosen['uses']:
             st.markdown('<ul class="scena-photo-uses">' + ''.join('<li>' + escape(use['label']) + '</li>' for use in chosen['uses']) + '</ul>', unsafe_allow_html=True)
@@ -157,25 +165,45 @@ def render_photo_library(db, app_dir, locale):
             st.caption(chosen['name'] + ' · ' + f'{chosen["size"] / 1024 / 1024:.1f} MB')
             for use in chosen['history']:
                 st.write(use['label'])
+        with st.expander(text('Удалить фото', 'Șterge fotografia', 'Delete photo')):
+            if chosen['uses']:
+                st.caption(text('Сначала замените или уберите фото со всех мест, перечисленных выше.', 'Înlocuiți sau eliminați mai întâi fotografia din toate locurile enumerate mai sus.', 'First replace or remove the photo from every placement listed above.'))
+            else:
+                st.caption(text('Фото переместится в корзину. Его можно восстановить; история публикаций и заказов сохранится.', 'Fotografia va fi mutată în coș și poate fi restabilită. Istoricul publicațiilor și comenzilor se păstrează.', 'The photo moves to Trash and can be restored. Post and order history is preserved.'))
+            with st.form('photo_trash_' + chosen['id']):
+                remove = st.form_submit_button(text('Переместить в корзину', 'Mută în coș', 'Move to Trash'), disabled=bool(chosen['uses']))
+            if remove:
+                try:
+                    trash_photo(db, app_dir, chosen['path'])
+                except (ValueError, OSError) as error:
+                    _notice(locale, error)
+                else:
+                    _complete(locale, chosen['path'], text('Фото перемещено в корзину.', 'Fotografia a fost mutată în coș.', 'Photo moved to Trash.'))
         return
 
     if st.query_params.get('photo'):
         st.warning(text('Фото не найдено. Выберите другое в каталоге.', 'Fotografia nu a fost găsită. Alegeți alta din catalog.', 'Photo not found. Choose another from the catalog.'))
-    st.markdown('<div class="scena-photo-toolbar"><span>' + escape(text(f'Фотографий: {len(rows)}', f'Fotografii: {len(rows)}', f'Photos: {len(rows)}')) + '</span>' + link('+ ' + text('Добавить', 'Adaugă', 'Add'), mode='upload') + '</div>', unsafe_allow_html=True)
+    active_count = sum(not row['trashed'] for row in rows)
+    st.markdown('<div class="scena-photo-toolbar"><span>' + escape(text(f'Фотографий: {active_count}', f'Fotografii: {active_count}', f'Photos: {active_count}')) + '</span>' + link('+ ' + text('Добавить', 'Adaugă', 'Add'), mode='upload') + link(text('Корзина', 'Coș', 'Trash') + ' · ' + str(len(rows)-active_count), filter='trash') + '</div>', unsafe_allow_html=True)
     if destination:
         st.info(text('Выберите фото для: ', 'Alegeți fotografia pentru: ', 'Choose a photo for: ') + destination['label'])
     initial_group = str(st.query_params.get('filter', 'all'))
     if initial_group not in group_labels:
         initial_group = 'all'
+    if st.session_state.get('photo_filter_route') != initial_group:
+        st.session_state['photo_filter'] = initial_group
+        st.session_state['photo_filter_route'] = initial_group
+        st.session_state.pop('photo_catalog_page', None)
     group = st.selectbox(text('Показать', 'Afișează', 'Show'), list(group_labels), index=list(group_labels).index(initial_group), format_func=group_labels.get, key='photo_filter')
-    visible = [row for row in rows if group == 'all' or (group == 'saved' and not row['uses']) or any(use['group'] == group for use in row['uses'] + row['history'])]
+    st.query_params['filter'] = group
+    visible = [row for row in rows if row['trashed'] == (group == 'trash') and (group in ('all', 'trash') or (group == 'saved' and not row['uses']) or any(use['group'] == group for use in row['uses'] + row['history']))]
     pages = max(1, (len(visible) + 11) // 12)
     page = st.selectbox(text('Страница каталога', 'Pagina catalogului', 'Catalog page'), list(range(1, pages + 1)), format_func=lambda value: f'{value} / {pages}', key='photo_catalog_page') if pages > 1 else 1
     cards = []
     for row in visible[(page - 1) * 12:page * 12]:
         title = row['uses'][0]['label'] if row['uses'] else row['name']
         count = len(row['uses'])
-        detail = text(f'Мест использования: {count}', f'Locuri de utilizare: {count}', f'Used in {count} places') if count else text('Сохранённое фото', 'Fotografie salvată', 'Saved photo')
+        detail = text('В корзине', 'În coș', 'In Trash') if row['trashed'] else text(f'Мест использования: {count}', f'Locuri de utilizare: {count}', f'Used in {count} places') if count else text('Сохранённое фото', 'Fotografie salvată', 'Saved photo')
         source = _source(app_dir, row['path'])
         cards.append('<a class="scena-photo-card" data-cabinet-nav href="' + escape(photo_url(locale, photo=row['id'], target=destination['id'] if destination else ''), quote=True) + '"><img src="' + escape(source, quote=True) + '" alt="' + escape(title, quote=True) + '" loading="lazy" width="240" height="300"><strong>' + escape(title) + '</strong><span>' + escape(detail) + '</span></a>')
     st.markdown('<div class="scena-photo-grid">' + ''.join(cards) + '</div>', unsafe_allow_html=True)

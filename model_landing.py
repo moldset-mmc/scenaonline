@@ -45,7 +45,7 @@ def public_page_url(
 ) -> str:
     """Build one absolute, shareable SCENA page URL."""
 
-    allowed_pages = {"scene", "professional", "model", "portfolio", "invite-model", "booking"}
+    allowed_pages = {"scene", "professional", "model", "portfolio", "invite-model", "booking", "shop", "course"}
     if page not in allowed_pages:
         raise ValueError("Unsupported public SCENA page.")
     query: dict[str, str] = {"page": page}
@@ -63,7 +63,7 @@ def internal_page_url(
 ) -> str:
     """Build a same-application route that follows the active local port."""
 
-    allowed_pages = {"scene", "professional", "model", "portfolio", "invite-model", "booking"}
+    allowed_pages = {"scene", "professional", "model", "portfolio", "invite-model", "booking", "shop", "course"}
     if page not in allowed_pages:
         raise ValueError("Unsupported internal SCENA page.")
     query: dict[str, str] = {"page": page}
@@ -315,22 +315,19 @@ def build_model_landing_html(
     model_url_ru = internal_page_url("model", locale="ru")
     model_url_ro = internal_page_url("model", locale="ro")
     model_url_en = internal_page_url("model", locale="en")
-    qr_uri = "data:image/png;base64," + base64.b64encode(qr_png_bytes(public_page_url(settings, "model", locale=language))).decode("ascii")
+    from scena_intro_qr import qr_button
+    qr_markup, qr_dialog = qr_button(settings, language)
+    qr_css = (Path(__file__).parent / 'scena_web/static/intro-qr.css').read_text()
+    qr_script = (Path(__file__).parent / 'scena_web/static/intro-qr.js').read_text()
     portfolio_url = internal_page_url("portfolio", locale=language, view="model")
     invite_url = internal_page_url("invite-model", locale=language)
     initial_statement = str(slides[first_index]["manifesto"][language]) if slides else ""
     intro_markup = ""
     intro_return_markup = ""
-    cube_intro = bool(intro and settings.get("model_intro_image") == "media/qr-scenes/model.png")
-    qr_label = {"ru": "Моя Сцена — с вами", "ro": "Scena mea, cu tine", "en": "My Scene, with you"}[language]
     if intro:
         intro_details = (
             f'<p class="intro-details">{html.escape(str(intro["details"][language]))}</p>'
             if intro["details"][language] else ""
-        )
-        qr_markup = (
-            f'<button class="cube-qr" type="button" aria-label="QR — Model"><img src="{qr_uri}" alt="QR — Model"></button>'
-            if cube_intro else f'<figcaption class="intro-qr"><img src="{qr_uri}" alt="QR — Model"><span>{html.escape(qr_label)}</span></figcaption>'
         )
         intro_markup = (
             '<section class="introduction" id="introduction" aria-labelledby="intro-title">'
@@ -341,7 +338,7 @@ def build_model_landing_html(
             f'<p class="intro-text">{html.escape(str(intro["text"][language]))}</p>'
             f'{intro_details}<div class="intro-signature"><h1 class="intro-name"><span class="first">{html.escape(first_name)}</span>'
             f'<span class="last">{html.escape(last_name)}</span></h1><span class="intro-role">{html.escape(role)}</span></div></div>' 
-            '<figure class="intro-photo" '
+            '<figure class="intro-photo" data-qr-photo '
             f'style="--dx:{intro["desktop_x"]}%;--dy:{intro["desktop_y"]}%;'
             f'--mx:{intro["mobile_x"]}%;--my:{intro["mobile_y"]}%">'
             f'<img src="{html.escape(str(intro["src"]), quote=True)}" '
@@ -367,7 +364,6 @@ def build_model_landing_html(
             "firstIndex": first_index,
             "autoplay": autoplay,
             "hasIntro": bool(intro),
-            "cubeIntro": cube_intro,
             "animation": design["animation"],
             "copy": copy,
             "icons": icons,
@@ -455,7 +451,7 @@ blockquote{{margin:0;max-width:900px;color:var(--paper);font-family:ScenaSerif,G
 @media(max-height:650px) and (max-width:720px){{.introduction{{top:68px;gap:12px;grid-template-rows:260px minmax(0,1fr) auto}}}}
 @media(prefers-reduced-motion:reduce){{*,*:before,*:after{{animation:none!important;transition:none!important}}}}
 
-.cube-qr{{position:absolute;z-index:5;padding:0;border:0;background:transparent;cursor:pointer;min-width:44px;min-height:44px;display:grid;place-items:center}}.cube-qr img{{display:block;width:var(--qr-size);height:var(--qr-size);object-fit:contain;mask-image:none;filter:none}}.qr-dialog{{max-width:calc(100vw - 36px);background:#fff;border:0;border-radius:8px;padding:24px;text-align:center;color:#151413}}.qr-dialog::backdrop{{background:#000c}}.qr-dialog img{{width:280px;max-width:100%;display:block}}.qr-dialog button{{border:0;background:white;min-width:44px;min-height:44px;font-size:30px;float:right;cursor:pointer}}
+
 /* V1.7: a personal stage, calm chrome actions, readable QR, no blue controls. */
 .identity{{top:auto;bottom:52px;transform:none}}
 .hero-actions{{display:flex;max-width:400px}}.invite{{background:#eee9df;color:#161513;border-color:#eee9df;letter-spacing:.1em;font-size:12px;min-height:52px;min-width:250px;font-weight:600}}
@@ -469,11 +465,11 @@ blockquote{{margin:0;max-width:900px;color:var(--paper);font-family:ScenaSerif,G
 .intro-copy{{display:flex;flex-direction:column;padding-top:38px}}.intro-copy h2{{font-size:clamp(33px,3.8vw,58px);max-width:14ch;letter-spacing:-.015em;line-height:1.05}}
 .intro-text{{max-width:42ch;color:#c9c4bb;font-size:17px;line-height:1.65}}.intro-signature{{margin-top:auto;padding-top:26px}}.intro-name{{margin-bottom:10px}}.intro-name .first{{font-size:clamp(36px,4vw,58px)}}.intro-name .last{{font-size:clamp(25px,2.8vw,39px)}}.intro-role{{color:#bfb4a2;font-size:12px;letter-spacing:.18em;text-transform:uppercase}}
 .intro-actions{{grid-column:1;grid-row:2;display:flex;flex-direction:column;gap:10px;align-items:stretch;max-width:400px}}.intro-actions .invite{{width:100%;min-width:0}}.intro-enter{{grid-row:auto;min-height:46px;background:transparent;border:1px solid #6c655c;justify-content:center;gap:22px;font-size:13px;letter-spacing:.08em;width:100%;padding:12px 18px}}
-.intro-qr{{position:absolute;z-index:3;bottom:22px;right:18px;display:flex;align-items:center;gap:12px;color:#e2dbcf;background:#10100fce;padding:10px;border:1px solid #bdb29b45;border-radius:4px;backdrop-filter:blur(12px)}}.intro-qr img{{width:106px;height:106px;display:block;object-fit:contain;filter:none;mask-image:none}}.intro-qr span{{max-width:90px;font-family:ScenaSerif,Georgia,serif;font-size:19px;line-height:1.15}}
+
 @media(max-width:720px){{
   .header{{padding:22px 20px}}.languages{{font-size:12px;gap:7px}}.languages a{{min-height:28px;display:inline-flex;align-items:center}}.header nav{{gap:12px}}.header nav .return-intro{{font-size:12px}}
   .introduction{{inset:78px 20px 18px;grid-template-rows:minmax(200px,37%) minmax(0,1fr) auto;gap:15px;grid-template-columns:minmax(0,1fr)}}
-  .intro-photo{{border-radius:44% 44% 0 0;grid-column:1;grid-row:1}}.intro-photo>img{{object-fit:contain}}.intro-photo:after{{display:none}}.intro-qr{{bottom:8px;right:8px;padding:5px;border-radius:2px;gap:0}}.intro-qr img{{width:80px;height:80px}}.intro-qr span{{display:none}}
+  .intro-photo{{border-radius:44% 44% 0 0;grid-column:1;grid-row:1}}.intro-photo>img{{object-fit:contain}}.intro-photo:after{{display:none}}.intro-qr span{{display:none}}
   .intro-copy{{grid-row:2;display:block;padding:0 4px 0 0}}.intro-kicker{{font-size:10px;margin-bottom:10px}}.intro-copy h2{{font-size:30px;max-width:20ch;margin-bottom:12px}}.intro-text{{font-size:15px;line-height:1.5}}.intro-details{{font-size:14px}}
   .intro-signature{{padding-top:8px;margin-top:14px}}.intro-name .first,.intro-name .last{{font-size:26px;line-height:1}}.intro-name{{margin-bottom:8px}}.intro-role{{font-size:11px;letter-spacing:.11em}}
   .intro-actions{{grid-row:3;max-width:none;width:100%;gap:8px}}.intro-actions .invite{{min-height:48px;font-size:11px}}.intro-enter{{min-height:44px;font-size:12px;padding:10px}}
@@ -500,6 +496,7 @@ blockquote{{margin:0;max-width:900px;color:var(--paper);font-family:ScenaSerif,G
   .intro-copy{{overflow:visible;padding:0}}.intro-text,.intro-details{{font-size:16px;line-height:1.55}}.intro-actions{{padding-top:4px}}
   .intro-enter,.portfolio-link{{min-height:44px;font-size:13px}}.intro-name,.identity h1{{overflow-wrap:anywhere}}
 }}
+{qr_css}
 </style>
 </head>
 <body>
@@ -514,7 +511,8 @@ blockquote{{margin:0;max-width:900px;color:var(--paper);font-family:ScenaSerif,G
     {intro_markup}
   </section>
   <section class="manifest" id="manifesto"><a class="portfolio-link" target="_blank" rel="noopener noreferrer" href="{html.escape(portfolio_url, quote=True)}">{copy["portfolio"]}<img class="icon" src="{icons["arrow-right"]}" alt=""></a><div class="manifest-copy" aria-live="polite"><div class="manifest-label"><span>{copy["manifesto"]}</span><span id="counter"></span></div><blockquote id="statement">“{html.escape(initial_statement)}”</blockquote></div><a class="invite" target="_blank" rel="noopener noreferrer" href="{html.escape(invite_url, quote=True)}">{copy["invite"]}<img class="icon" src="{icons["arrow-right"]}" alt=""></a><div class="controls"><div class="dots">{dot_markup}</div><div class="transport"><button id="previous" type="button" aria-label="{html.escape(copy["previous"], quote=True)}"><img class="icon" src="{icons["arrow-left"]}" alt=""></button><button id="toggle" type="button"><img class="icon" id="toggle-icon" alt=""></button><button id="next" type="button" aria-label="{html.escape(copy["next"], quote=True)}"><img class="icon" src="{icons["arrow-right"]}" alt=""></button></div></div><div class="progress" id="progress"><span></span></div></section>
-</main><dialog class="qr-dialog" id="qr-dialog"><form method="dialog"><button aria-label="Close">×</button></form><img src="{qr_uri}" alt="QR — Model"><p>SCENA · {html.escape(master_name)}</p></dialog>
+</main>{qr_dialog}
+<script>{qr_script}</script>
 <script>
 const state={state_json},reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 let introOpen=state.hasIntro,entered=false;
@@ -632,11 +630,6 @@ function returnToIntroduction(){{
   syncIntroduction();syncPlay();schedule();
   if(matchMedia('(max-width:720px)').matches)scrollTo({{top:0,behavior:'instant'}});
   (enterButton?.hidden?document.querySelector('.intro-copy'):enterButton)?.focus({{preventScroll:true}});
-}}
-if(state.cubeIntro){{
-  const photo=document.querySelector('.intro-photo>img'),cube=document.querySelector('.cube-qr');
-  const positionQR=()=>{{if(!photo?.naturalWidth||!cube)return;const box=photo.getBoundingClientRect(),parent=photo.parentElement.getBoundingClientRect(),ratio=Math.min(box.width/photo.naturalWidth,box.height/photo.naturalHeight),pos=getComputedStyle(photo).objectPosition.split(' ').map(parseFloat);const size=140*ratio,hit=Math.max(44,size);cube.style.left=(box.left-parent.left+(box.width-photo.naturalWidth*ratio)*(pos[0]/100)+429*ratio-(hit-size)/2)+'px';cube.style.top=(box.top-parent.top+(box.height-photo.naturalHeight*ratio)*(pos[1]/100)+452*ratio-(hit-size)/2)+'px';cube.style.width=hit+'px';cube.style.height=hit+'px';cube.style.setProperty('--qr-size',size+'px')}};
-  photo.addEventListener('load',positionQR);new ResizeObserver(positionQR).observe(photo);positionQR();cube.onclick=()=>document.getElementById('qr-dialog').showModal();
 }}
 if(enterButton)enterButton.onclick=enterImages;
 if(returnButton)returnButton.onclick=returnToIntroduction;
