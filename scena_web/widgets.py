@@ -267,7 +267,7 @@ class WebUI:
     form_submit_button = button
 
     def link_button(self, label, url, type='secondary', disabled=False, **_):
-        if not str(url).startswith(('/', '?', '#', 'http://', 'https://', 'mailto:', 'tel:')):
+        if not str(url).startswith(('/', '?', '#', 'http://', 'https://', 'mailto:', 'tel:', 'sms:')):
             return
         current.get().add('<a class="scena-link-button"' + attributes(href=None if disabled else url, data_kind=type,
             aria_disabled='true' if disabled else None) + '>' + escape(label) + '</a>')

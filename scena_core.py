@@ -775,6 +775,8 @@ def init_db(db_path: str | Path, *, now: datetime | None = None) -> None:
         from scena_prompts import initialize_prompts
         from scena_licensing import initialize_licensing
         init_shop(connection)
+        from scena_service_telegram import initialize as initialize_service_telegram
+        initialize_service_telegram(connection)
         initialize_prompts(connection)
         initialize_licensing(connection)
         if not connection.execute("SELECT 1 FROM app_meta WHERE key='v17_intro_default_migrated'").fetchone():
@@ -1464,7 +1466,7 @@ def _expire_pending(connection: sqlite3.Connection, now: datetime) -> list[int]:
     expired: list[int] = []
     for row in rows:
         connection.execute(
-            "UPDATE requests SET status = 'Срок подтверждения истёк' WHERE id = ?",
+            "UPDATE requests SET status = 'Срок подтверждения истёк', revision=revision+1 WHERE id = ?",
             (row["id"],),
         )
         _queue_sms(connection, dict(row), "hold_expired", now)
@@ -1747,6 +1749,8 @@ def _queue_sms(
     event: str,
     now: datetime,
 ) -> None:
+    if row.get('request_type') == 'service_request' and row.get('contact_channel', 'sms') != 'sms':
+        return
     connection.execute(
         """
         INSERT INTO sms_outbox (
@@ -1787,6 +1791,8 @@ def create_service_request(
     name: str,
     phone: str,
     email: str = "",
+    contact_channel: str = "sms",
+    telegram: str = "",
     message: str = "",
     consent: bool = False,
     locale: str = "ro",
@@ -1795,6 +1801,8 @@ def create_service_request(
     clean_name, clean_phone, clean_email = _base_contact(
         name=name, phone=phone, email=email, consent=consent
     )
+    from scena_service_telegram import validate_reply_contact
+    clean_telegram = validate_reply_contact(contact_channel, telegram, clean_email)
     moment = _now(now)
     target = _parse_date(slot_date)
     chosen_time = _parse_hhmm(slot_time)
@@ -1819,10 +1827,10 @@ def create_service_request(
                 request_type, name, phone, email, service_id, service,
                 preferred_date, preferred_time, slot_start, slot_end,
                 slot_block_end, hold_expires_at, locale, message, consent,
-                status, created_at
+                status, created_at, contact_channel, contact_telegram, telegram_status
             ) VALUES (
                 'service_request', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1,
-                'Ожидает подтверждения', ?
+                'Ожидает подтверждения', ?, ?, ?, 'queued'
             )
             """,
             (
@@ -1834,6 +1842,7 @@ def create_service_request(
                 (moment + timedelta(hours=hold_hours)).isoformat(timespec="seconds"),
                 _locale(locale), str(message or "").strip(),
                 moment.isoformat(timespec="seconds"),
+                contact_channel, clean_telegram,
             ),
         )
         request_id = int(cursor.lastrowid)
@@ -1983,6 +1992,7 @@ def update_request_status(
     status: str,
     *,
     now: datetime | None = None,
+    expected_revision: int | None = None,
 ) -> None:
     if status not in REQUEST_STATUSES:
         raise RequestValidationError("Неизвестный статус заявки.")
@@ -1995,38 +2005,33 @@ def update_request_status(
         ).fetchone()
         if not row:
             raise RequestValidationError("Заявка не найдена.")
-        if row["status"] == status:
-            return
-        if status == "Подтверждена" and row["slot_start"] and row["slot_block_end"]:
-            if row["status"] == "Срок подтверждения истёк":
-                raise RequestValidationError(
-                    "Срок удержания истёк. Сначала согласуйте с клиентом новое доступное время."
-                )
-            conflict = connection.execute(
-                """
-                SELECT id FROM requests
-                WHERE id != ?
-                  AND status IN ('Ожидает подтверждения', 'Связались', 'Подтверждена')
-                  AND slot_start != '' AND slot_block_end != ''
-                  AND slot_start < ? AND slot_block_end > ?
-                LIMIT 1
-                """,
-                (int(request_id), row["slot_block_end"], row["slot_start"]),
-            ).fetchone()
-            if conflict:
-                raise RequestValidationError(
-                    "Это время уже занято другой заявкой. Согласуйте новое время."
-                )
-        connection.execute(
-            "UPDATE requests SET status = ? WHERE id = ?", (status, int(request_id))
-        )
-        event = {
-            "Подтверждена": "confirmed",
-            "Отклонена": "rejected",
-            "Отменена": "cancelled",
-        }.get(status)
-        if event:
-            _queue_sms(connection, dict(row), event, moment)
+        if expected_revision is not None and row['revision'] != expected_revision:
+            raise RequestValidationError('Заявка уже изменена. Обновите её перед сохранением.')
+        _change_request_status(connection, dict(row), status, moment)
+
+
+def _change_request_status(connection, row, status, moment):
+    """Shared booking transition; caller holds the writer transaction."""
+    if status not in REQUEST_STATUSES:
+        raise RequestValidationError('Неизвестный статус заявки.')
+    if row['status'] == status:
+        return
+    if status == 'Подтверждена' and row['slot_start'] and row['slot_block_end']:
+        if row['status'] == 'Срок подтверждения истёк' or (row['hold_expires_at'] and row['hold_expires_at'] <= moment.isoformat(timespec='seconds')):
+            raise RequestValidationError('Срок удержания истёк. Сначала согласуйте с клиентом новое доступное время.')
+        if datetime.fromisoformat(row['slot_start']) <= moment:
+            raise RequestValidationError('Время записи уже прошло. Согласуйте новое время.')
+        conflict = connection.execute('''SELECT id FROM requests WHERE id != ?
+            AND status IN ('Ожидает подтверждения', 'Связались', 'Подтверждена')
+            AND slot_start != '' AND slot_block_end != ''
+            AND slot_start < ? AND slot_block_end > ? LIMIT 1''',
+            (row['id'], row['slot_block_end'], row['slot_start'])).fetchone()
+        if conflict:
+            raise RequestValidationError('Это время уже занято другой заявкой. Согласуйте новое время.')
+    connection.execute('UPDATE requests SET status=?,revision=revision+1 WHERE id=?', (status,row['id']))
+    event = {'Подтверждена':'confirmed', 'Отклонена':'rejected', 'Отменена':'cancelled'}.get(status)
+    if event:
+        _queue_sms(connection, row, event, moment)
 
 
 def add_post(

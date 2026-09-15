@@ -337,12 +337,60 @@ async def main():
                 if w['kind']=='text' and 'имя' in w['label'].lower():changes[w['label']]='Acceptance booking'
                 if w['kind']=='text' and 'телефон' in w['label'].lower():changes[w['label']]='+37360000222'
             submit=next(w['label'] for w in saved['widgets'].values() if w['kind']=='button' and w['group'])
-            booked,_=await request(path,data=payload(booking,submit,changes),instance=1)
+            channel=next(w for w in saved['widgets'].values() if w.get('key')=='booking_contact_channel')
+            telegram_field=next(w for w in saved['widgets'].values() if w.get('key')=='booking_contact_telegram')
+            assert channel['options']==['phone','telegram','sms','email']
+            changes[channel['label']]='telegram'
+            import scena_service_telegram as service_tg
+            with patch.dict(os.environ,{'SCENA_TELEGRAM_CREDENTIAL_KEY':'native-fixture-only-key'}):
+                with patch.object(tg.TelegramBotAdapter,'_call',return_value={'message_id':301}) as sender:
+                    invalid,_=await request(path,data=payload(booking,submit,changes))
+                    assert invalid.code==200 and 'укажите ваш @username' in invalid.body.decode()
+                    sender.assert_not_called()
+                    changes[telegram_field['label']]='@bookingclient'
+                    submitted_data=payload(invalid,submit,changes)
+                    booked,_=await request(path,data=submitted_data,instance=1)
+                sender.assert_called_once()
+                assert sender.call_args.args[0]=='sendMessage'
+                lead=sender.call_args.args[1]
+                assert lead['chat_id']=='501' and 'Канал ответа: Telegram' in lead['text']
+                with connect(os.environ['SCENA_DB_PATH']) as db:
+                    identity=db.execute("SELECT id FROM requests WHERE name='Acceptance booking'").fetchone()[0]
+                    assert db.execute('SELECT contact_telegram FROM requests WHERE id=?',(identity,)).fetchone()[0]=='@bookingclient'
+                    assert db.execute('SELECT COUNT(*) FROM sms_outbox WHERE request_id=?',(identity,)).fetchone()[0]==0
+                direct=service_tg.request_path(identity)
+                anonymous,_=await request(direct)
+                assert anonymous.code==302 and parse_qs(urlsplit(anonymous.headers['Location']).query)['next']==[direct]
+                focused,_=await request(direct,owner=True,instance=1)
+                assert focused.code==200 and 'https://t.me/bookingclient' in focused.body.decode()
+                assert 'tel:+37360000222' in focused.body.decode() and 'Все заявки' in focused.body.decode()
+                assert len(re.findall(r'data-form-key="request_status_',focused.body.decode()))==1
+                assert 'request-contact' in focused.body.decode()
+                contact=next(b['callback_data'] for line in lead['reply_markup']['inline_keyboard'] for b in line if b['text']=='Связались')
+                update={'update_id':52,'callback_query':{'id':'service-contact','from':{'id':501,'is_bot':False},
+                    'message':{'message_id':301,'chat':{'id':501,'type':'private'}},'data':contact}}
+                config=tg._load(os.environ['SCENA_DB_PATH'])
+                with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as api:
+                    assert (await webhook(config['webhook_secret'],json.dumps(update))).code==200
+                    edited=next(c.args[1] for c in api.call_args_list if c.args[0]=='editMessageText')
+                    update['callback_query']['data']=next(b['callback_data'] for line in edited['reply_markup']['inline_keyboard'] for b in line if b['text']=='Подтвердить запись')
+                    assert (await webhook(config['webhook_secret'],json.dumps(update),instance=1)).code==200
+                    assert (await webhook(config['webhook_secret'],json.dumps(update))).code==200
+                with connect(os.environ['SCENA_DB_PATH']) as db:
+                    assert tuple(db.execute('SELECT status,revision FROM requests WHERE id=?',(identity,)).fetchone())==('Подтверждена',3)
+                for method,extra,expected in [('sms','', 'sms:+37360000222'),('email','client@example.com','mailto:client@example.com')]:
+                    with connect(os.environ['SCENA_DB_PATH']) as db:
+                        db.execute('UPDATE requests SET contact_channel=?,email=? WHERE id=?',(method,extra,identity))
+                    view,_=await request(direct,owner=True)
+                    assert expected in view.body.decode()
+                duplicate,_=await request(path,data=submitted_data)
+                assert duplicate.code==409
             assert booked.code==200
             with connect(os.environ['SCENA_DB_PATH']) as db:
                 assert db.execute("SELECT COUNT(*) FROM requests WHERE name='Acceptance booking'").fetchone()[0]==1,'Booking missing'
             assert 'Спасибо!' in booked.body.decode(),'Booking receipt missing'
             print('PASS service/date/time/contact/confirmation booking across instances',flush=True)
+            print('PASS service lead to shared bot, selected channel validation, Telegram/SMS/email/phone reply links, direct owner access and two idempotent status actions',flush=True)
             path='/?page=admin&lang=ru&section=settings&view=backup'
             response,_=await request(path,owner=True)
             backup,_=await request(path,owner=True,data=payload(response,'Создать резервную копию'),instance=1)

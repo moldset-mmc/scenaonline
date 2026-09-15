@@ -318,6 +318,10 @@ def receive_update(db, update, secret, *, now=None):
         _answer(adapter, query, 'Эта кнопка доступна только владельцу заказа.')
         return
     data = query.get('data', '')
+    if isinstance(data, str) and data.startswith('s:'):
+        from scena_service_telegram import receive_callback
+        receive_callback(db, query, config, now)
+        return
     match = re.fullmatch(r'(c:([a-f0-9]{32}):([1-9][0-9]{0,8})):([A-Za-z0-9_-]{16})', data) if isinstance(data, str) else None
     if not match or not config.get('action_secret') or not hmac.compare_digest(match[4], _signature(config, match[1])):
         _answer(adapter, query, 'Кнопка устарела. Откройте заказ в кабинете.')
@@ -405,7 +409,7 @@ duplicate message on retry; the stable order reference identifies the same lead.
 
 def render_settings(db, locale):
     from scena_ui import st
-    st.subheader('Telegram · '+{'ru':'уведомления о заказах','ro':'notificări despre comenzi','en':'order notifications'}[locale])
+    st.subheader('Telegram · '+{'ru':'заявки и заказы','ro':'cereri și comenzi','en':'bookings and orders'}[locale])
     try:
         try:
             status = connection_status(db)
@@ -413,9 +417,10 @@ def render_settings(db, locale):
             st.warning(str(error))
             status = {'connected':False,'pending':{}}
         if status['connected']:
-            st.success('Заказы отправляются в Telegram @'+status['username'])
+            st.success('Заявки и заказы отправляются в Telegram @'+status['username'])
             if status.get('actions_ready'):
                 st.caption('В новых лидах доступны кнопки «Открыть заказ» и «Связались».')
+                st.caption('Для заявок на услуги: «Открыть заявку», ответ клиенту, «Связались» и «Подтвердить запись».')
             elif os.environ.get('SCENA_NATIVE_WEB') == '1' and st.button('Включить кнопки в Telegram'):
                 enable_actions(db)
                 st.rerun()

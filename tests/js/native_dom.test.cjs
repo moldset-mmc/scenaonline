@@ -53,6 +53,18 @@ async function main(){
   assert.equal(dialog.querySelector('.shop-photo-thumbs').hidden,true);
   assert.equal(calls.length,beforeGallery);
   console.log('PASS: 1–3 photo modal, thumbnail and keyboard changes, focus restoration, safe product text, zero requests');
+  const contact=w.document.createElement('fieldset');contact.dataset.formKey='service_request_form';
+  contact.innerHTML='<div class="st-key-booking_reply_channel"><select><option value="0">Звонок</option><option value="1">Telegram</option><option value="2">SMS</option><option value="3">Email</option></select></div><div class="st-key-booking_reply_telegram"><input value="@clientname"></div><div class="st-key-booking_reply_email"><input value="client@example.com"></div>';
+  w.document.getElementById('scena-page').append(contact);
+  const channel=contact.querySelector('select');
+  for (const index of ['0','1','2','3','1']) {
+    channel.value=index;channel.dispatchEvent(new w.Event('change',{bubbles:true}));
+    assert.equal(contact.querySelector('.st-key-booking_reply_telegram').hidden,index!=='1');
+    assert.equal(contact.querySelector('.st-key-booking_reply_email').hidden,index!=='3');
+  }
+  assert.equal(contact.querySelector('.st-key-booking_reply_telegram input').value,'@clientname');
+  assert.equal(calls.length,beforeGallery);
+  console.log('PASS: reply channel reveals only needed contact field, preserves typed contact, zero requests');
   observer.disconnect();dom.window.close();
   console.log('PASS: scoped urlencoded save on a >100-field page; repeat save uses fresh token; cabinet navigation is a GET link');
 }

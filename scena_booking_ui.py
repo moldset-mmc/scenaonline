@@ -194,18 +194,28 @@ def _confirmation(db_path: Path, settings: dict, locale: str, services: list[dic
         st.caption(_tr(locale, "После заявки мастер свяжется с вами и подтвердит запись.", "După cerere, specialistul vă va contacta și va confirma programarea."))
     st.button(_tr(locale, "Изменить услугу, дату или время", "Schimbă serviciul, data sau ora"), key="booking_edit", on_click=_edit_selection)
     with st.form("service_request_form"):
+        from scena_service_telegram import CHANNELS, CHANNEL_LABELS
         st.subheader(_tr(locale, "Как с вами связаться?", "Cum vă contactăm?"))
         first, second = st.columns(2)
         name = first.text_input(_tr(locale, "Ваше имя *", "Numele dvs. *"), key="booking_contact_name")
         phone = second.text_input(_tr(locale, "Телефон +373 *", "Telefon +373 *"), placeholder="60 123 456", key="booking_contact_phone")
-        with st.expander(_tr(locale, "Добавить email или пожелание", "Adaugă email sau o preferință")):
-            email = st.text_input(_tr(locale, "Email — необязательно", "Email — opțional"), key="booking_contact_email")
+        with st.container(key='booking_reply_channel'):
+            channel = st.selectbox(_tr(locale, 'Как вам ответить?', 'Cum doriți să vă răspundem?', 'How should we reply?'),
+                CHANNELS, format_func=CHANNEL_LABELS[locale].get, key='booking_contact_channel')
+        with st.container(key='booking_reply_telegram'):
+            telegram = st.text_input(_tr(locale, 'Ваш Telegram — для ответа в Telegram', 'Telegram — pentru răspuns în Telegram', 'Your Telegram — for a Telegram reply'),
+                placeholder='@username', key='booking_contact_telegram', max_chars=100)
+        with st.container(key='booking_reply_email'):
+            email = st.text_input(_tr(locale, 'Email — для ответа по email', 'Email — pentru răspuns prin email', 'Email — for an email reply'), key='booking_contact_email', max_chars=254)
+        with st.expander(_tr(locale, "Добавить пожелание", "Adaugă o preferință", 'Add a preference')):
             message = st.text_area(_tr(locale, "Комментарий — необязательно", "Comentariu — opțional"), height=80, key="booking_contact_message")
         consent = st.checkbox(_tr(locale, "Согласие на обработку контактных данных *", "Acord pentru prelucrarea datelor de contact *"), key="booking_contact_consent")
         submitted = st.form_submit_button(_tr(locale, "Отправить заявку", "Trimite cererea"), type="primary", width="stretch")
     if submitted:
         try:
-            request_id = create_service_request(db_path, service_id=item["id"], slot_date=confirmation["date"], slot_time=confirmation["time"], name=name, phone=phone, email=email, message=message, consent=consent, locale=locale)
+            request_id = create_service_request(db_path, service_id=item["id"], slot_date=confirmation["date"], slot_time=confirmation["time"], name=name, phone=phone,
+                email=email if channel=='email' else '', telegram=telegram if channel=='telegram' else '', contact_channel=channel,
+                message=message, consent=consent, locale=locale)
         except RequestValidationError as exc:
             ro = {
                 "Укажите имя или название организации.": "Introduceți numele.",
@@ -216,8 +226,16 @@ def _confirmation(db_path: Path, settings: dict, locale: str, services: list[dic
                 "Выбранное время уже недоступно. Выберите другое.": "Ora aleasă nu mai este disponibilă. Alegeți alta.",
                 "Предложение недоступно.": "Oferta nu este disponibilă.",
             }
-            st.error(translate_literaltext(locale, str(exc)))
+            reply_errors = {
+                'Выберите способ связи.':('Alegeți metoda de contact.', 'Choose a contact method.'),
+                'Укажите Telegram в формате @username.':('Introduceți Telegram în formatul @username.', 'Enter Telegram as @username.'),
+                'Для ответа в Telegram укажите ваш @username.':('Pentru răspuns în Telegram, introduceți @username.', 'Enter your @username for a Telegram reply.'),
+                'Для ответа по email укажите адрес электронной почты.':('Pentru răspuns prin email, introduceți adresa de email.', 'Enter your email address for an email reply.'),
+            }
+            st.error(_tr(locale,str(exc),*reply_errors[str(exc)]) if str(exc) in reply_errors else translate_literaltext(locale,str(exc)))
         else:
+            from scena_service_telegram import dispatch
+            dispatch(db_path, request_id=request_id)
             st.session_state["booking_receipt"] = {"id": request_id, "service": _name(item, locale), "service_ru": _name(item, "ru"), "service_ro": _name(item, "ro"), "service_en": _name(item, "en"), "date": confirmation["date"], "time": confirmation["time"]}
             st.session_state.pop("booking_confirmation", None)
             st.rerun()

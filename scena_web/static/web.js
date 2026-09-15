@@ -96,6 +96,7 @@
           if (tab?.getAttribute('role') === 'tab') selectTab(tab);
         }
       }
+      syncBookingContact();
       const destination = response.headers.get('X-Scena-URL') || form.action;
       history.replaceState(null,'',destination);
       window.scrollTo(0,scroll);
@@ -241,6 +242,18 @@
     if(!button && !event.target.closest('button,a,input,select,textarea'))button=event.target.closest('[class*="st-key-shop_card_"]')?.querySelector('[data-shop-gallery]');
     if(button){event.preventDefault();openProductGallery(button);}
   });
+  function syncBookingContact() {
+    const channel = document.querySelector('.st-key-booking_reply_channel select');
+    if (!channel) return;
+    for (const [name, index] of [['telegram','1'], ['email','3']]) {
+      const field = document.querySelector('.st-key-booking_reply_' + name);
+      if (field) field.hidden = channel.value !== index;
+    }
+  }
+  document.addEventListener('change', event => {
+    if (event.target.closest('.st-key-booking_reply_channel')) syncBookingContact();
+  });
+  syncBookingContact();
   const selectTab = tab => {
     const list = tab.closest('[role=tablist]');
     for (const item of list.querySelectorAll('[role=tab]')) {

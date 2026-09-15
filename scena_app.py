@@ -1406,7 +1406,10 @@ def render_course(settings: dict[str, str], locale: str) -> None:
 
 
 def render_crm() -> None:
-    expire_pending_requests(DB_PATH)
+    from scena_service_telegram import CHANNEL_LABELS, reply_label, reply_link, dispatch as dispatch_service
+    from scena_shop import dial_number
+    locale = st.session_state.get('scena_ui_locale', 'ru')
+    focused = str(st.query_params.get('request', ''))
     rows = list_requests(DB_PATH)
     counts = {key: sum(row["request_type"] == key for row in rows) for key in REQUEST_TYPES}
     metric_columns = st.columns(4)
@@ -1417,6 +1420,9 @@ def render_crm() -> None:
     filter_options = {"all": "Все пути", **REQUEST_TYPES}
     selected_filter = st.selectbox(ui("Показать"), list(filter_options), format_func=lambda key: ui(filter_options[key]))
     visible = rows if selected_filter == "all" else [row for row in rows if row["request_type"] == selected_filter]
+    if focused:
+        visible = [row for row in rows if str(row['id']) == focused]
+        st.link_button(ui('Все заявки'), '/?page=admin&lang='+locale+'&section=work&view=requests')
     if not visible:
         st.info(ui("В выбранной категории заявок пока нет."))
         return
@@ -1426,9 +1432,24 @@ def render_crm() -> None:
         title = f"#{row['id']} · {ui(REQUEST_TYPES[row['request_type']])} · {row['name']}"
         with st.expander(title, expanded=len(visible) == 1):
             st.caption(f"{ui('Статус: ')}{ui(row['status'])}{ui(' · Создано: ')}{row['created_at']}")
+            if focused:
+                st.markdown('<span id="request-contact"></span>', unsafe_allow_html=True)
+            if phone := dial_number(row['phone']):
+                st.link_button(ui('Позвонить')+': '+row['phone'], 'tel:'+phone)
+            if row['request_type'] == 'service_request':
+                st.caption(ui('Канал ответа')+': '+CHANNEL_LABELS.get(locale,CHANNEL_LABELS['ru']).get(row['contact_channel'],row['contact_channel']))
+                if contact := reply_link(row):
+                    st.link_button(reply_label(row,locale), contact)
+                st.caption('Telegram: '+{'sent':'отправлено','queued':'ожидает отправки','retry':'нужна повторная отправка','sending':'отправляется','skipped':'заявка до подключения уведомлений'}.get(row['telegram_status'],'ожидает отправки'))
+                if row['telegram_status'] in ('queued','retry') and st.button(ui('Повторить отправку заявки в Telegram'), key='service_telegram_retry_'+str(row['id'])):
+                    result = dispatch_service(DB_PATH,request_id=row['id'])
+                    if result == 'sent':
+                        rerun_admin_with_success('Уведомление отправлено в Telegram.')
+                    else:
+                        st.warning(ui('Уведомление пока не отправлено. Проверьте подключение Telegram в Market → Витрина и повторите позже.'))
             detail_columns = st.columns(2)
             details = [
-                ("Телефон", row["phone"]), ("Email", row["email"]),
+                ("Телефон", row["phone"]), ("Email", row["email"]), ('Telegram',row.get('contact_telegram','')),
                 ("Организация", row["organization"]), ("Услуга / формат", row["service"]),
                 ("Дата и время", " · ".join(value for value in (row["preferred_date"], row["preferred_time"]) if value)),
                 ("Язык", row["locale"].upper()), ("Город", row["city"]),
@@ -1439,6 +1460,15 @@ def render_crm() -> None:
                 with detail_columns[index % 2]:
                     st.caption(ui(label))
                     st.write(value or "—")
+            with st.form('request_status_'+str(row['id'])+'_'+str(row['revision'])):
+                status = st.selectbox(ui('Статус'), REQUEST_STATUSES, index=REQUEST_STATUSES.index(row['status']), format_func=ui)
+                if st.form_submit_button(ui('Сохранить статус'), type='primary'):
+                    try:
+                        update_request_status(DB_PATH,row['id'],status,expected_revision=row['revision'])
+                    except RequestValidationError as exc:
+                        st.error(ui(str(exc)))
+                    else:
+                        rerun_admin_with_success('Статус заявки обновлён.')
         display_rows.append({
             "ID": row["id"], "Путь": ui(REQUEST_TYPES[row["request_type"]]),
             "Имя": row["name"], "Телефон": row["phone"], "Услуга": row["service"],
@@ -1448,23 +1478,6 @@ def render_crm() -> None:
     with st.expander(ui("Полная таблица заявок")):
         st.caption(ui("На телефоне таблица прокручивается внутри этого блока."))
         render_data_table(display_rows)
-    st.subheader(ui("Изменить статус"))
-    labels = {row["id"]: f"#{row['id']} · {ui(REQUEST_TYPES[row['request_type']])} · {row['name']}" for row in visible}
-    with st.form("status_form"):
-        request_id = st.selectbox(ui("Заявка"), list(labels), format_func=labels.get)
-        current = next(row["status"] for row in visible if row["id"] == request_id)
-        status = st.selectbox(ui("Статус"), REQUEST_STATUSES, index=REQUEST_STATUSES.index(current), format_func=ui)
-        submitted = st.form_submit_button(ui("Сохранить статус"), type="primary")
-    if submitted:
-        try:
-            update_request_status(DB_PATH, request_id, status)
-        except RequestValidationError as exc:
-            st.error(ui(str(exc)))
-        else:
-            rerun_admin_with_success(
-                "Статус обновлён; соответствующее SMS добавлено в очередь, "
-                "если статус требует сообщения."
-            )
 
 
 def render_profile_admin(settings: dict[str, str]) -> None:
