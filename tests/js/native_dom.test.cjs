@@ -2,7 +2,7 @@ const {JSDOM}=require('jsdom');
 const fs=require('fs');
 const assert=require('node:assert/strict');
 const source=fs.readFileSync(require('path').join(__dirname,'../../scena_web/static/web.js'),'utf8');
-const html=token=>`<!doctype html><html><head><title>SCENA</title></head><body><form id="scena-page" action="/?page=admin&view=model"><input type="hidden" name="_token" value="${token}"><a data-cabinet-nav href="/?page=admin&section=pages&view=scene">Моя Сцена</a><fieldset data-form-key="active"><input name="name" value="Saved"><input name="price" value="900"><button name="_action" value="save">Сохранить</button></fieldset><fieldset data-form-key="unrelated">${Array.from({length:150},(_,i)=>`<input name="other_${i}" value="Unrelated">`).join('')}<input type="file" id="unused-photo" name="photo"></fieldset></form><div id="scena-operation" hidden></div></body></html>`;
+const html=token=>`<!doctype html><html><head><title>SCENA</title></head><body><form id="scena-page" action="/?page=admin&view=model"><input type="hidden" name="_token" value="${token}"><a data-cabinet-nav href="/?page=admin&section=pages&view=scene">Моя Сцена</a><div class="scena-tabs"><div role="tablist"><button type="button" id="products-tab" role="tab" aria-controls="products-panel" aria-selected="true">Товары</button><button type="button" id="settings-tab" role="tab" aria-controls="settings-panel" aria-selected="false">Витрина</button></div><div role="tabpanel" id="products-panel">Каталог</div><div role="tabpanel" id="settings-panel" hidden><fieldset data-form-key="active"><input name="name" value="Saved"><input name="price" value="900"><button name="_action" value="save">Сохранить</button></fieldset></div></div><fieldset data-form-key="unrelated">${Array.from({length:150},(_,i)=>`<input name="other_${i}" value="Unrelated">`).join('')}<input type="file" id="unused-photo" name="photo"></fieldset></form><div id="scena-operation" hidden></div></body></html>`;
 async function main(){
   const dom=new JSDOM(html('before'),{url:'https://fixture.scena.test/',runScripts:'outside-only'});
   const w=dom.window;w.scrollTo=()=>{};w.TextEncoder=TextEncoder;
@@ -12,10 +12,13 @@ async function main(){
   const observer=new w.MutationObserver(()=>{if(w.document.getElementById('scena-performance')?.dataset.lastInteraction)done()});
   observer.observe(w.document.body,{subtree:true,attributes:true,childList:true});
   w.eval(source);
+  w.document.getElementById("settings-tab").click();
   // >100 fields exist, but only the submitted group belongs in the request.
   w.document.querySelector('button[value=save]').click();
   await Promise.race([completed,new Promise((_,reject)=>setTimeout(()=>reject(Error('Save did not finish')),1500))]);
   assert.equal(calls.length,1);
+  assert.equal(w.document.getElementById('settings-panel').hidden,false,'Save must keep the Telegram settings tab visible');
+  assert.equal(w.document.getElementById('settings-tab').getAttribute('aria-selected'),'true');
   const body=calls[0].options.body;
   assert.equal(body.constructor.name,'URLSearchParams');
   assert.deepEqual([...body.keys()].sort(),['_action','_token','name','price']);

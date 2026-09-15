@@ -131,6 +131,15 @@ def confirm_connection(db, *, now=None):
     return connection_status(db)
 
 
+def refresh_code(db, *, now=None):
+    config = _load(db)
+    pending = config.get('pending', {})
+    if not pending or pending['username'] != owner_username(db):
+        raise ConnectionError('Telegram в профиле изменился. Подключите бота для нового аккаунта.')
+    pending.update(code='SCENA CONNECT '+secrets.token_hex(10).upper(), started=time.time() if now is None else now)
+    _save(db, config)
+
+
 def connection_status(db):
     config = _load(db)
     try:
@@ -143,9 +152,11 @@ def connection_status(db):
 
 
 def lead_text(order):
-    from scena_shop import money
+    from scena_shop import money, dial_number
     lines = ['SCENA · новый заказ '+order['reference'], '',
-        'Покупатель: '+order['customer_name'], 'Телефон: '+order['phone']]
+        'Покупатель: '+order['customer_name'], 'Телефон: '+(dial_number(order['phone']) or order['phone'])]
+    # Keep the number as plain text: Telegram automatically recognizes phone
+    # entities. Manually submitted phone_number entities are ignored by Bot API.
     for key, label in (('telegram','Telegram'), ('email','Email')):
         if order[key]:
             lines.append(label+': '+order[key])
@@ -212,7 +223,7 @@ def render_settings(db, locale):
             st.success('Заказы отправляются в Telegram @'+status['username'])
         else:
             st.info('Подключите личный Telegram, указанный в «Моя сцена», чтобы получать заказы из маркета.')
-        st.caption('Создайте отдельного бота через @BotFather → /newbot. Токен вставьте только сюда. Затем отправьте боту код из этого окна.')
+        st.caption('Если бот уже создан, используйте его токен из @BotFather. Новый бот нужен только при отсутствии собственного бота. Токен вставьте только сюда.')
         with st.form('shop_telegram_connect'):
             token = st.text_input('Токен бота из @BotFather', type='password', max_chars=230)
             if st.form_submit_button('Получить код подключения'):
@@ -230,8 +241,15 @@ def render_settings(db, locale):
             st.link_button('Открыть @'+pending['bot'], 'https://t.me/'+pending['bot'])
             st.write('Отправьте из @'+pending['username']+' это сообщение боту:')
             st.code(pending['code'])
+            st.caption('Код действует 10 минут. Отправьте его своему боту, затем нажмите кнопку ниже.')
             if st.button('Код отправлен — подключить Telegram'):
-                confirm_connection(db)
+                try:
+                    confirm_connection(db)
+                    st.rerun()
+                except ConnectionError as error:
+                    st.warning(str(error))
+            if st.button('Получить новый код без повторного ввода токена'):
+                refresh_code(db)
                 st.rerun()
         if status['connected'] and st.button('Повторить отправку ожидающего заказа'):
             result = dispatch(db)

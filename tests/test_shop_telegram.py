@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import test_shop_v17 as shop_tests
 import scena_shop_telegram as tg
-from scena_shop import list_orders, init_shop
+from scena_shop import list_orders, init_shop, dial_number
 
 TOKEN = '123456789:'+'a'*32
 
@@ -74,10 +74,30 @@ class ShopTelegramTests(unittest.TestCase):
         api.assert_called_once()
         message=api.call_args.args[1]
         self.assertEqual(message['chat_id'],'501')
-        for text in (order['reference'],order['phone'],order['customer_name'],order['note'],order['items'][0]['name_ru']):
+        for text in (order['reference'],dial_number(order['phone']),order['customer_name'],order['note'],order['items'][0]['name_ru']):
             self.assertIn(text,message['text'])
         self.assertNotIn('parse_mode',message)
         self.assertEqual(list_orders(self.db)[0]['telegram_message_id'],'99')
+
+    def test_refresh_expired_binding_without_reentering_or_sending_token(self):
+        old_code=self.bind()
+        with patch.object(tg.TelegramBotAdapter,'_call') as api:
+            tg.refresh_code(self.db,now=2000)
+        api.assert_not_called()
+        pending=tg.connection_status(self.db)['pending']
+        self.assertNotEqual(pending['code'],old_code)
+        self.assertEqual(pending['bot'],'OwnerTestBot')
+        with patch.object(tg.TelegramBotAdapter,'_call',return_value=self.update(pending['code'],date=2001)):
+            self.assertTrue(tg.confirm_connection(self.db,now=2002)['connected'])
+
+    def test_phone_is_plain_international_text_for_telegram_dialing(self):
+        order=self.buy(contacts={**self.contact,'phone':'069 123-456'})
+        self.assertIn('\nТелефон: +37369123456\n',tg.lead_text(order))
+        for source in ('+373 (69) 123-456','069 123456','69123456','37369123456','0037369123456'):
+            self.assertEqual(dial_number(source),'+37369123456')
+        self.assertEqual(dial_number('+49 (151) 12345678'),'+4915112345678')
+        for source in ('javascript:alert(1)','123#45678','+3731;ext=5','no phone'):
+            self.assertEqual(dial_number(source),'')
 
     def test_no_connection_keeps_new_lead_and_migration_skips_historical_orders(self):
         self.buy()

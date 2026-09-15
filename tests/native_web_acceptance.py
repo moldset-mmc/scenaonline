@@ -247,6 +247,9 @@ async def main():
                 sender.assert_called_once()
                 assert sender.call_args.args[0]=='sendMessage' and sender.call_args.args[1]['chat_id']=='501'
                 assert list_orders(os.environ['SCENA_DB_PATH'])[0]['telegram_status']=='sent'
+                cabinet_orders,_=await request(market,owner=True)
+                assert 'href="tel:+37360000111"' in cabinet_orders.body.decode()
+                assert 'Телефон: +37360000111' in sender.call_args.args[1]['text']
                 duplicate,_=await request('/?page=shop&lang=ru',data=data)
                 assert duplicate.code==409
             print('PASS native Telegram binding and checkout: one committed order, one lead to verified owner',flush=True)

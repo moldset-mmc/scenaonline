@@ -337,6 +337,27 @@ def quote_cart(db, cart):
         return _quote(con, cart)
 
 
+def dial_number(value):
+    """A safe dial target. Local Moldovan formats become international."""
+    value = str(value or '').strip()
+    if not re.fullmatch(r'\+?[0-9 ()-]{7,40}', value):
+        return ''
+    digits = re.sub(r'[^0-9]', '', value)
+    if not 7 <= len(digits) <= 15:
+        return ''
+    if value.startswith('+'):
+        return '+'+digits
+    if digits.startswith('00'):
+        return '+'+digits[2:]
+    if len(digits) == 9 and digits.startswith('0'):
+        return '+373'+digits[1:]
+    if len(digits) == 8:
+        return '+373'+digits
+    if len(digits) == 11 and digits.startswith('373'):
+        return '+'+digits
+    return digits
+
+
 def _contacts(values):
     limits = {'name': 160, 'phone': 40, 'email': 254, 'telegram': 40, 'note': 2000, 'preferred_contact': 12}
     data = {field: str(values.get(field, '')).strip() for field in limits}
@@ -917,7 +938,11 @@ def render_shop_admin(db_path, app_dir, settings, locale='ru'):
                 st.caption(datetime.fromisoformat(order['created_at']).astimezone(ZoneInfo('Europe/Chisinau')).strftime('%d.%m.%Y · %H:%M'))
                 for item in order['items']:
                     st.write(f'{item[f"name_{locale}"]} · {item["quantity"]} × {money(item["unit_price_cents"])}')
-                st.write(f'{_t("phone_label",locale)}: {order["phone"]}')
+                if phone := dial_number(order['phone']):
+                    call_label = {'ru':'Позвонить', 'ro':'Sună', 'en':'Call'}[locale]
+                    st.link_button(f'{call_label}: {order["phone"]}', 'tel:'+phone)
+                else:
+                    st.write(f'{_t("phone_label",locale)}: {order["phone"]}')
                 for field in ('email', 'telegram'):
                     if order[field]:
                         st.write(f'{field.title()}: {order[field]}')

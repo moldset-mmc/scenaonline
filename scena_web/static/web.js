@@ -83,6 +83,7 @@
         patch(target, template.content.firstElementChild);
         form.elements._token.value = payload.token;
       } else {
+        const selectedTabs = [...form.querySelectorAll('[role=tab][aria-selected=true]')].map(tab => tab.id);
         const next = new DOMParser().parseFromString(text,'text/html');
         document.title = next.title;
         const oldStyles = [...document.head.querySelectorAll('style')];
@@ -90,6 +91,10 @@
         newStyles.forEach((style, index) => oldStyles[index] ? patch(oldStyles[index], style) : document.head.append(style.cloneNode(true)));
         oldStyles.slice(newStyles.length).forEach(style => style.remove());
         patch(document.body, next.body);
+        for (const id of selectedTabs) {
+          const tab = document.getElementById(id);
+          if (tab?.getAttribute('role') === 'tab') selectTab(tab);
+        }
       }
       const destination = response.headers.get('X-Scena-URL') || form.action;
       history.replaceState(null,'',destination);
