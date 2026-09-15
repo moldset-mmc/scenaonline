@@ -133,7 +133,7 @@ class ScenaV11ContractTestCase(unittest.TestCase):
                 now=now,
             )
 
-        update_request_status(self.db_path, request_id, "Связались")
+        update_request_status(self.db_path, request_id, "Связались", now=now)
 
         expired = expire_pending_requests(
             self.db_path,

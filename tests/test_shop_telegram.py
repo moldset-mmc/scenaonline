@@ -99,6 +99,38 @@ class ShopTelegramTests(unittest.TestCase):
         for source in ('javascript:alert(1)','123#45678','+3731;ext=5','no phone'):
             self.assertEqual(dial_number(source),'')
 
+    def test_checkout_rejects_incomplete_moldovan_number(self):
+        from scena_shop import _contacts, ShopError
+        for phone in ('+3737475858','003737475858','+373747585899'):
+            with self.subTest(phone=phone),self.assertRaises(ShopError):
+                _contacts({**self.contact,'phone':phone})
+        self.assertEqual(_contacts({**self.contact,'phone':'+37374758589'})['phone'],'+37374758589')
+
+    def test_order_menu_all_statuses_back_and_refresh_do_not_duplicate_orders(self):
+        from scena_shop import ORDER_STATES, _t
+        config,order,update=self.delivered_action()
+        before=list_orders(self.db)[0]
+        for state in ORDER_STATES:
+            row=list_orders(self.db)[0]
+            markup=tg.lead_buttons(self.db,row,config)
+            update['callback_query']['data']=markup['reply_markup']['inline_keyboard'][1][0]['callback_data']
+            with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as api:
+                tg.receive_update(self.db,update,config['webhook_secret'])
+                self.assertEqual(list_orders(self.db)[0],row)
+                menu=next(c.args[1] for c in api.call_args_list if c.args[0]=='editMessageText')
+                choices=[b for line in menu['reply_markup']['inline_keyboard'] for b in line]
+                self.assertEqual(len(choices),len(ORDER_STATES)+1)
+                update['callback_query']['data']=next(b['callback_data'] for b in choices if b['text'].removeprefix('✓ ')==_t(state,'ru'))
+                tg.receive_update(self.db,update,config['webhook_secret'])
+            self.assertEqual(list_orders(self.db)[0]['status'],state)
+        final=list_orders(self.db)[0]
+        with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as api:
+            tg.refresh_lead(self.db,'order',order['id'])
+        api.assert_called_once()
+        self.assertEqual(api.call_args.args[0],'editMessageText')
+        self.assertEqual(list_orders(self.db)[0],final)
+        self.assertEqual(final['items'],before['items'])
+
     def test_no_connection_keeps_new_lead_and_migration_skips_historical_orders(self):
         self.buy()
         self.assertEqual(tg.dispatch(self.db),'unconfigured')
@@ -138,11 +170,15 @@ class ShopTelegramTests(unittest.TestCase):
         with patch.object(tg.TelegramBotAdapter, '_call', return_value={'message_id':99}) as api:
             self.assertEqual(tg.dispatch(self.db, order_id=order['id']), 'sent')
         buttons = api.call_args.args[1]['reply_markup']['inline_keyboard']
-        self.assertEqual([row[0]['text'] for row in buttons], ['Открыть заказ','Связались'])
+        self.assertEqual([row[0]['text'] for row in buttons], ['Открыть заказ','Сменить статус'])
         self.assertEqual(buttons[0][0]['url'], 'https://scena.example'+tg.order_path(order['id']))
         self.assertLessEqual(len(buttons[1][0]['callback_data'].encode()), 64)
         callback = {'update_id':77, 'callback_query':{'id':'fixture-query', 'from':{'id':501,'is_bot':False},
             'message':{'message_id':99, 'chat':{'id':501,'type':'private'}}, 'data':buttons[1][0]['callback_data']}}
+        with patch.object(tg.TelegramBotAdapter, '_call', return_value=True) as api:
+            tg.receive_update(self.db, callback, config['webhook_secret'])
+        menu = next(c.args[1] for c in api.call_args_list if c.args[0]=='editMessageText')
+        callback['callback_query']['data'] = next(b['callback_data'] for line in menu['reply_markup']['inline_keyboard'] for b in line if b['text']=='Связались')
         return config, order, callback
 
     def test_owner_callback_commits_once_updates_same_message_and_removes_action(self):
@@ -159,7 +195,7 @@ class ShopTelegramTests(unittest.TestCase):
             self.assertEqual(edit['message_id'], 99)
             self.assertEqual(edit['chat_id'], '501')
             self.assertIn('Статус: Связались', edit['text'])
-            self.assertEqual(len(edit['reply_markup']['inline_keyboard']), 1)
+            self.assertTrue(edit['reply_markup']['inline_keyboard'])
 
     def test_callback_rejects_wrong_header_owner_chat_message_signature_and_old_binding(self):
         import copy

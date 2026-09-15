@@ -2016,7 +2016,7 @@ def _change_request_status(connection, row, status, moment):
         raise RequestValidationError('Неизвестный статус заявки.')
     if row['status'] == status:
         return
-    if status == 'Подтверждена' and row['slot_start'] and row['slot_block_end']:
+    if status in BLOCKING_STATUSES and row['slot_start'] and row['slot_block_end']:
         if row['status'] == 'Срок подтверждения истёк' or (row['hold_expires_at'] and row['hold_expires_at'] <= moment.isoformat(timespec='seconds')):
             raise RequestValidationError('Срок удержания истёк. Сначала согласуйте с клиентом новое доступное время.')
         if datetime.fromisoformat(row['slot_start']) <= moment:

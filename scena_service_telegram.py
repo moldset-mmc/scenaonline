@@ -81,43 +81,46 @@ def reply_label(row, locale='ru'):
 
 def lead_text(row):
     from scena_shop import dial_number
-    lines = [f"SCENA · заявка на услугу №{row['id']}", 'Статус: '+row['status'], '',
-        'Услуга: '+row['service'], 'Дата: '+row['preferred_date'], 'Время: '+row['preferred_time']+' · Кишинёв', '',
-        'Клиент: '+row['name'], 'Телефон: '+(dial_number(row['phone']) or row['phone']),
-        'Канал ответа: '+CHANNEL_LABELS['ru'].get(row['contact_channel'], row['contact_channel'])]
-    for field, label in (('contact_telegram','Telegram'), ('email','Email')):
-        if row.get(field):
-            lines.append(label+': '+row[field])
+    day = datetime.fromisoformat(row['preferred_date']).strftime('%d.%m.%Y')
+    lines = [f"Запись №{row['id']} · {row['service']}", 'Статус: '+row['status'],
+        'Запись: '+day+' · '+row['preferred_time']+' (Кишинёв)', '',
+        row['name'], 'Телефон: '+(dial_number(row['phone']) or row['phone'])]
+    channel = row['contact_channel']
+    if channel == 'telegram' and row.get('contact_telegram'):
+        lines.append('Ответить в Telegram: '+row['contact_telegram'])
+    elif channel == 'email' and row.get('email'):
+        lines.append('Ответить по email: '+row['email'])
+    elif channel == 'sms':
+        lines.append('Ответить по SMS')
     if row['status'] in ('Ожидает подтверждения','Связались') and row['hold_expires_at']:
         from scena_core import CHISINAU
         until = datetime.fromisoformat(row['hold_expires_at']).astimezone(CHISINAU).strftime('%d.%m.%Y %H:%M')
-        lines.append('Подтвердить до: '+until+' · Кишинёв')
+        lines.append('Подтвердить до: '+until)
     if row['message']:
         lines += ['', 'Пожелания: '+row['message'][:700]]
     return '\n'.join(lines).encode('utf-16-le')[:7800].decode('utf-16-le', errors='ignore')
 
 
-def lead_buttons(db, row, config):
+def lead_buttons(db, row, config, *, menu=False):
+    from scena_core import REQUEST_STATUSES
     origin = tg.public_origin(db)
     if not origin:
         return {}
     destination = origin + request_path(row['id'], row['locale'])
     buttons = [[{'text':'Открыть заявку','url':destination}]]
     link = reply_link(row)
-    if link:
+    if link and row['contact_channel'] != 'phone':
         # Bot inline buttons accept HTTP/tg URLs, not tel/mailto/sms schemes.
         buttons.append([{'text':reply_label(row), 'url':link if row['contact_channel']=='telegram' else destination+'#request-contact'}])
     if config.get('webhook_ready') and config.get('action_secret'):
-        actions = []
-        if row['status'] == 'Ожидает подтверждения':
-            actions.append(('c','Связались'))
-        if row['status'] in ('Ожидает подтверждения','Связались'):
-            actions.append(('f','Подтвердить запись'))
-        if actions:
-            buttons.append([])
-        for action, label in actions:
-            value = f"s:{row['id']}:{row['revision']}:{action}"
-            buttons[-1].append({'text':label,'callback_data':value+':'+tg._signature(config,value)})
+        prefix = f"r:{row['id']}:{row['revision']}:"
+        if menu:
+            buttons = [[tg.action_button(config, prefix+str(i), ('✓ ' if status == row['status'] else '')
+                +status+(' · авто' if status == 'Срок подтверждения истёк' else ''))]
+                for i,status in enumerate(REQUEST_STATUSES)]
+            buttons.append([tg.action_button(config,prefix+'b','Назад')])
+        else:
+            buttons.append([tg.action_button(config,prefix+'m','Сменить статус')])
     return {'reply_markup':{'inline_keyboard':buttons}}
 
 
@@ -162,13 +165,15 @@ def receive_callback(db, query, config, now):
     """Called only after shared webhook and owner/chat validation."""
     adapter = tg._adapter(config)
     data = query.get('data','')
-    match = re.fullmatch(r'(s:([1-9][0-9]{0,18}):([1-9][0-9]{0,8}):([cf])):([A-Za-z0-9_-]{16})', data)
-    if not match or not config.get('action_secret') or not hmac.compare_digest(match[5],tg._signature(config,match[1])):
+    match = re.fullmatch(r'([sr]:([1-9][0-9]{0,18}):([1-9][0-9]{0,8}):([cfmb0-7])):([A-Za-z0-9_-]{16})', data)
+    if (not match or not config.get('action_secret') or not hmac.compare_digest(match[5],tg._signature(config,match[1]))
+        or (data.startswith('s:') != (match[4] in ('c','f')))):
         tg._answer(adapter,query,'Кнопка устарела. Откройте заявку в кабинете.')
         return
-    from scena_core import _connect, _expire_pending, _change_request_status, CHISINAU, RequestValidationError
+    from scena_core import _connect, _expire_pending, _change_request_status, CHISINAU, RequestValidationError, REQUEST_STATUSES
     moment = datetime.fromtimestamp(now, CHISINAU)
-    notice = ''
+    action = match[4]
+    menu, notice = action == 'm', ''
     with _connect(db) as con:
         con.execute('BEGIN IMMEDIATE')
         stored = con.execute('SELECT payload FROM shop_telegram_connection WHERE id=1').fetchone()
@@ -181,21 +186,25 @@ def receive_callback(db, query, config, now):
         else:
             _expire_pending(con, moment)
             row = dict(con.execute('SELECT * FROM requests WHERE id=?', (row['id'],)).fetchone())
-            if row['revision'] == int(match[3]):
-                status = 'Связались' if match[4]=='c' else 'Подтверждена'
-                allowed = row['status']=='Ожидает подтверждения' or (row['status']=='Связались' and status=='Подтверждена')
-                if allowed:
+            if action == '7':
+                menu, notice = True, 'Этот статус устанавливается автоматически, когда истекает срок подтверждения.'
+            elif action not in ('m','b'):
+                status = {'c':'Связались','f':'Подтверждена'}.get(action) or REQUEST_STATUSES[int(action)]
+                allowed = not data.startswith('s:') or row['status']=='Ожидает подтверждения' or (row['status']=='Связались' and status=='Подтверждена')
+                if row['revision'] != int(match[3]):
+                    menu, notice = True, 'Заявка изменилась. Выберите статус заново.'
+                elif allowed:
                     try:
                         _change_request_status(con,row,status,moment)
                     except RequestValidationError as error:
-                        notice = str(error)
+                        menu, notice = True, str(error)
             row = dict(con.execute('SELECT * FROM requests WHERE id=?', (row['id'],)).fetchone())
     if not row:
         tg._answer(adapter,query,'Заявка недоступна. Откройте кабинет.')
         return
     try:
         adapter._call('editMessageText', {'chat_id':config['chat_id'],'message_id':query['message']['message_id'],
-            'text':lead_text(row),'link_preview_options':{'is_disabled':True}, **lead_buttons(db,row,config)})
+            'text':lead_text(row),'link_preview_options':{'is_disabled':True}, **lead_buttons(db,row,config,menu=menu)})
     except Exception:
         notice = notice or 'Статус в SCENA: '+row['status']+'. Повторите нажатие для обновления сообщения.'
-    tg._answer(adapter,query,notice or 'Статус: '+row['status'])
+    tg._answer(adapter,query,notice or ('Выберите статус' if menu else 'Статус: '+row['status']))

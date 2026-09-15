@@ -43,12 +43,18 @@ class ServiceTelegramTests(unittest.TestCase):
 
     def deliver(self, channel='telegram'):
         config=self.active_actions()
+        self.callback_config = config.copy()
         identity=self.book(channel)
         with patch.object(tg.TelegramBotAdapter,'_call',return_value={'message_id':201}) as api:
             self.assertEqual(service_tg.dispatch(self.db,request_id=identity),'sent')
         return config,identity,api.call_args.args[1]
 
     def callback(self, payload, label):
+        if label not in [b['text'] for line in payload['reply_markup']['inline_keyboard'] for b in line]:
+            menu = self.callback(payload, 'Сменить статус')
+            with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as api:
+                tg.receive_update(self.db, menu, self.callback_config['webhook_secret'], now=self.moment.timestamp())
+            payload = next(c.args[1] for c in api.call_args_list if c.args[0]=='editMessageText')
         data=next(button['callback_data'] for row in payload['reply_markup']['inline_keyboard'] for button in row if button['text']==label)
         return {'update_id':404,'callback_query':{'id':'service-query','from':{'id':501,'is_bot':False},
             'message':{'message_id':201,'chat':{'id':501,'type':'private'}},'data':data}}
@@ -70,10 +76,10 @@ class ServiceTelegramTests(unittest.TestCase):
     def test_one_lead_contains_booking_contacts_channel_and_supported_buttons(self):
         config,identity,payload=self.deliver()
         row=self.row(identity)
-        for value in (row['service'],row['preferred_date'],row['preferred_time'],'+37360000001','@clientname','Канал ответа: Telegram'):
+        for value in (row['service'],datetime.fromisoformat(row['preferred_date']).strftime('%d.%m.%Y'),row['preferred_time'],'+37360000001','@clientname','Ответить в Telegram: @clientname'):
             self.assertIn(value,payload['text'])
         buttons=[b for line in payload['reply_markup']['inline_keyboard'] for b in line]
-        self.assertEqual([b['text'] for b in buttons],['Открыть заявку','Ответить в Telegram','Связались','Подтвердить запись'])
+        self.assertEqual([b['text'] for b in buttons],['Открыть заявку','Ответить в Telegram','Сменить статус'])
         self.assertEqual(buttons[0]['url'],'https://scena.example'+service_tg.request_path(identity))
         self.assertEqual(buttons[1]['url'],'https://t.me/clientname')
         for b in buttons:
@@ -81,7 +87,10 @@ class ServiceTelegramTests(unittest.TestCase):
         for channel in ('phone','sms','email'):
             row.update(contact_channel=channel,email='client@example.com')
             buttons=service_tg.lead_buttons(self.db,row,config)['reply_markup']['inline_keyboard']
-            self.assertTrue(buttons[1][0]['url'].endswith('#request-contact'))
+            if channel == 'phone':
+                self.assertEqual([b[0]['text'] for b in buttons], ['Открыть заявку','Сменить статус'])
+            else:
+                self.assertTrue(buttons[1][0]['url'].endswith('#request-contact'))
         with patch.object(tg.TelegramBotAdapter,'_call') as api:
             self.assertEqual(service_tg.dispatch(self.db,request_id=identity),'idle')
         api.assert_not_called()
@@ -93,7 +102,7 @@ class ServiceTelegramTests(unittest.TestCase):
             tg.receive_update(self.db,contact,config['webhook_secret'],now=self.moment.timestamp()+1)
         self.assertEqual((self.row(identity)['status'],self.row(identity)['revision']),('Связались',2))
         edited=next(c.args[1] for c in api.call_args_list if c.args[0]=='editMessageText')
-        confirm=self.callback(edited,'Подтвердить запись')
+        confirm=self.callback(edited,'Подтверждена')
         with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as api:
             tg.receive_update(self.db,confirm,config['webhook_secret'],now=self.moment.timestamp()+2)
             tg.receive_update(self.db,contact,config['webhook_secret'],now=self.moment.timestamp()+3)
@@ -104,12 +113,12 @@ class ServiceTelegramTests(unittest.TestCase):
         for edit in edits:
             self.assertEqual(edit['message_id'],201)
             self.assertIn('Подтверждена',edit['text'])
-            self.assertFalse(any('callback_data' in b for line in edit['reply_markup']['inline_keyboard'] for b in line))
+            self.assertTrue(any('callback_data' in b for line in edit['reply_markup']['inline_keyboard'] for b in line))
         self.assertFalse(list_sms_outbox(self.db),'Telegram choice must not queue customer SMS')
 
     def test_concurrent_confirmation_is_idempotent_and_queues_one_selected_sms(self):
         config,identity,payload=self.deliver('sms')
-        update=self.callback(payload,'Подтвердить запись')
+        update=self.callback(payload,'Подтверждена')
         with patch.object(tg.TelegramBotAdapter,'_call',return_value=True):
             with ThreadPoolExecutor(max_workers=2) as pool:
                 list(pool.map(lambda _:tg.receive_update(self.db,update,config['webhook_secret'],now=self.moment.timestamp()+1),range(2)))
@@ -118,8 +127,9 @@ class ServiceTelegramTests(unittest.TestCase):
 
     def test_forged_owner_header_signature_message_and_binding_do_not_change_booking(self):
         config,identity,payload=self.deliver()
-        update=self.callback(payload,'Подтвердить запись')
+        update=self.callback(payload,'Подтверждена')
         with self.assertRaises(PermissionError):tg.receive_update(self.db,update,'wrong-secret')
+        original_update = copy.deepcopy(update)
         variants=[]
         for path,value in [(('from','id'),999),(('message','message_id'),999),(('message','chat'),{'id':501,'type':'group'})]:
             changed=copy.deepcopy(update);changed['callback_query'][path[0]][path[1]]=value;variants.append(changed)
@@ -127,13 +137,13 @@ class ServiceTelegramTests(unittest.TestCase):
         with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as api:
             for update in variants:tg.receive_update(self.db,update,config['webhook_secret'])
             config['action_secret']='different-owner-binding';tg._save(self.db,config)
-            tg.receive_update(self.db,self.callback(payload,'Подтвердить запись'),config['webhook_secret'])
+            tg.receive_update(self.db,original_update,config['webhook_secret'])
         self.assertTrue(all(c.args[0]=='answerCallbackQuery' for c in api.call_args_list))
         self.assertEqual(self.row(identity)['revision'],1)
 
     def test_expired_and_past_bookings_cannot_be_confirmed(self):
         config,identity,payload=self.deliver()
-        update=self.callback(payload,'Подтвердить запись')
+        update=self.callback(payload,'Подтверждена')
         expires=datetime.fromisoformat(self.row(identity)['hold_expires_at']).timestamp()
         with patch.object(tg.TelegramBotAdapter,'_call',return_value=True):
             tg.receive_update(self.db,update,config['webhook_secret'],now=expires+1)
@@ -153,7 +163,7 @@ class ServiceTelegramTests(unittest.TestCase):
         other=self.book('phone')
         with sqlite3.connect(self.db) as con:
             con.execute("UPDATE requests SET slot_start=?,slot_block_end=?,status='Подтверждена' WHERE id=?",(original['slot_start'],original['slot_block_end'],other))
-        update=self.callback(payload,'Подтвердить запись')
+        update=self.callback(payload,'Подтверждена')
         with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as api:
             tg.receive_update(self.db,update,config['webhook_secret'],now=self.moment.timestamp()+1)
         self.assertIn('уже занято',api.call_args.args[1]['text'])
@@ -177,7 +187,7 @@ class ServiceTelegramTests(unittest.TestCase):
 
     def test_edit_timeout_keeps_confirmed_booking_and_retries_only_message(self):
         config,identity,payload=self.deliver()
-        update=self.callback(payload,'Подтвердить запись')
+        update=self.callback(payload,'Подтверждена')
         with patch.object(tg.TelegramBotAdapter,'_call',side_effect=[TimeoutError(),True]):
             tg.receive_update(self.db,update,config['webhook_secret'])
         self.assertEqual(self.row(identity)['status'],'Подтверждена')
@@ -195,3 +205,47 @@ class ServiceTelegramTests(unittest.TestCase):
         self.assertEqual(row['name'],'Booking fixture')
         self.assertEqual(row['telegram_status'],'skipped')
         self.assertEqual(service_tg.dispatch(self.db),'unconfigured')
+
+    def test_menu_back_all_statuses_and_refresh_leave_booking_unchanged(self):
+        from scena_core import REQUEST_STATUSES
+        config,identity,payload=self.deliver('phone')
+        before=self.row(identity)
+        with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as api:
+            tg.receive_update(self.db,self.callback(payload,'Сменить статус'),config['webhook_secret'],now=self.moment.timestamp())
+            menu=next(c.args[1] for c in api.call_args_list if c.args[0]=='editMessageText')
+            labels=[b['text'] for line in menu['reply_markup']['inline_keyboard'] for b in line]
+            for status in REQUEST_STATUSES:self.assertTrue(any(status in label for label in labels))
+            tg.receive_update(self.db,self.callback(menu,'Назад'),config['webhook_secret'],now=self.moment.timestamp())
+            tg.refresh_lead(self.db,'service',identity)
+        self.assertEqual(self.row(identity),before)
+        self.assertTrue(all(c.args[0] in ('editMessageText','answerCallbackQuery') for c in api.call_args_list))
+        self.assertNotIn('Позвонить',json.dumps(api.call_args.args[1],ensure_ascii=False))
+        self.assertNotIn('Канал ответа',payload['text'])
+        self.assertEqual(payload['text'].count('Кишинёв'),1)
+        self.assertNotIn(before['preferred_date'],payload['text'])
+
+    def test_menu_closed_statuses_and_expiry_cannot_reclaim_occupied_slot(self):
+        config,identity,payload=self.deliver()
+        for status in ('Отклонена','Новая','Завершена','Отменена'):
+            update=self.callback(payload,status)
+            with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as api:
+                tg.receive_update(self.db,update,config['webhook_secret'],now=self.moment.timestamp())
+            self.assertEqual(self.row(identity)['status'],status)
+            payload=next(c.args[1] for c in api.call_args_list if c.args[0]=='editMessageText')
+        original=self.row(identity)
+        self.book('phone',slot_date=original['preferred_date'],slot_time=original['preferred_time'])
+        for status in ('Ожидает подтверждения','Связались','Подтверждена'):
+            with self.subTest(status=status),self.assertRaisesRegex(RequestValidationError,'уже занято'):
+                update_request_status(self.db,identity,status,expected_revision=original['revision'],now=self.moment)
+        self.assertEqual(self.row(identity),original)
+
+    def test_previously_delivered_service_button_still_works(self):
+        config,identity,payload=self.deliver('phone')
+        value=f's:{identity}:1:c'
+        update=self.callback(payload,'Сменить статус')
+        update['callback_query']['data']=value+':'+tg._signature(config,value)
+        with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as api:
+            tg.receive_update(self.db,update,config['webhook_secret'],now=self.moment.timestamp())
+        self.assertEqual(self.row(identity)['status'],'Связались')
+        edited=next(c.args[1] for c in api.call_args_list if c.args[0]=='editMessageText')
+        self.assertEqual([line[0]['text'] for line in edited['reply_markup']['inline_keyboard']],['Открыть заявку','Сменить статус'])

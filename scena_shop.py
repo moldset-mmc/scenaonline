@@ -365,6 +365,9 @@ def _contacts(values):
         raise ShopError('contacts')
     if len(data['name']) < 2 or not re.fullmatch(r'\+?[\d ()-]{7,40}', data['phone']) or not 7 <= len(re.sub(r'\D', '', data['phone'])) <= 15:
         raise ShopError('contacts')
+    normalized = dial_number(data['phone'])
+    if not normalized or (normalized.startswith('+373') and len(normalized) != 12):
+        raise ShopError('phone_length')
     if data['email'] and not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', data['email']):
         raise ShopError('email')
     if data['telegram'] and not re.fullmatch(r'@?[A-Za-z][A-Za-z0-9_]{4,31}', data['telegram']):
@@ -555,6 +558,7 @@ _ERRORS = {
     'unavailable': ('Один из товаров больше не доступен. Уберите его из корзины и проверьте заказ ещё раз.', 'Un produs nu mai este disponibil. Eliminați-l din coș și verificați comanda.', 'An item is no longer available. Remove it from your bag and review the order.'),
     'changed': ('Товар или цена изменились. Проверьте актуальный заказ и подтвердите его ещё раз.', 'Produsul sau prețul s-a schimbat. Verificați comanda actualizată și confirmați din nou.', 'An item or its price changed. Review the updated order before confirming again.'),
     'contacts': ('Укажите имя и корректный номер телефона.', 'Introduceți numele și un număr de telefon valid.', 'Enter your name and a valid phone number.'),
+    'phone_length': ('Проверьте номер телефона: после +373 должно быть 8 цифр.', 'Verificați numărul: după +373 trebuie să fie 8 cifre.', 'Check the phone number: +373 must be followed by 8 digits.'),
     'email': ('Проверьте email.', 'Verificați adresa de email.', 'Check the email address.'),
     'telegram': ('Укажите имя Telegram в формате @username.', 'Introduceți numele Telegram în format @username.', 'Enter your Telegram username as @username.'),
     'contact_channel': ('Заполните контакт для выбранного способа связи.', 'Completați datele pentru metoda de contact aleasă.', 'Add your details for the selected contact method.'),
@@ -959,6 +963,13 @@ def render_shop_admin(db_path, app_dir, settings, locale='ru'):
                 if order['note']:
                     st.write(order['note'])
                 st.caption('Telegram: ' + {'sent':'отправлено', 'queued':'ожидает отправки', 'retry':'нужна повторная отправка', 'sending':'отправляется', 'skipped':'заказ до подключения уведомлений'}.get(order.get('telegram_status'), 'ожидает отправки'))
+                if order.get('telegram_message_id') and st.button('Обновить карточку в Telegram', key='shop_tg_refresh_'+order['id']):
+                    from scena_shop_telegram import refresh_lead, ConnectionError
+                    try:
+                        refresh_lead(db_path, 'order', order['id'])
+                        st.success('Карточка в Telegram обновлена.')
+                    except ConnectionError as error:
+                        st.warning(str(error))
                 with st.form('shop_order_status_' + order['id'] + '_' + str(order['revision'])):
                     status = st.selectbox(_t('order_status', locale), ORDER_STATES, index=ORDER_STATES.index(order['status']), format_func=lambda value: _t(value, locale))
                     if st.form_submit_button(_t('status_save', locale)):

@@ -1438,9 +1438,16 @@ def render_crm() -> None:
                 st.link_button(ui('Позвонить')+': '+row['phone'], 'tel:'+phone)
             if row['request_type'] == 'service_request':
                 st.caption(ui('Канал ответа')+': '+CHANNEL_LABELS.get(locale,CHANNEL_LABELS['ru']).get(row['contact_channel'],row['contact_channel']))
-                if contact := reply_link(row):
+                if (contact := reply_link(row)) and row['contact_channel'] != 'phone':
                     st.link_button(reply_label(row,locale), contact)
                 st.caption('Telegram: '+{'sent':'отправлено','queued':'ожидает отправки','retry':'нужна повторная отправка','sending':'отправляется','skipped':'заявка до подключения уведомлений'}.get(row['telegram_status'],'ожидает отправки'))
+                if row.get('telegram_message_id') and st.button('Обновить карточку в Telegram', key='service_tg_refresh_'+str(row['id'])):
+                    from scena_shop_telegram import refresh_lead, ConnectionError
+                    try:
+                        refresh_lead(DB_PATH, 'service', row['id'])
+                        st.success('Карточка в Telegram обновлена.')
+                    except ConnectionError as error:
+                        st.warning(str(error))
                 if row['telegram_status'] in ('queued','retry') and st.button(ui('Повторить отправку заявки в Telegram'), key='service_telegram_retry_'+str(row['id'])):
                     result = dispatch_service(DB_PATH,request_id=row['id'])
                     if result == 'sent':

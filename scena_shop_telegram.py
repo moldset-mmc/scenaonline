@@ -248,17 +248,17 @@ def connection_status(db):
 
 def lead_text(order):
     from scena_shop import money, dial_number, _t
-    lines = ['SCENA · заказ '+order['reference'], 'Статус: '+_t(order['status'], 'ru'), '',
-        'Покупатель: '+order['customer_name'], 'Телефон: '+(dial_number(order['phone']) or order['phone'])]
+    lines = ['Заказ '+order['reference'], 'Статус: '+_t(order['status'], 'ru'), '',
+        order['customer_name'], 'Телефон: '+(dial_number(order['phone']) or order['phone'])]
     # Keep the number as plain text: Telegram automatically recognizes phone
     # entities. Manually submitted phone_number entities are ignored by Bot API.
-    for key, label in (('telegram','Telegram'), ('email','Email')):
-        if order[key]:
-            lines.append(label+': '+order[key])
-    lines += ['Способ связи: '+{'phone':'телефон','email':'email','telegram':'Telegram'}[order['preferred_contact']], '', 'Товары:']
+    channel = order['preferred_contact']
+    if channel in ('telegram','email') and order[channel]:
+        lines.append('Ответить в '+('Telegram: ' if channel == 'telegram' else 'Email: ')+order[channel])
+    lines += ['']
     for item in order['items']:
         lines.append(f"• {item['name_ru'][:80]} · {item['quantity']} × {money(item['unit_price_cents'])}")
-    lines += ['', 'Итого: '+money(order['total_cents']), 'Оплата и получение согласовываются лично.']
+    lines += ['Итого: '+money(order['total_cents'])]
     if order['note']:
         lines += ['', 'Комментарий: '+order['note'][:700]]
     return '\n'.join(lines).encode('utf-16-le')[:7800].decode('utf-16-le', errors='ignore')
@@ -268,14 +268,24 @@ def _signature(config, value):
     return base64.urlsafe_b64encode(hmac.new(config['action_secret'].encode(), value.encode(), hashlib.sha256).digest()[:12]).decode()
 
 
-def lead_buttons(db, order, config):
+def action_button(config, value, label):
+    return {'text':label, 'callback_data':value+':'+_signature(config, value)}
+
+
+def lead_buttons(db, order, config, *, menu=False):
+    from scena_shop import ORDER_STATES, _t
     origin = public_origin(db)
     if not origin:
         return {}
     buttons = [[{'text':'Открыть заказ', 'url':origin + order_path(order['id'], order.get('locale', 'ru'))}]]
-    if config.get('webhook_ready') and config.get('action_secret') and order['status'] == 'new':
-        value = 'c:' + UUID(order['id']).hex + ':' + str(order['revision'])
-        buttons.append([{'text':'Связались', 'callback_data':value + ':' + _signature(config, value)}])
+    if config.get('webhook_ready') and config.get('action_secret'):
+        prefix = 'o:' + UUID(order['id']).hex + ':' + str(order['revision']) + ':'
+        if menu:
+            buttons = [[action_button(config, prefix+str(i), ('✓ ' if state == order['status'] else '')+_t(state,'ru'))]
+                for i,state in enumerate(ORDER_STATES)]
+            buttons.append([action_button(config,prefix+'b','Назад')])
+        else:
+            buttons.append([action_button(config,prefix+'m','Сменить статус')])
     return {'reply_markup':{'inline_keyboard':buttons}}
 
 
@@ -318,15 +328,18 @@ def receive_update(db, update, secret, *, now=None):
         _answer(adapter, query, 'Эта кнопка доступна только владельцу заказа.')
         return
     data = query.get('data', '')
-    if isinstance(data, str) and data.startswith('s:'):
+    if isinstance(data, str) and data.startswith(('s:', 'r:')):
         from scena_service_telegram import receive_callback
         receive_callback(db, query, config, now)
         return
-    match = re.fullmatch(r'(c:([a-f0-9]{32}):([1-9][0-9]{0,8})):([A-Za-z0-9_-]{16})', data) if isinstance(data, str) else None
-    if not match or not config.get('action_secret') or not hmac.compare_digest(match[4], _signature(config, match[1])):
+    match = re.fullmatch(r'((?:c|o):([a-f0-9]{32}):([1-9][0-9]{0,8})(?::([mb0-4]))?):([A-Za-z0-9_-]{16})', data) if isinstance(data, str) else None
+    if (not match or not config.get('action_secret') or not hmac.compare_digest(match[5], _signature(config, match[1]))
+        or (data.startswith('c:') != (match[4] is None))):
         _answer(adapter, query, 'Кнопка устарела. Откройте заказ в кабинете.')
         return
-    from scena_shop import _connect, _order, _now, _t
+    from scena_shop import _connect, _order, _now, _t, ORDER_STATES
+    action = match[4] or '1'  # Accept the previously delivered “contacted” button.
+    menu, notice = action == 'm', ''
     with _connect(db) as con:
         con.execute('BEGIN IMMEDIATE')
         row = con.execute('SELECT payload FROM shop_telegram_connection WHERE id=1').fetchone()
@@ -337,10 +350,15 @@ def receive_update(db, update, secret, *, now=None):
         order = _order(con, str(UUID(match[2])))
         if not order or order['telegram_message_id'] != str(message.get('message_id')):
             order = None
-        elif order['status'] == 'new' and order['revision'] == int(match[3]):
-            con.execute("UPDATE shop_orders SET status='contacted',revision=revision+1,updated_at=? WHERE id=? AND revision=? AND status='new'",
-                (_now(), order['id'], int(match[3])))
-            order = _order(con, order['id'])
+        elif action not in ('m','b'):
+            if order['revision'] != int(match[3]):
+                menu, notice = True, 'Заказ изменился. Выберите статус заново.'
+            elif not data.startswith('c:') or order['status'] == 'new':
+                status = ORDER_STATES[int(action)]
+                if status != order['status']:
+                    con.execute('UPDATE shop_orders SET status=?,revision=revision+1,updated_at=? WHERE id=? AND revision=?',
+                        (status, _now(), order['id'], int(match[3])))
+                    order = _order(con, order['id'])
     if not order:
         _answer(adapter, query, 'Заказ недоступен. Откройте кабинет.')
         return
@@ -349,10 +367,10 @@ def receive_update(db, update, secret, *, now=None):
     updated = True
     try:
         adapter._call('editMessageText', {'chat_id':config['chat_id'], 'message_id':message['message_id'],
-            'text':lead_text(order), 'link_preview_options':{'is_disabled':True}, **lead_buttons(db, order, config)})
+            'text':lead_text(order), 'link_preview_options':{'is_disabled':True}, **lead_buttons(db, order, config, menu=menu)})
     except Exception:
         updated = False
-    text = 'Статус: ' + _t(order['status'], 'ru')
+    text = notice or ('Выберите статус' if menu else 'Статус: ' + _t(order['status'], 'ru'))
     if not updated:
         text += '. В SCENA сохранён; сообщение обновится при повторном нажатии.'
     _answer(adapter, query, text)
@@ -363,6 +381,32 @@ def _answer(adapter, query, text):
         adapter._call('answerCallbackQuery', {'callback_query_id':query['id'], 'text':text, 'show_alert':False})
     except Exception:
         pass  # Old/repeated callbacks may already have expired on Telegram.
+
+
+def refresh_lead(db, kind, identity):
+    """Explicit owner action: edit an existing card without resending or changing data."""
+    from scena_shop import _connect
+    config = _load(db)
+    if not config.get('chat_id') or config.get('username') != owner_username(db):
+        raise ConnectionError('Сначала подключите Telegram владельца.')
+    with _connect(db) as con:
+        if kind == 'order':
+            from scena_shop import _order
+            row = _order(con, str(UUID(str(identity))))
+            text_fn, buttons_fn = lead_text, lead_buttons
+        elif kind == 'service':
+            from scena_service_telegram import lead_text as text_fn, lead_buttons as buttons_fn
+            found = con.execute("SELECT * FROM requests WHERE id=? AND request_type='service_request'", (int(identity),)).fetchone()
+            row = dict(found) if found else None
+        else:
+            raise ValueError('Unknown lead type')
+    if not row or not row['telegram_message_id']:
+        raise ConnectionError('У этой заявки пока нет отправленной карточки.')
+    try:
+        _adapter(config)._call('editMessageText', {'chat_id':config['chat_id'], 'message_id':int(row['telegram_message_id']),
+            'text':text_fn(row), 'link_preview_options':{'is_disabled':True}, **buttons_fn(db,row,config)})
+    except Exception:
+        raise ConnectionError('Не удалось подтвердить обновление. Проверьте карточку в Telegram.') from None
 
 
 def dispatch(db, *, order_id=None, now=None, adapter=None):
@@ -419,8 +463,8 @@ def render_settings(db, locale):
         if status['connected']:
             st.success('Заявки и заказы отправляются в Telegram @'+status['username'])
             if status.get('actions_ready'):
-                st.caption('В новых лидах доступны кнопки «Открыть заказ» и «Связались».')
-                st.caption('Для заявок на услуги: «Открыть заявку», ответ клиенту, «Связались» и «Подтвердить запись».')
+                st.caption('В лидах: переход к заявке или заказу и меню «Сменить статус». Номер телефона указан в тексте.')
+                st.caption('Для старых сообщений нажмите «Обновить карточку в Telegram» в нужной заявке или заказе.')
             elif os.environ.get('SCENA_NATIVE_WEB') == '1' and st.button('Включить кнопки в Telegram'):
                 enable_actions(db)
                 st.rerun()

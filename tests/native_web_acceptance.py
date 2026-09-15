@@ -257,7 +257,7 @@ async def main():
                 assert 'Телефон: +37360000111' in sender.call_args.args[1]['text']
                 order=list_orders(os.environ['SCENA_DB_PATH'])[0]
                 buttons=sender.call_args.args[1]['reply_markup']['inline_keyboard']
-                assert [row[0]['text'] for row in buttons]==['Открыть заказ','Связались']
+                assert [row[0]['text'] for row in buttons]==['Открыть заказ','Сменить статус']
                 direct=tg.order_path(order['id'])
                 anonymous,_=await request(direct)
                 from urllib.parse import parse_qs, urlsplit
@@ -271,6 +271,12 @@ async def main():
                 assert re.search(r'role="tab"[^>]*aria-selected="true"[^>]*>Заказы</button>',focused.body.decode())
                 assert re.search(r'<details[^>]* open=', focused.body.decode())
                 assert 'Все заказы' in focused.body.decode()
+                with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as refresh:
+                    refreshed,_=await request(direct,owner=True,data=payload(focused,'Обновить карточку в Telegram'),instance=1)
+                assert refreshed.code==200 and 'Карточка в Telegram обновлена.' in refreshed.body.decode()
+                refresh.assert_called_once()
+                assert refresh.call_args.args[0]=='editMessageText'
+                assert list_orders(os.environ['SCENA_DB_PATH'])[0]['revision']==1
                 all_orders,_=await request(market+'&orders=1',owner=True)
                 assert re.search(r'role="tab"[^>]*aria-selected="true"[^>]*>Заказы</button>',all_orders.body.decode())
                 config=tg._load(os.environ['SCENA_DB_PATH'])
@@ -286,6 +292,10 @@ async def main():
                     calls.assert_not_called()
                     malformed=await webhook(config['webhook_secret'],'[]')
                     assert malformed.code==400
+                    assert (await webhook(config['webhook_secret'],json.dumps(update))).code==200
+                    assert list_orders(os.environ['SCENA_DB_PATH'])[0]['revision']==1
+                    menu=next(c.args[1] for c in calls.call_args_list if c.args[0]=='editMessageText')
+                    update['callback_query']['data']=next(b['callback_data'] for line in menu['reply_markup']['inline_keyboard'] for b in line if b['text']=='Связались')
                     assert (await webhook(config['webhook_secret'],json.dumps(update))).code==200
                     assert (await webhook(config['webhook_secret'],json.dumps(update),instance=1)).code==200
                 updated=list_orders(os.environ['SCENA_DB_PATH'])[0]
@@ -353,7 +363,7 @@ async def main():
                 sender.assert_called_once()
                 assert sender.call_args.args[0]=='sendMessage'
                 lead=sender.call_args.args[1]
-                assert lead['chat_id']=='501' and 'Канал ответа: Telegram' in lead['text']
+                assert lead['chat_id']=='501' and 'Ответить в Telegram: @bookingclient' in lead['text']
                 with connect(os.environ['SCENA_DB_PATH']) as db:
                     identity=db.execute("SELECT id FROM requests WHERE name='Acceptance booking'").fetchone()[0]
                     assert db.execute('SELECT contact_telegram FROM requests WHERE id=?',(identity,)).fetchone()[0]=='@bookingclient'
@@ -366,15 +376,24 @@ async def main():
                 assert 'tel:+37360000222' in focused.body.decode() and 'Все заявки' in focused.body.decode()
                 assert len(re.findall(r'data-form-key="request_status_',focused.body.decode()))==1
                 assert 'request-contact' in focused.body.decode()
-                contact=next(b['callback_data'] for line in lead['reply_markup']['inline_keyboard'] for b in line if b['text']=='Связались')
+                with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as refresh:
+                    refreshed,_=await request(direct,owner=True,data=payload(focused,'Обновить карточку в Telegram'),instance=1)
+                assert refreshed.code==200 and 'Карточка в Telegram обновлена.' in refreshed.body.decode()
+                refresh.assert_called_once()
+                assert refresh.call_args.args[0]=='editMessageText'
+                contact=next(b['callback_data'] for line in lead['reply_markup']['inline_keyboard'] for b in line if b['text']=='Сменить статус')
                 update={'update_id':52,'callback_query':{'id':'service-contact','from':{'id':501,'is_bot':False},
                     'message':{'message_id':301,'chat':{'id':501,'type':'private'}},'data':contact}}
                 config=tg._load(os.environ['SCENA_DB_PATH'])
                 with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as api:
                     assert (await webhook(config['webhook_secret'],json.dumps(update))).code==200
-                    edited=next(c.args[1] for c in api.call_args_list if c.args[0]=='editMessageText')
-                    update['callback_query']['data']=next(b['callback_data'] for line in edited['reply_markup']['inline_keyboard'] for b in line if b['text']=='Подтвердить запись')
-                    assert (await webhook(config['webhook_secret'],json.dumps(update),instance=1)).code==200
+                    async def press(label):
+                        edited=[c.args[1] for c in api.call_args_list if c.args[0]=='editMessageText'][-1]
+                        update['callback_query']['data']=next(b['callback_data'] for line in edited['reply_markup']['inline_keyboard'] for b in line if b['text']==label)
+                        assert (await webhook(config['webhook_secret'],json.dumps(update),instance=1)).code==200
+                    await press('Связались')
+                    await press('Сменить статус')
+                    await press('Подтверждена')
                     assert (await webhook(config['webhook_secret'],json.dumps(update))).code==200
                 with connect(os.environ['SCENA_DB_PATH']) as db:
                     assert tuple(db.execute('SELECT status,revision FROM requests WHERE id=?',(identity,)).fetchone())==('Подтверждена',3)
