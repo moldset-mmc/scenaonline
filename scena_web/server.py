@@ -245,6 +245,29 @@ class Media(Base):
         self.finish(data)
 
 
+class PhotoOriginal(Base):
+    async def get(self, identifier):
+        self.require_owner()
+        from scena_photo_library import _files, photo_id, original_path
+        root = Path(os.environ.get('SCENA_APP_DIR', ROOT))
+        database = os.environ['SCENA_DB_PATH']
+        def read():
+            relative = next((path for path in _files(database, root) if photo_id(path) == identifier), None)
+            if not relative:
+                raise ValueError('Missing photo')
+            path = original_path(database, root, relative)
+            return path.name, path.read_bytes()
+        try:
+            name, data = await asyncio.to_thread(read)
+        except ValueError:
+            raise tornado.web.HTTPError(404) from None
+        except OSError:
+            raise tornado.web.HTTPError(503, reason='Original temporarily unavailable') from None
+        self.set_header('Content-Type', 'application/octet-stream')
+        self.set_header('Content-Disposition', "attachment; filename=SCENA-photo; filename*=UTF-8''" + quote(name, safe=''))
+        self.finish(data)
+
+
 class Assets(tornado.web.StaticFileHandler):
     def set_extra_headers(self,path):
         self.set_header('Cache-Control','public, max-age=31536000, immutable')
@@ -286,6 +309,7 @@ def application():
         (r'/scena-assets/(.*)',Assets,{'path':str(ROOT/'public/scena-assets')}),
         (r'/scena-upload',UploadChunk),(r'/scena-download/([a-f0-9]{64})',Download),
         (r'/scena-media/([^/]+)',Media),(r'/',Page),
+        (r'/scena-photo/([a-f0-9]{64})',PhotoOriginal),
     ],compress_response=True)
 
 

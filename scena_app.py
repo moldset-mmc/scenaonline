@@ -1165,7 +1165,7 @@ def render_professional(settings: dict[str, str], locale: str) -> None:
         service_html.append(
             f'<div class="scena-public-group"><h3>{clean(group_name)}</h3><p>{clean(group_description)}</p>{"".join(rows)}</div>'
         )
-    portrait_value = settings.get("beauty_image_1", "").strip() or settings.get(
+    portrait_value = settings.get("professional_cover_image", "").strip() or settings.get("beauty_image_1", "").strip() or settings.get(
         "professional_hero_image", "media/scena-v13/professional-portrait.webp"
     )
     portrait_uri = image_uri(APP_DIR, portrait_value)
@@ -1379,7 +1379,7 @@ def render_course(settings: dict[str, str], locale: str) -> None:
     render_stage_intro(APP_DIR, settings, locale, kicker="SCENA · BEAUTY CLASS",
         title=service_name(course, locale),
         text=description,
-        image=settings.get('professional_hero_image', ''),
+        image=settings.get('course_cover_image', '') or settings.get('professional_hero_image', ''),
         tag=localized_name(settings, locale) + ' · ' + format_price(course, settings['currency'], locale),
     )
     st.write(tr(locale,"Хотите узнать программу и ближайшие даты? Оставьте контакты — обсудим обучение и подтвердим место лично.","Doriți să aflați programul și datele apropiate? Lăsați datele de contact — discutăm despre curs și confirmăm locul personal."))
@@ -1687,7 +1687,10 @@ def render_media_slots(
     preview_columns = st.columns(min(len(slots), 3))
     for index, (_, setting_key, label) in enumerate(slots):
         with preview_columns[index % len(preview_columns)]:
-            source = image_source(settings.get(setting_key, ""))
+            value = settings.get(setting_key, "")
+            if setting_key == 'avatar_url' and not value:
+                value = settings.get('scene_hero_image', 'media/scena-v13/my-scena-hero.webp')
+            source = image_source(value)
             if source:
                 st.image(source, width="stretch", caption=ui(label))
             else:
@@ -1844,7 +1847,7 @@ def render_professional_admin(settings: dict[str, str]) -> None:
         if cover_saved:
             save_settings(DB_PATH,cover)
             rerun_admin_with_success(ui("Баннер сохранён."))
-    st.caption(ui("Обложки используют ваши фотографии автоматически. Название и описание каждого курса редактируются в «Работа → Услуги»."))
+    st.caption(ui("Обложки страниц выбираются в разделе «Фото». Названия и описания курсов — в «Работа → Услуги»."))
     st.subheader(ui("Портфолио"))
     from scena_portfolio import render_portfolio_editor
     render_portfolio_editor(DB_PATH, APP_DIR, settings, "Professional")
@@ -3019,6 +3022,7 @@ def render_pro_admin() -> None:
 ADMIN_SECTIONS = {
     "work": "Работа",
     "pages": "Страницы",
+    "photos": "Фото",
     "help": "Помощь",
     "pro": "PRO",
     "home": "Главная",
@@ -3027,6 +3031,7 @@ ADMIN_SECTIONS = {
 }
 
 ADMIN_VIEWS = {
+    "photos": {"library": "Фото"},
     "pro": {"subscription": "Подписка PRO"},
     "help": {
         "assistant": "SCENA Ассистент",
@@ -3058,6 +3063,7 @@ ADMIN_VIEWS = {
 }
 
 ADMIN_VIEW_COPY = {
+    ("photos", "library"): ("Фото", "Все фотографии и места их использования."),
     ("work", "overview"): ("Ваша работа сегодня", "Записи, услуги и заказы — начните с важного."),
     ("pro", "subscription"): ("SCENA PRO", "Ваш образ, ваш магазин, ваши возможности."),
     ("pages", "shop"): ("Ваш Market", "Товары, которые вы рекомендуете. Заказы от ваших клиентов."),
@@ -3243,9 +3249,15 @@ def render_admin(settings: dict[str, str], locale: str) -> None:
         getattr(st, kind if kind in {"success", "warning", "error", "info"} else "info")(ui(message))
 
     render_admin_heading(locale, section, view)
+    if section == 'pages' and view in {'scene', 'professional', 'model', 'shop'}:
+        from scena_photo_ui import photo_url
+        st.markdown('<a data-cabinet-nav href="' + clean(photo_url(locale, filter=view)) + '">' + clean(tr(locale, 'Фото этого раздела', 'Fotografiile acestei secțiuni', 'Photos in this section')) + '</a>', unsafe_allow_html=True)
 
     if section == "home" or (section == "work" and view == "overview"):
         render_admin_home(locale)
+    elif section == "photos":
+        from scena_photo_ui import render_photo_library
+        render_photo_library(DB_PATH, APP_DIR, locale)
     elif section == "help" and view == "assistant":
         render_assistant_admin(settings)
     elif section == "help" and view == "support":

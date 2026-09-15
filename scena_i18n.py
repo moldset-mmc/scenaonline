@@ -1582,6 +1582,13 @@ RU и RO проверены — сразу опубликовать|RU și RO ve
 Сохранить фотографию|Salvează fotografia|Save photo
 Сохранённый оригинал|Original salvat|Saved original
 Фотографии|Fotografii|Photos
+Фото|Fotografii|Photos
+Обложки страниц выбираются в разделе «Фото». Названия и описания курсов — в «Работа → Услуги».|Coperțile paginilor se aleg în secțiunea «Fotografii». Titlurile și descrierile cursurilor — în «Activitate → Servicii».|Choose page covers in «Photos». Course titles and descriptions are in «Work → Services».
+Все фотографии и места их использования.|Toate fotografiile și locurile în care sunt folosite.|All photos and where they are used.
+Недопустимая фотография.|Fotografie nevalidă.|Invalid photo.
+Фотография не найдена. Обновите каталог.|Fotografia nu a fost găsită. Reîncărcați catalogul.|Photo not found. Reload the catalog.
+Оригинал пока недоступен. Повторите позже.|Originalul nu este disponibil momentan. Încercați mai târziu.|The original is temporarily unavailable. Try again later.
+Фото в этом месте уже изменилось. Обновите страницу и выберите его заново.|Fotografia din acest loc a fost deja modificată. Reîncărcați pagina și alegeți din nou.|The photo in this place has changed. Reload the page and choose again.
 Фотографии портфолио|Fotografii de portofoliu|Portfolio photos
 Портфолио Model|Portofoliu Model|Model portfolio
 Фотография недоступна. Выберите замену.|Fotografia nu este disponibilă. Alegeți un înlocuitor.|Photo unavailable. Choose a replacement.

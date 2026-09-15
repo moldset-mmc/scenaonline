@@ -1,0 +1,17 @@
+.scena-photo-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.scena-photo-toolbar > span { font-size: 15px; color: var(--muted, #685d4f); }
+.scena-photo-toolbar a, .scena-photo-actions a { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line, #d8cdbb); border-radius: 10px; text-decoration: none; font-size: 16px; }
+.scena-photo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.scena-photo-card { min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--line, #d8cdbb); border-radius: 12px; background: var(--card, #fffdf9); text-decoration: none; color: inherit; }
+.scena-photo-card img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 5; object-fit: contain; border-radius: 6px; background: #eae5dc; }
+.scena-photo-card strong { font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; font-weight: 600; }
+.scena-photo-card > span { font-size: 14px; line-height: 1.35; color: var(--muted, #685d4f); overflow-wrap: anywhere; }
+.scena-photo-card:focus-visible, .scena-photo-actions a:focus-visible, .scena-photo-toolbar a:focus-visible { outline: 3px solid var(--accent-dark, #795928); outline-offset: 3px; }
+.scena-photo-preview { margin: 0; display: grid; place-items: center; border-radius: 12px; background: #eae5dc; }
+.scena-photo-preview img { display: block; width: 100%; height: auto; max-height: min(55svh, 540px); object-fit: contain; border-radius: 12px; }
+.scena-photo-uses { margin: 0; padding-inline-start: 22px; }
+.scena-photo-uses li { padding-block: 4px; font-size: 16px; overflow-wrap: anywhere; }
+.scena-photo-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (min-width: 600px) { .scena-photo-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; } }
+@media (min-width: 900px) { .scena-photo-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 359px) { .scena-photo-grid { gap: 8px; } .scena-photo-card { padding: 6px; } }

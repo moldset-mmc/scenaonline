@@ -73,6 +73,8 @@ DEFAULT_SETTINGS = {
     "avatar_url": "",
     "scene_hero_image": "media/scena-v13/my-scena-hero.webp",
     "professional_hero_image": "media/scena-v13/professional-portrait.webp",
+    "professional_cover_image": "",
+    "course_cover_image": "",
     "beauty_image_1": "",
     "beauty_image_2": "",
     "beauty_image_3": "",
