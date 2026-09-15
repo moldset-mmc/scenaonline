@@ -844,13 +844,91 @@ def _add_to_bag(st, product_id, locale):
         st.error(_error(exc, locale))
 
 
+def _render_order_details(db_path, order, locale):
+    from scena_ui import st
+    st.caption(datetime.fromisoformat(order['created_at']).astimezone(ZoneInfo('Europe/Chisinau')).strftime('%d.%m.%Y · %H:%M'))
+    for item in order['items']:
+        st.write(f'{item[f"name_{locale}"]} · {item["quantity"]} × {money(item["unit_price_cents"])}')
+    if phone := dial_number(order['phone']):
+        st.link_button(order['phone'], 'tel:'+phone)
+    else:
+        st.write(f'{_t("phone_label",locale)}: {order["phone"]}')
+    from scena_service_telegram import reply_link, reply_label
+    contact_row = dict(phone=order['phone'],email=order['email'],contact_telegram=order['telegram'],contact_channel=order['preferred_contact'])
+    if order['preferred_contact'] != 'phone' and (contact := reply_link(contact_row)):
+        st.link_button(reply_label(contact_row,locale), contact)
+    st.write(f'{_t("preferred",locale)} {_t(order["preferred_contact"],locale)}')
+    if order['note']:
+        st.write(order['note'])
+    with st.form('shop_order_status_' + order['id'] + '_' + str(order['revision'])):
+        status = st.selectbox(_t('order_status', locale), ORDER_STATES, index=ORDER_STATES.index(order['status']), format_func=lambda value: _t(value, locale))
+        if st.form_submit_button(_t('status_save', locale)):
+            try:
+                update_order_status(db_path, order['id'], status, expected_revision=order['revision'])
+                st.session_state['shop_admin_notice'] = _t('status_saved', locale)
+                st.rerun()
+            except ShopError as exc:
+                st.error(_error(exc, locale))
+
+
+    with st.expander({'ru':'Дополнительно','ro':'Detalii suplimentare','en':'More details'}[locale]):
+        st.caption('Telegram: ' + {'sent':'отправлено', 'queued':'ожидает отправки', 'retry':'нужна повторная отправка', 'sending':'отправляется', 'skipped':'заказ до подключения уведомлений'}.get(order.get('telegram_status'), 'ожидает отправки'))
+        if order.get('telegram_message_id') and st.button('Обновить карточку в Telegram', key='shop_tg_refresh_'+order['id']):
+            from scena_shop_telegram import refresh_lead, ConnectionError
+            try:
+                refresh_lead(db_path, 'order', order['id'])
+                st.success('Карточка в Telegram обновлена.')
+            except ConnectionError as error:
+                st.warning(str(error))
+
+def render_shop_orders(db_path, locale, selected_order=''):
+    from scena_ui import st
+    from scena_shop_telegram import order_path
+    native = os.environ.get('SCENA_NATIVE_WEB') == '1'
+    if selected_order:
+        with _connect(db_path) as con:
+            selected = _order(con, selected_order)
+        orders = [selected] if selected else []
+    else:
+        orders = list_orders(db_path)
+    if not orders:
+        st.info(_t('no_orders', locale))
+        return
+    if selected_order and not native:
+        st.link_button({'ru':'Все заказы','ro':'Toate comenzile','en':'All orders'}[locale],
+            '/?page=admin&lang='+locale+'&section=pages&view=shop&orders=1')
+    if native and not selected_order:
+        with st.container(key='scena_order_list'):
+            for order in orders:
+                phone = dial_number(order['phone'])
+                call = '<a href="tel:'+html.escape(phone,quote=True)+'">'+html.escape(order['phone'])+'</a>' if phone else html.escape(order['phone'])
+                st.markdown('<article class="scena-inbox-card"><a class="scena-inbox-open" data-cabinet-nav href="'+html.escape(order_path(order['id'],locale),quote=True)+'"><strong>'+html.escape(order['customer_name'])+'</strong><span>'+html.escape(order['reference'])+' · '+money(order['total_cents'])+'</span></a><div class="scena-inbox-footer">'+call+'<span class="scena-status">'+html.escape(_t(order['status'],locale))+'</span></div></article>',unsafe_allow_html=True)
+        return
+    for order in orders:
+        if native:
+            with st.container(key='scena_request_card'):
+                st.caption(order['reference'])
+                st.title(order['customer_name'])
+                st.markdown('<p class="scena-order-total">'+money(order['total_cents'])+'</p>',unsafe_allow_html=True)
+                _render_order_details(db_path,order,locale)
+        else:
+            with st.expander(f'{order["reference"]} · {order["customer_name"]} · {money(order["total_cents"])} · {_t(order["status"],locale)}',expanded=bool(selected_order) or order['status']=='new'):
+                _render_order_details(db_path,order,locale)
+
+
 def render_shop_admin(db_path, app_dir, settings, locale='ru'):
     from scena_ui import st
     locale = locale if locale in LOCALES else 'ru'
     app_dir = Path(app_dir)
     _shop_style()
-    st.subheader(_t('title', locale))
-    st.write(_t('admin_intro', locale))
+    if st.query_params.get('order') and os.environ.get('SCENA_NATIVE_WEB') == '1':
+        if message := st.session_state.pop('shop_admin_notice',None):
+            st.success(message)
+        render_shop_orders(db_path,locale,str(st.query_params['order']))
+        return
+    if os.environ.get('SCENA_NATIVE_WEB') != '1':
+        st.subheader(_t('title', locale))
+        st.write(_t('admin_intro', locale))
     if message := st.session_state.pop('shop_admin_notice', None):
         st.success(message)
     selected_order = str(st.query_params.get('order', ''))
@@ -876,25 +954,26 @@ def render_shop_admin(db_path, app_dir, settings, locale='ru'):
             if source.get('image') and (path := local_photo(app_dir, source['image'])):
                 st.image(str(path), width=240)
             with st.form(f'shop_product_editor_{selected or "new"}_{rev}'):
-                upload = st.file_uploader(_t('photo_label', locale), type=['jpg', 'jpeg', 'png', 'webp'])
-                st.caption(_t('photo_hint', locale))
                 values = {}
                 extras = {}
-                st.caption(_t('gallery_hint', locale))
-                for number in (2, 3):
-                    field = f'image_{number}'
-                    if source.get(field) and (path := local_photo(app_dir, source[field])):
-                        st.image(str(path), width=150)
-                    extras[field] = st.file_uploader(_t(f'photo_{number}', locale), type=['jpg','jpeg','png','webp'], key=f'shop_extra_{selected or "new"}_{rev}_{number}')
-                    if source.get(field) and st.checkbox(_t('remove_photo',locale) + f' · {number}', key=f'shop_remove_{selected}_{rev}_{number}'):
-                        values[field] = ''
-                history = product_photo_history(app_dir, source)
-                if history:
-                    restore = st.selectbox(_t('photo_restore', locale), [''] + history, format_func=lambda value: _t('photo_current',locale) if not value else f'{_t("photo_version",locale)} {history.index(value) + 1}')
-                    if restore:
-                        values['image'] = restore
-                        if old_photo := local_photo(app_dir, restore):
-                            st.image(str(old_photo), width=180)
+                with st.expander({'ru':'Фотографии товара · до 3','ro':'Fotografii · până la 3','en':'Product photos · up to 3'}[locale]):
+                    upload = st.file_uploader(_t('photo_label', locale), type=['jpg', 'jpeg', 'png', 'webp'])
+                    st.caption(_t('photo_hint', locale))
+                    st.caption(_t('gallery_hint', locale))
+                    for number in (2, 3):
+                        field = f'image_{number}'
+                        if source.get(field) and (path := local_photo(app_dir, source[field])):
+                            st.image(str(path), width=150)
+                        extras[field] = st.file_uploader(_t(f'photo_{number}', locale), type=['jpg','jpeg','png','webp'], key=f'shop_extra_{selected or "new"}_{rev}_{number}')
+                        if source.get(field) and st.checkbox(_t('remove_photo',locale) + f' · {number}', key=f'shop_remove_{selected}_{rev}_{number}'):
+                            values[field] = ''
+                    history = product_photo_history(app_dir, source)
+                    if history:
+                        restore = st.selectbox(_t('photo_restore', locale), [''] + history, format_func=lambda value: _t('photo_current',locale) if not value else f'{_t("photo_version",locale)} {history.index(value) + 1}')
+                        if restore:
+                            values['image'] = restore
+                            if old_photo := local_photo(app_dir, restore):
+                                st.image(str(old_photo), width=180)
                 lang_tabs = st.tabs(['RU', 'RO', 'EN'])
                 for language, lang_tab in zip(LOCALES, lang_tabs):
                     with lang_tab:
@@ -936,52 +1015,11 @@ def render_shop_admin(db_path, app_dir, settings, locale='ru'):
                         except ShopError as exc:
                             st.error(_error(exc, locale))
     with order_tab, st.container(key='shop_admin_orders'):
-        if selected_order:
-            with _connect(db_path) as con:
-                selected = _order(con, selected_order)
-            orders = [selected] if selected else []
-            st.link_button({'ru':'Все заказы', 'ro':'Toate comenzile', 'en':'All orders'}[locale],
-                '/?page=admin&lang='+locale+'&section=pages&view=shop&orders=1')
-        else:
-            orders = list_orders(db_path)
-        if not orders:
-            st.info(_t('no_orders', locale))
-        for order in orders:
-            with st.expander(f'{order["reference"]} · {order["customer_name"]} · {money(order["total_cents"])} · {_t(order["status"],locale)}', expanded=bool(selected_order) or order['status'] == 'new'):
-                st.caption(datetime.fromisoformat(order['created_at']).astimezone(ZoneInfo('Europe/Chisinau')).strftime('%d.%m.%Y · %H:%M'))
-                for item in order['items']:
-                    st.write(f'{item[f"name_{locale}"]} · {item["quantity"]} × {money(item["unit_price_cents"])}')
-                if phone := dial_number(order['phone']):
-                    call_label = {'ru':'Позвонить', 'ro':'Sună', 'en':'Call'}[locale]
-                    st.link_button(f'{call_label}: {order["phone"]}', 'tel:'+phone)
-                else:
-                    st.write(f'{_t("phone_label",locale)}: {order["phone"]}')
-                for field in ('email', 'telegram'):
-                    if order[field]:
-                        st.write(f'{field.title()}: {order[field]}')
-                st.write(f'{_t("preferred",locale)} {_t(order["preferred_contact"],locale)}')
-                if order['note']:
-                    st.write(order['note'])
-                st.caption('Telegram: ' + {'sent':'отправлено', 'queued':'ожидает отправки', 'retry':'нужна повторная отправка', 'sending':'отправляется', 'skipped':'заказ до подключения уведомлений'}.get(order.get('telegram_status'), 'ожидает отправки'))
-                if order.get('telegram_message_id') and st.button('Обновить карточку в Telegram', key='shop_tg_refresh_'+order['id']):
-                    from scena_shop_telegram import refresh_lead, ConnectionError
-                    try:
-                        refresh_lead(db_path, 'order', order['id'])
-                        st.success('Карточка в Telegram обновлена.')
-                    except ConnectionError as error:
-                        st.warning(str(error))
-                with st.form('shop_order_status_' + order['id'] + '_' + str(order['revision'])):
-                    status = st.selectbox(_t('order_status', locale), ORDER_STATES, index=ORDER_STATES.index(order['status']), format_func=lambda value: _t(value, locale))
-                    if st.form_submit_button(_t('status_save', locale)):
-                        try:
-                            update_order_status(db_path, order['id'], status, expected_revision=order['revision'])
-                            st.session_state['shop_admin_notice'] = _t('status_saved', locale)
-                            st.rerun()
-                        except ShopError as exc:
-                            st.error(_error(exc, locale))
+        render_shop_orders(db_path,locale,selected_order)
     with settings_tab, st.container(key='shop_admin_storefront'):
         from scena_shop_telegram import render_settings as render_telegram_settings
-        render_telegram_settings(db_path, locale)
+        with st.expander({'ru':'Telegram-уведомления','ro':'Notificări Telegram','en':'Telegram notifications'}[locale]):
+            render_telegram_settings(db_path, locale)
         with st.form('shop_storefront_settings'):
             updates = {'shop_enabled': '1' if st.checkbox(_t('shop_visible', locale), value=settings.get('shop_enabled', '1') == '1') else '0'}
             for language, tab in zip(LOCALES, st.tabs(['RU', 'RO', 'EN'])):

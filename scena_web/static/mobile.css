@@ -1,0 +1,121 @@
+/* Shared native layout, loaded after legacy presentation styles. */
+:root { --scena-tap: 44px; --scena-radius: 12px; --scena-space: 16px; }
+.stVerticalBlock, .stMarkdown, .scena-tabs, .scena-tabpanel, .scena-container { min-inline-size: 0; }
+.scena-field input, .scena-field textarea, .scena-field select { font-size: 16px; min-height: var(--scena-tap); }
+.scena-field label, .scena-choices legend { font-size: 15px; }
+.scena-check label { min-height: var(--scena-tap); align-items: center; }
+.scena-check input { width: 20px; height: 20px; }
+.scena-choices label { min-height: var(--scena-tap); }
+.scena-choices span { min-height: var(--scena-tap); display: flex; align-items: center; }
+.scena-expander > summary { min-height: var(--scena-tap); padding-block: 8px; margin-bottom: 0; }
+.scena-tabs [role=tablist] { max-width: 100%; scroll-padding-inline: 8px; overscroll-behavior-inline: contain; }
+.scena-tabs [role=tab] { min-height: var(--scena-tap); font-size: 16px; }
+.scena-caption, small { font-size: 14px; color: #685d4f; }
+.scena-pretext, .scena-notice, .scena-expander, .scena-field label { overflow-wrap: anywhere; }
+.scena-notice.error { border-inline-start: 4px solid #a3382b; font-weight: 550; }
+.scena-notice[tabindex="-1"] { scroll-margin-top: 80px; }
+input, textarea, select, button, a, summary { scroll-margin-block: 80px; }
+img { max-inline-size: 100%; }
+body[data-scena-page=model] .scena-embed { height: 100svh; }
+.scena-table-wrap { max-inline-size: 100%; overscroll-behavior-inline: contain; }
+#scena-operation { bottom: calc(16px + env(safe-area-inset-bottom)); font-size: 15px; }
+
+/* A single compact cabinet header, with secondary destinations in its menu. */
+body[data-scena-page=admin] .block-container { max-width: 960px; }
+body[data-scena-page=admin] h1.scena-admin-title { font-size: clamp(26px, 4vw, 34px) !important; line-height: 1.2 !important; margin: 8px 0 !important; }
+body[data-scena-page=admin] .scena-section { margin-top: 16px; padding-top: 12px; }
+body[data-scena-page=admin] .scena-form { padding: 20px; gap: 16px; background: var(--card); }
+body[data-scena-page=admin] .scena-form h3 { margin: 0; }
+body[data-scena-page=admin] .scena-image img { max-height: 280px; }
+.st-key-scena_cabinet_chrome { position: sticky; top: 0; z-index: 40; background: var(--paper); }
+.scena-cabinet-header { display: flex; align-items: center; gap: 12px; min-height: 56px; border-bottom: 1px solid var(--line); }
+.scena-cabinet-header > a { font: 700 19px Georgia,serif; letter-spacing: .12em; text-decoration: none; min-height: 44px; display: flex; align-items: center; }
+.scena-cabinet-current { flex: 1; min-width: 0; font-size: 15px; color: var(--muted); }
+.scena-cabinet-menu { position: relative; flex-shrink: 0; }
+.scena-cabinet-menu > summary { min-height: 44px; min-width: 76px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; list-style: none; text-align: center; font-size: 16px; }
+.scena-cabinet-menu > summary::-webkit-details-marker { display: none; }
+.scena-cabinet-menu[open] > summary { background: var(--ink); color: var(--card); }
+.scena-cabinet-panel { position: absolute; right: 0; top: calc(100% + 8px); width: min(360px, calc(100dvw - 32px)); max-height: calc(100dvh - 100px); overflow-y: auto; overscroll-behavior: contain; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); box-shadow: 0 12px 32px #201b1720; }
+.scena-cabinet-panel > p { margin: 0 0 12px; font-size: 16px; overflow-wrap: anywhere; }
+.scena-cabinet-panel > nav:first-of-type { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.scena-cabinet-panel a { display: flex; min-height: 48px; align-items: center; padding: 10px 12px; text-decoration: none; border-radius: 8px; overflow-wrap: anywhere; }
+.scena-cabinet-panel a[aria-current=page] { background: var(--soft); font-weight: 650; }
+.scena-cabinet-languages { display: flex; gap: 8px; margin-block: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.scena-cabinet-languages a { justify-content: center; min-width: 48px; }
+.scena-cabinet-tabs { display: flex; gap: 4px; max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; padding-block: 4px; border-bottom: 1px solid var(--line); }
+.scena-cabinet-tabs a { display: inline-flex; flex-shrink: 0; align-items: center; min-height: 44px; padding: 8px 12px; text-decoration: none; font-size: 16px; border-bottom: 3px solid transparent; }
+.scena-cabinet-tabs a[aria-current=page] { border-color: var(--accent-dark); color: var(--ink); font-weight: 650; }
+
+/* Work lists prioritize actionable records rather than forms and metric blocks. */
+.scena-work-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.scena-work-actions > a { display: flex; flex-direction: column; gap: 8px; padding: 16px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; text-decoration: none; min-width: 0; }
+.scena-work-actions strong { font-size: 19px; }
+.scena-work-actions span { font-size: 16px; color: var(--muted); }
+.scena-work-waiting { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; border-bottom: 1px solid var(--line); min-height: 64px; padding: 12px 0; text-decoration: none; }
+.scena-work-waiting strong, .scena-work-waiting span:nth-child(2) { grid-column: 1; overflow-wrap: anywhere; }
+.scena-work-waiting span:last-child { grid-column: 2; grid-row: 1/3; align-self: center; }
+.st-key-scena_request_list, .st-key-scena_order_list { gap: 12px !important; }
+.scena-inbox-card { min-width: 0; padding: 16px; border: 1px solid var(--line); background: var(--card); border-radius: 12px; }
+.scena-inbox-open { display: flex; flex-direction: column; gap: 4px; text-decoration: none; min-height: 44px; overflow-wrap: anywhere; }
+.scena-inbox-open strong { font-size: 18px; }
+.scena-inbox-open span { font-size: 15px; }
+.scena-inbox-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.scena-inbox-footer a { display: flex; align-items: center; min-height: 44px; font-size: 16px; }
+.scena-status { font-size: 14px; padding: 4px 8px; border-radius: 8px; background: var(--soft); overflow-wrap: anywhere; }
+.scena-order-total { font-weight: 650; font-size: 22px; }
+body[data-scena-page=admin] .st-key-scena_request_card .scena-form { border: 0; padding: 0; }
+
+@media (max-width: 768px) {
+  .scena-columns:not([data-count='7']) { grid-template-columns: minmax(0,1fr); }
+  .block-container { padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right)) !important; padding-bottom: calc(32px + env(safe-area-inset-bottom)); }
+  body[data-scena-page=model]:has(.scena-embed) .block-container { padding: 0 !important; }
+  .scena-top { gap: 8px; }
+  .scena-top > .scena-muted { display: none; }
+  .scena-locale { gap: 4px; }
+  .scena-locale a { min-width: 44px; min-height: 44px; padding: 8px; font-size: 14px; }
+  .scena-nav { gap: 4px !important; padding: 8px 0 !important; max-width: 100%; overscroll-behavior-inline: contain; }
+  .scena-nav a { min-height: 44px; font-size: 16px !important; }
+  .scena-form, .scena-bordered { padding: 16px; }
+  body[data-scena-page=admin] .scena-form { padding: 16px; }
+  .scena-expander { padding: 8px 12px; }
+  body[data-scena-page=admin] .scena-note { margin: 0; padding: 12px; }
+  body[data-scena-page=admin] .st-key-scena_visibility { padding: 12px !important; }
+  .scena-stage-intro p { font-size: 16px; }
+  .scena-stage-copy { padding: 20px; }
+  .scena-card, .scena-role, .scena-post { padding: 16px; }
+  .scena-professional-shell { grid-template-columns: minmax(0,1fr); min-height: 0; }
+  .scena-professional-portrait { min-height: 320px; }
+  .scena-professional-panel { padding: 20px; }
+  .scena-public-service { grid-template-columns: minmax(0,1fr) auto; gap: 8px; }
+  .scena-public-service strong { overflow-wrap: anywhere; }
+  .scena-public-service span { white-space: normal; text-align: right; }
+  body[data-scena-page=booking] .scena-stage-intro { grid-template-columns: minmax(0,1fr); }
+  body[data-scena-page=booking] .scena-stage-image { display: none; }
+  body[data-scena-page=booking] .scena-stage-copy { padding: 16px; }
+  body[data-scena-page=booking] .scena-stage-kicker, body[data-scena-page=booking] .scena-stage-tag { display: none; }
+  body[data-scena-page=booking] .scena-stage-intro h1 { font-size: 26px !important; margin-bottom: 8px !important; }
+  .st-key-booking_calendar button { min-height: 44px !important; }
+  .st-key-booking_morning, .st-key-booking_afternoon { padding: 12px !important; }
+  .scena-booking-date { min-height: 0; }
+  .shop-gallery-compact .shop-cover { height: 140px; }
+  .st-key-shop_catalog [class*='st-key-shop_card_'] { gap: 8px !important; }
+  .st-key-shop_catalog button { min-height: 44px; font-size: 15px; }
+  .shop-product-dialog { max-height: calc(100dvh - 24px); padding-bottom: max(12px,env(safe-area-inset-bottom)); }
+  .shop-dialog-copy { overflow-wrap: anywhere; }
+  .shop-dialog-description, .shop-dialog-recommendation { font-size: 16px; }
+  .shop-cover { max-height: 55dvh; }
+  .scena-pro-banner { flex-wrap: wrap; padding: 12px; }
+}
+@media (max-width: 359px) {
+  .scena-cabinet-current { font-size: 14px; }
+  .scena-cabinet-header { gap: 8px; }
+  .scena-cabinet-tabs a { padding-inline: 8px; font-size: 15px; }
+  .scena-work-actions { gap: 8px; }
+  .scena-work-actions > a { padding: 12px; }
+  .st-key-shop_catalog { gap: 8px !important; }
+  .shop-gallery-compact .shop-cover { height: 120px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto !important; }
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}

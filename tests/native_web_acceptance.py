@@ -35,6 +35,13 @@ async def main():
             server=HTTPServer(application());server.add_socket(sock);servers.append(server)
             urls.append('http://127.0.0.1:'+str(port))
         client=AsyncHTTPClient()
+        snapshots=Path(os.environ['SCENA_TEST_SNAPSHOTS']) if os.environ.get('SCENA_TEST_SNAPSHOTS') else None
+        if snapshots:
+            snapshots.mkdir(parents=True,exist_ok=True)
+        def capture(name, response):
+            if snapshots and response.code == 200:
+                document=re.sub(r'(name="_token" value=")[^"]*',r'\1',response.body.decode())
+                (snapshots/(name+'.html')).write_text(document)
         sid='fixture-browser-identity-'+'a'*20
         cookie=COOKIE+'='+make_session()+'; '+BROWSER_COOKIE+'='+sid
         async def request(path,*,owner=False,data=None,instance=0,headers=None):
@@ -45,20 +52,30 @@ async def main():
             return response,round((time.monotonic()-start)*1000)
         failures=[]
         try:
-            for page in ('scene','portfolio','professional','model','booking','course','join-model','invite-model','post','posts','shop'):
-                response,elapsed=await request('/?page='+page+'&lang=ru')
-                print('PUBLIC',page,response.code,elapsed,len(response.body),flush=True)
-                if response.code!=200:failures.append(page)
-                else:assert b'data-scena-runtime="native-html"' in response.body
+            for locale in ('ru','ro','en'):
+                for page in ('scene','portfolio','professional','model','booking','course','join-model','invite-model','post','posts','shop'):
+                    response,elapsed=await request('/?page='+page+'&lang='+locale)
+                    print('PUBLIC',locale,page,response.code,elapsed,len(response.body),flush=True)
+                    if response.code!=200:failures.append(locale+'/'+page)
+                    else:
+                        assert b'data-scena-runtime="native-html"' in response.body
+                        assert ('<html lang="'+locale+'"') in response.body.decode()
+                        capture('public-'+page+'-'+locale,response)
             response,_=await request('/?page=admin',headers={'X-Scena-Session':make_session()})
             assert response.code==302,'Spoofed auth header accepted'
             import scena_app
-            for section,views in scena_app.ADMIN_VIEWS.items():
-                for view in views:
-                    response,elapsed=await request('/?page=admin&lang=ru&section='+section+'&view='+view,owner=True)
-                    print('CABINET',section,view,response.code,elapsed,len(response.body),flush=True)
-                    if response.code!=200:failures.append(section+'/'+view)
-                    assert 'Vercel-CDN-Cache-Control' not in response.headers
+            for locale in ('ru','ro','en'):
+                for section,views in scena_app.ADMIN_VIEWS.items():
+                    for view in views:
+                        response,elapsed=await request('/?page=admin&lang='+locale+'&section='+section+'&view='+view,owner=True)
+                        print('CABINET',locale,section,view,response.code,elapsed,len(response.body),flush=True)
+                        if response.code!=200:failures.append(locale+'/'+section+'/'+view)
+                        document=response.body.decode()
+                        assert 'Vercel-CDN-Cache-Control' not in response.headers
+                        assert document.count('<header class="scena-cabinet-header">') == 1
+                        assert '<nav class="scena-admin-tabs">' not in document
+                        assert ('<html lang="'+locale+'"') in document
+                        capture('cabinet-'+section+'-'+view+'-'+locale,response)
             assert not failures,failures
             def form(response):
                 token=re.search(r'name="_token" value="([^"]+)"',response.body.decode())[1]
@@ -268,8 +285,8 @@ async def main():
                 assert direct in html.unescape(login.body.decode())
                 focused,_=await request(direct,owner=True,instance=1)
                 assert focused.code==200 and order['reference'] in focused.body.decode()
-                assert re.search(r'role="tab"[^>]*aria-selected="true"[^>]*>Заказы</button>',focused.body.decode())
-                assert re.search(r'<details[^>]* open=', focused.body.decode())
+                assert 'st-key-scena_request_card' in focused.body.decode()
+                assert 'shop_product_editor_' not in focused.body.decode()
                 assert 'Все заказы' in focused.body.decode()
                 with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as refresh:
                     refreshed,_=await request(direct,owner=True,data=payload(focused,'Обновить карточку в Telegram'),instance=1)
@@ -302,6 +319,12 @@ async def main():
                 assert updated['status']=='contacted' and updated['revision']==2
                 focused,_=await request(direct,owner=True)
                 assert 'Связались' in focused.body.decode() and 'tel:+37360000111' in focused.body.decode()
+                saved_order,_=await request(direct,owner=True,data=payload(focused,'Сохранить статус'),instance=1)
+                assert saved_order.code==200 and 'st-key-scena_request_card' in saved_order.body.decode()
+                assert list_orders(os.environ['SCENA_DB_PATH'])[0]['status']=='contacted'
+                for locale in ('ru','ro','en'):
+                    screen,_=await request(tg.order_path(order['id'],locale),owner=True)
+                    capture('order-'+locale,screen)
                 missing,_=await request(tg.order_path('00000000-0000-0000-0000-000000000000'),owner=True)
                 assert missing.code==200 and order['reference'] not in missing.body.decode()
                 duplicate,_=await request('/?page=shop&lang=ru',data=data)
@@ -376,6 +399,23 @@ async def main():
                 assert 'tel:+37360000222' in focused.body.decode() and 'Все заявки' in focused.body.decode()
                 assert len(re.findall(r'data-form-key="request_status_',focused.body.decode()))==1
                 assert 'request-contact' in focused.body.decode()
+                assert 'st-key-scena_request_card' in focused.body.decode()
+                assert '<nav class="scena-admin-tabs">' not in focused.body.decode()
+                assert 'Полная таблица заявок' not in focused.body.decode()
+                assert 'Acceptance client' not in focused.body.decode()
+                missing,_=await request(service_tg.request_path(999999999),owner=True)
+                assert 'Заявка не найдена.' in missing.body.decode()
+                assert 'Acceptance booking' not in missing.body.decode()
+                for locale in ('ro','en'):
+                    translated,_=await request(service_tg.request_path(identity,locale),owner=True)
+                    assert translated.code==200 and 'st-key-scena_request_card' in translated.body.decode()
+                    capture('request-'+locale,translated)
+                capture('request-ru',focused)
+                saved_status,_=await request(direct,owner=True,data=payload(focused,'Сохранить статус'),instance=0)
+                assert saved_status.code==200 and 'Статус заявки обновлён.' in saved_status.body.decode()
+                assert 'st-key-scena_request_card' in saved_status.body.decode()
+                focused,_=await request(direct,owner=True)
+                print('PASS compact request: isolated record, missing ID, RU/RO/EN and save stays on card',flush=True)
                 with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as refresh:
                     refreshed,_=await request(direct,owner=True,data=payload(focused,'Обновить карточку в Telegram'),instance=1)
                 assert refreshed.code==200 and 'Карточка в Telegram обновлена.' in refreshed.body.decode()
@@ -408,6 +448,11 @@ async def main():
             with connect(os.environ['SCENA_DB_PATH']) as db:
                 assert db.execute("SELECT COUNT(*) FROM requests WHERE name='Acceptance booking'").fetchone()[0]==1,'Booking missing'
             assert 'Спасибо!' in booked.body.decode(),'Booking receipt missing'
+            for locale in ('ru','ro','en'):
+                for name,path in [('overview','/?page=admin&section=work&view=overview'),('requests','/?page=admin&section=work&view=requests'),('orders','/?page=admin&section=pages&view=shop&orders=1')]:
+                    screen,_=await request(path+'&lang='+locale,owner=True)
+                    assert screen.code==200
+                    capture(name+'-'+locale,screen)
             print('PASS service/date/time/contact/confirmation booking across instances',flush=True)
             print('PASS service lead to shared bot, selected channel validation, Telegram/SMS/email/phone reply links, direct owner access and two idempotent status actions',flush=True)
             path='/?page=admin&lang=ru&section=settings&view=backup'

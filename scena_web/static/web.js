@@ -1,6 +1,7 @@
 (() => {
   let busy = false;
   let pendingNavigation = null;
+  const uiText = (ru, ro, en) => ({ru,ro,en}[document.documentElement.lang] || ru);
   const status = (message, failed = false) => {
     const node = document.getElementById('scena-operation');
     node.hidden = !message; node.textContent = message; node.dataset.failed = String(failed);
@@ -33,7 +34,8 @@
     if (busy) return;
     busy = true;
     const started = performance.now();
-    status('Сохраняю…');
+    status(uiText('Сохраняю…','Se salvează…','Saving…'));
+    form.setAttribute('aria-busy','true');
     const focus = document.activeElement?.id;
     const scroll = window.scrollY;
     const trigger = button || [...form.elements].find(field => field.name === changed);
@@ -67,7 +69,7 @@
         }
         data.set('_upload_' + input.name, JSON.stringify(descriptors));
       }
-      status('Сохраняю…');
+      status(uiText('Сохраняю…','Se salvează…','Saving…'));
       const headers = form.querySelector('.st-key-booking_flow') ? {'X-Scena-Fragment':'booking'} : {};
       const response = await fetch(form.action, {method:'POST',body:data,credentials:'same-origin',headers});
       const text = await response.text();
@@ -84,6 +86,7 @@
         form.elements._token.value = payload.token;
       } else {
         const selectedTabs = [...form.querySelectorAll('[role=tab][aria-selected=true]')].map(tab => tab.id);
+        const expanded = [...form.querySelectorAll('details.scena-expander[id]')].map(node => [node.id,node.open]);
         const next = new DOMParser().parseFromString(text,'text/html');
         document.title = next.title;
         const oldStyles = [...document.head.querySelectorAll('style')];
@@ -91,6 +94,9 @@
         newStyles.forEach((style, index) => oldStyles[index] ? patch(oldStyles[index], style) : document.head.append(style.cloneNode(true)));
         oldStyles.slice(newStyles.length).forEach(style => style.remove());
         patch(document.body, next.body);
+        for (const [id,open] of expanded) {
+          const node=document.getElementById(id); if(node?.tagName==='DETAILS') node.open=open;
+        }
         for (const id of selectedTabs) {
           const tab = document.getElementById(id);
           if (tab?.getAttribute('role') === 'tab') selectTab(tab);
@@ -102,8 +108,22 @@
       window.scrollTo(0,scroll);
       if (focus) document.getElementById(focus)?.focus({preventScroll:true});
       for (const field of fields.filter(field => field.type === 'file')) { const input = document.getElementById(field.id); if (input?.type === 'file') input.value = ''; }
-      status('');
-      completed = true;
+      const validation = document.querySelector('.scena-notice.error');
+      if (validation) {
+        for (let parent=validation.parentElement; parent; parent=parent.parentElement) {
+          if (parent.tagName === 'DETAILS') parent.open=true;
+          if (parent.getAttribute('role') === 'tabpanel' && parent.hidden) {
+            const tab=document.getElementById(parent.getAttribute('aria-labelledby'));
+            if(tab) selectTab(tab);
+          }
+        }
+        validation.tabIndex=-1; validation.focus();
+        validation.scrollIntoView?.({block:'nearest'});
+        status(uiText('Проверьте отмеченную ошибку.','Verificați eroarea indicată.','Check the highlighted error.'),true);
+      } else {
+        status('');
+        completed = true;
+      }
       let meter = document.getElementById('scena-performance');
       if (!meter) { meter = document.createElement('div'); meter.id = 'scena-performance'; meter.hidden = true; document.body.append(meter); }
       meter.dataset.lastInteraction = JSON.stringify({ms:Math.round(performance.now()-started),
@@ -113,6 +133,7 @@
       status(error.message,true);
     } finally {
       busy = false;
+      document.getElementById('scena-page')?.removeAttribute('aria-busy');
       const destination = pendingNavigation; pendingNavigation = null;
       if (completed && destination) window.location.assign(destination);
     }
@@ -261,6 +282,7 @@
       item.setAttribute('aria-selected',String(selected)); item.tabIndex = selected ? 0 : -1;
       document.getElementById(item.getAttribute('aria-controls')).hidden = !selected;
     }
+    tab.scrollIntoView?.({block:'nearest',inline:'nearest'});
   };
   document.addEventListener('click', event => {const tab=event.target.closest('[role=tab]');if(tab)selectTab(tab);});
   document.addEventListener('keydown', event => {
@@ -268,5 +290,15 @@
     event.preventDefault();const tabs=[...tab.parentElement.querySelectorAll('[role=tab]')];let index=tabs.indexOf(tab);
     index=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
     selectTab(tabs[index]);tabs[index].focus();
+  });
+  document.addEventListener('click', event => {
+    for (const menu of document.querySelectorAll('.scena-cabinet-menu[open]')) {
+      if (!menu.contains(event.target) || event.target.closest('a')) menu.open=false;
+    }
+  });
+  document.addEventListener('keydown', event => {
+    if(event.key !== 'Escape') return;
+    const menu=document.querySelector('.scena-cabinet-menu[open]');
+    if(menu){event.preventDefault();menu.open=false;menu.querySelector('summary')?.focus();}
   });
 })();

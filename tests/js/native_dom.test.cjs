@@ -2,7 +2,7 @@ const {JSDOM}=require('jsdom');
 const fs=require('fs');
 const assert=require('node:assert/strict');
 const source=fs.readFileSync(require('path').join(__dirname,'../../scena_web/static/web.js'),'utf8');
-const html=token=>`<!doctype html><html><head><title>SCENA</title></head><body><form id="scena-page" action="/?page=admin&view=model"><input type="hidden" name="_token" value="${token}"><a data-cabinet-nav href="/?page=admin&section=pages&view=scene">Моя Сцена</a><div class="scena-tabs"><div role="tablist"><button type="button" id="products-tab" role="tab" aria-controls="products-panel" aria-selected="true">Товары</button><button type="button" id="settings-tab" role="tab" aria-controls="settings-panel" aria-selected="false">Витрина</button></div><div role="tabpanel" id="products-panel">Каталог</div><div role="tabpanel" id="settings-panel" hidden><fieldset data-form-key="active"><input name="name" value="Saved"><input name="price" value="900"><button name="_action" value="save">Сохранить</button></fieldset></div></div><fieldset data-form-key="unrelated">${Array.from({length:150},(_,i)=>`<input name="other_${i}" value="Unrelated">`).join('')}<input type="file" id="unused-photo" name="photo"></fieldset></form><div id="scena-operation" hidden></div></body></html>`;
+const html=token=>`<!doctype html><html><head><title>SCENA</title></head><body><form id="scena-page" action="/?page=admin&view=model"><input type="hidden" name="_token" value="${token}"><a data-cabinet-nav href="/?page=admin&section=pages&view=scene">Моя Сцена</a><div class="scena-tabs"><div role="tablist"><button type="button" id="products-tab" role="tab" aria-controls="products-panel" aria-selected="true">Товары</button><button type="button" id="settings-tab" role="tab" aria-controls="settings-panel" aria-selected="false">Витрина</button></div><div role="tabpanel" id="products-panel">Каталог</div><div role="tabpanel" id="settings-panel" hidden><fieldset data-form-key="active"><input name="name" value="Saved"><input name="price" value="900"><details id="photo-details" class="scena-expander" open><summary>Фото</summary>Настройки фото</details><button name="_action" value="save">Сохранить</button></fieldset></div></div><fieldset data-form-key="unrelated">${Array.from({length:150},(_,i)=>`<input name="other_${i}" value="Unrelated">`).join('')}<input type="file" id="unused-photo" name="photo"></fieldset></form><div id="scena-operation" hidden></div></body></html>`;
 async function main(){
   const dom=new JSDOM(html('before'),{url:'https://fixture.scena.test/',runScripts:'outside-only'});
   const w=dom.window;w.scrollTo=()=>{};w.TextEncoder=TextEncoder;
@@ -12,11 +12,24 @@ async function main(){
   const observer=new w.MutationObserver(()=>{if(w.document.getElementById('scena-performance')?.dataset.lastInteraction)done()});
   observer.observe(w.document.body,{subtree:true,attributes:true,childList:true});
   w.eval(source);
+  const menu=w.document.createElement('details');
+  menu.className='scena-cabinet-menu';menu.innerHTML='<summary>Меню</summary><a href="#workspace">Работа</a>';
+  w.document.body.append(menu);menu.open=true;
+  menu.querySelector('summary').dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+  assert.equal(menu.open,false);assert.equal(w.document.activeElement,menu.querySelector('summary'));
+  menu.open=true;w.document.body.click();assert.equal(menu.open,false,'Outside tap must close cabinet menu');
+  menu.remove();
+  const unsaved=w.document.querySelector('input[name=other_0]');
+  unsaved.value='Unsubmitted work';
+  unsaved.dispatchEvent(new w.Event('input',{bubbles:true}));
   w.document.getElementById("settings-tab").click();
+  w.document.getElementById("photo-details").open=false;
   // >100 fields exist, but only the submitted group belongs in the request.
   w.document.querySelector('button[value=save]').click();
   await Promise.race([completed,new Promise((_,reject)=>setTimeout(()=>reject(Error('Save did not finish')),1500))]);
   assert.equal(calls.length,1);
+  assert.equal(w.document.getElementById('photo-details').open,false,'Save must preserve deliberately collapsed settings');
+  assert.equal(w.document.querySelector('input[name=other_0]').value,'Unsubmitted work','Saving one form must preserve edits in another form');
   assert.equal(w.document.getElementById('settings-panel').hidden,false,'Save must keep the Telegram settings tab visible');
   assert.equal(w.document.getElementById('settings-tab').getAttribute('aria-selected'),'true');
   const body=calls[0].options.body;
@@ -26,8 +39,10 @@ async function main(){
   assert.equal(w.document.querySelector('[data-cabinet-nav]').getAttribute('href'),'/?page=admin&section=pages&view=scene');
   assert.equal(w.document.getElementById('scena-operation').textContent,'');
   // Save a second time without refreshing: the fresh token must be submitted.
+  w.document.getElementById("photo-details").open=true;
   w.document.querySelector('button[value=save]').click();
   await new Promise(resolve=>setTimeout(resolve,20));
+  assert.equal(w.document.getElementById('photo-details').open,true);
   assert.equal(calls.length,2);assert.equal(calls[1].options.body.get('_token'),'after');
   // Real gallery code: main image, next/previous and thumbnails need no HTTP.
   const opener=w.document.createElement('button');opener.type='button';
@@ -65,6 +80,11 @@ async function main(){
   assert.equal(contact.querySelector('.st-key-booking_reply_telegram input').value,'@clientname');
   assert.equal(calls.length,beforeGallery);
   console.log('PASS: reply channel reveals only needed contact field, preserves typed contact, zero requests');
+  w.fetch=async()=>({ok:true,headers:new Map([['Content-Type','text/html']]),text:async()=>html('invalid').replace('</form>','<div class="scena-notice error" role="alert">Validation failed</div></form>')});
+  w.document.querySelector('button[value=save]').click();
+  await new Promise(resolve=>setTimeout(resolve,20));
+  assert.equal(w.document.getElementById('scena-operation').dataset.failed,'true','HTTP 200 with a form error must not count as successful saving');
+  assert.equal(w.document.activeElement.getAttribute('role'),'alert','Validation error must be brought into focus');
   observer.disconnect();dom.window.close();
   console.log('PASS: scoped urlencoded save on a >100-field page; repeat save uses fresh token; cabinet navigation is a GET link');
 }

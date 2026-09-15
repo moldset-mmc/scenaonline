@@ -57,18 +57,20 @@ def render_page(ctx, previous=None, values=None, files=None):
             return response, ctx.url, bool(ctx.widgets), round((time.monotonic()-started)*1000,1)
         resources=media.assets()
         css=resources.get('scena_web/static/web.css','')
+        mobile_css=resources.get('scena_web/static/mobile.css','')
         js=resources.get('scena_web/static/web.js','')
         favicon=resources.get('scena_web/static/favicon.png','')
         measure=(ROOT/'scena_web/measure.js').read_text()
         styles='\n'.join(ctx.styles)
         body=ctx.root.render()
+        page = 'admin' if ctx.query.get('admin') == '1' else ctx.query.get('page','scene')
         # The existing scene markup supplies dimensions; the first visible image
         # is prioritized rather than competing with every below-fold photograph.
         body=re.sub(r'(<img\b[^>]*)(>)',lambda m:m[1].replace('loading="lazy"','loading="eager"')+' fetchpriority="high"'+m[2],body,count=1)
         document=f'''<!doctype html><html lang="{html.escape(ctx.state.get('scena_ui_locale',ctx.query.get('lang','ru')))}" data-scena-runtime="native-html"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(ctx.title)}</title>
-<link rel="icon" href="{favicon}"><link rel="stylesheet" href="{css}"><style>{styles}</style><script>{measure}</script><script src="{js}" defer></script></head>
-<body><div class="stApp" data-testid="stApp"><main class="stMain" data-testid="stMain"><div class="block-container stMainBlockContainer" data-testid="stMainBlockContainer">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>{html.escape(ctx.title)}</title>
+<link rel="icon" href="{favicon}"><link rel="stylesheet" href="{css}"><style>{styles}</style><link rel="stylesheet" href="{mobile_css}"><script>{measure}</script><script src="{js}" defer></script></head>
+<body data-scena-page="{html.escape(str(page),quote=True)}"><div class="stApp" data-testid="stApp"><main class="stMain" data-testid="stMain"><div class="block-container stMainBlockContainer" data-testid="stMainBlockContainer">
 <form id="scena-page" method="post" action="{html.escape(ctx.url,quote=True)}" enctype="multipart/form-data" novalidate>
 <input type="hidden" name="_token" value="{form_token}">{body}</form></div></main></div>
 <div id="scena-operation" role="status" aria-live="polite" hidden></div></body></html>'''

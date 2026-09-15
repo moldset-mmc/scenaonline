@@ -484,6 +484,22 @@ blockquote{{margin:0;max-width:900px;color:var(--paper);font-family:ScenaSerif,G
 
 @media(max-width:340px){{.header nav .return-intro{{position:absolute;right:20px;top:57px;min-height:32px;font-size:11px}}.intro-copy h2{{font-size:27px}}.intro-name .first,.intro-name .last{{font-size:23px}}.intro-text{{font-size:14px}}.intro-actions .invite{{font-size:10px;letter-spacing:.02em;gap:10px}}.hero-actions .invite{{letter-spacing:0;font-size:10px;gap:12px}}}}
 {design_css}
+/* Mobile text and controls remain reachable with a short browser viewport. */
+@media(max-width:720px){{
+  html,body{{height:auto;min-height:100%;overflow:auto}}
+  .shell{{height:auto;min-height:100svh;overflow:visible}}
+  .stage{{height:67svh;min-height:420px}}
+  .manifest{{height:auto;min-height:33svh;padding:20px max(16px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));gap:14px}}
+  .header{{height:auto;padding:16px max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left));display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center}}
+  .header nav{{display:contents}}.header .wordmark{{grid-column:1;grid-row:1;min-height:44px;display:flex;align-items:center}}
+  .languages{{grid-column:2;grid-row:1;gap:0}}.languages>span{{display:none}}.languages a{{min-width:44px;min-height:44px;justify-content:center}}
+  .header nav .return-intro{{position:static;grid-column:1/-1;grid-row:2;justify-self:start;min-height:44px;font-size:13px;padding:8px 0}}
+  .controls{{gap:12px;flex-wrap:wrap}}.dots{{gap:0;flex:1;flex-wrap:wrap}}.dot{{min-width:44px;min-height:44px;padding:0 8px}}.transport button{{width:44px;height:44px}}
+  .shell.intro-open .stage{{height:auto;min-height:100svh}}
+  .introduction{{position:relative;inset:auto;padding:80px max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));grid-template-rows:clamp(220px,38svh,360px) auto auto;gap:20px}}
+  .intro-copy{{overflow:visible;padding:0}}.intro-text,.intro-details{{font-size:16px;line-height:1.55}}.intro-actions{{padding-top:4px}}
+  .intro-enter,.portfolio-link{{min-height:44px;font-size:13px}}.intro-name,.identity h1{{overflow-wrap:anywhere}}
+}}
 </style>
 </head>
 <body>
@@ -603,6 +619,7 @@ function syncIntroduction(){{
 function enterImages(){{
   if(!introOpen||!figures.length)return;
   introOpen=false;syncIntroduction();
+  if(matchMedia('(max-width:720px)').matches)scrollTo({{top:0,behavior:'instant'}});
   // Only the first deliberate entry uses the saved autoplay choice. Returning
   // to the business card pauses the show, and re-entry keeps that pause.
   setPlaying(!entered&&state.autoplay);entered=true;
@@ -613,6 +630,7 @@ function returnToIntroduction(){{
   setPlaying(false);introOpen=true;requestVersion++;requested=active;touchStart=null;
   transitionAnimations.forEach(animation=>animation.finish());
   syncIntroduction();syncPlay();schedule();
+  if(matchMedia('(max-width:720px)').matches)scrollTo({{top:0,behavior:'instant'}});
   (enterButton?.hidden?document.querySelector('.intro-copy'):enterButton)?.focus({{preventScroll:true}});
 }}
 if(state.cubeIntro){{

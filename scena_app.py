@@ -686,7 +686,7 @@ def set_admin_route(locale: str, section: str, view: str = "") -> None:
         view = ""
     params = {
         "page": "admin",
-        "lang": locale if locale in {"ru", "ro"} else "ru",
+        "lang": locale if locale in {"ru", "ro", "en"} else "ru",
         "admin": "1",
         "section": section,
     }
@@ -828,6 +828,8 @@ def detected_locale(settings: dict[str, str]) -> str:
 
 def render_header(page: str, locale: str, *, admin: bool = False) -> None:
     if admin:
+        if os.environ.get('SCENA_NATIVE_WEB') == '1':
+            return
         section = str(st.query_params.get("section", "work"))
         view = str(st.query_params.get("view", ""))
         with st.container(key="scena_admin_header"):
@@ -1405,12 +1407,96 @@ def render_course(settings: dict[str, str], locale: str) -> None:
             )
 
 
+def render_request_status(row) -> None:
+    with st.form('request_status_'+str(row['id'])+'_'+str(row['revision'])):
+        status = st.selectbox(ui('Статус'), REQUEST_STATUSES, index=REQUEST_STATUSES.index(row['status']), format_func=ui)
+        if st.form_submit_button(ui('Сохранить статус'), type='primary'):
+            try:
+                update_request_status(DB_PATH,row['id'],status,expected_revision=row['revision'])
+            except RequestValidationError as exc:
+                st.error(ui(str(exc)))
+            else:
+                rerun_admin_with_success('Статус заявки обновлён.')
+
+
+def render_focused_request(row, locale) -> None:
+    """A direct lead link opens its working card before cabinet navigation."""
+    from scena_service_telegram import CHANNEL_LABELS, reply_label, reply_link, dispatch
+    from scena_shop import dial_number
+
+    def formatted(value, timestamp=False):
+        if not value:
+            return ''
+        try:
+            parsed = datetime.fromisoformat(value)
+            if timestamp and parsed.tzinfo:
+                parsed = parsed.astimezone(CHISINAU)
+            return parsed.strftime('%d.%m.%Y %H:%M' if timestamp else '%d.%m.%Y')
+        except ValueError:
+            return value
+
+    with st.container(key='scena_request_card'):
+        if row is None:
+            st.info(tr(locale, 'Заявка не найдена.', 'Cererea nu a fost găsită.', 'Request not found.'))
+            return
+        st.caption(tr(locale, f"Заявка №{row['id']}", f"Cererea #{row['id']}", f"Request #{row['id']}"))
+        st.title(row['service'] or ui(REQUEST_TYPES[row['request_type']]))
+        appointment = ' · '.join(value for value in (formatted(row['preferred_date']), row['preferred_time']) if value)
+        if appointment:
+            st.markdown('<p class="scena-request-when">'+clean(appointment)+'</p>', unsafe_allow_html=True)
+            if row['request_type'] == 'service_request':
+                st.caption(tr(locale, 'Время Кишинёва', 'Ora Chișinăului', 'Chișinău time'))
+        st.markdown('<div id="request-contact" class="scena-request-contact"><strong>'+clean(row['name'])+'</strong></div>', unsafe_allow_html=True)
+        if phone := dial_number(row['phone']):
+            st.link_button(row['phone'], 'tel:'+phone)
+        elif row['phone']:
+            st.text(row['phone'])
+        if row['request_type'] == 'service_request':
+            channel = row.get('contact_channel', 'phone')
+            st.caption(ui('Канал ответа')+': '+CHANNEL_LABELS.get(locale, CHANNEL_LABELS['ru']).get(channel, channel))
+            if channel != 'phone' and (contact := reply_link(row)):
+                st.link_button(reply_label(row, locale), contact)
+        if row['message']:
+            st.text(row['message'])
+        if row['status'] in ('Ожидает подтверждения', 'Связались') and row['hold_expires_at']:
+            st.caption(tr(locale, 'Подтвердить до: ', 'Confirmă până la: ', 'Confirm by: ')+formatted(row['hold_expires_at'], True))
+        render_request_status(row)
+        with st.expander(tr(locale, 'Дополнительно', 'Detalii suplimentare', 'More details')):
+            st.caption(ui('Создано: ')+formatted(row['created_at'], True))
+            for label, value in [('Email', row['email']), ('Telegram', row.get('contact_telegram', '')),
+                                 ('Организация', row['organization']), ('Город', row['city']), ('Опыт', row['experience'])]:
+                if value:
+                    st.text(ui(label)+': '+value)
+            if row['request_type'] == 'service_request':
+                st.caption('Telegram: '+{'sent':'отправлено','queued':'ожидает отправки','retry':'нужна повторная отправка','sending':'отправляется','skipped':'заявка до подключения уведомлений'}.get(row['telegram_status'],'ожидает отправки'))
+                if row.get('telegram_message_id') and st.button('Обновить карточку в Telegram', key='service_tg_refresh_'+str(row['id'])):
+                    from scena_shop_telegram import refresh_lead, ConnectionError
+                    try:
+                        refresh_lead(DB_PATH, 'service', row['id'])
+                    except ConnectionError as error:
+                        st.warning(str(error))
+                    else:
+                        rerun_admin_with_success('Карточка в Telegram обновлена.')
+                if row['telegram_status'] in ('queued','retry') and st.button(ui('Повторить отправку заявки в Telegram'), key='service_telegram_retry_'+str(row['id'])):
+                    if dispatch(DB_PATH, request_id=row['id']) == 'sent':
+                        rerun_admin_with_success('Уведомление отправлено в Telegram.')
+                    else:
+                        st.warning(ui('Уведомление пока не отправлено. Проверьте подключение Telegram в Market → Витрина и повторите позже.'))
+
+
 def render_crm() -> None:
     from scena_service_telegram import CHANNEL_LABELS, reply_label, reply_link, dispatch as dispatch_service
     from scena_shop import dial_number
     locale = st.session_state.get('scena_ui_locale', 'ru')
     focused = str(st.query_params.get('request', ''))
     rows = list_requests(DB_PATH)
+    if focused:
+        render_focused_request(next((row for row in rows if str(row['id']) == focused), None), locale)
+        return
+    if os.environ.get('SCENA_NATIVE_WEB') == '1':
+        from scena_mobile_ui import request_list
+        request_list(rows, locale, REQUEST_TYPES)
+        return
     counts = {key: sum(row["request_type"] == key for row in rows) for key in REQUEST_TYPES}
     metric_columns = st.columns(4)
     metric_columns[0].metric(ui('Все'), len(rows))
@@ -1420,9 +1506,6 @@ def render_crm() -> None:
     filter_options = {"all": "Все пути", **REQUEST_TYPES}
     selected_filter = st.selectbox(ui("Показать"), list(filter_options), format_func=lambda key: ui(filter_options[key]))
     visible = rows if selected_filter == "all" else [row for row in rows if row["request_type"] == selected_filter]
-    if focused:
-        visible = [row for row in rows if str(row['id']) == focused]
-        st.link_button(ui('Все заявки'), '/?page=admin&lang='+locale+'&section=work&view=requests')
     if not visible:
         st.info(ui("В выбранной категории заявок пока нет."))
         return
@@ -1432,8 +1515,6 @@ def render_crm() -> None:
         title = f"#{row['id']} · {ui(REQUEST_TYPES[row['request_type']])} · {row['name']}"
         with st.expander(title, expanded=len(visible) == 1):
             st.caption(f"{ui('Статус: ')}{ui(row['status'])}{ui(' · Создано: ')}{row['created_at']}")
-            if focused:
-                st.markdown('<span id="request-contact"></span>', unsafe_allow_html=True)
             if phone := dial_number(row['phone']):
                 st.link_button(ui('Позвонить')+': '+row['phone'], 'tel:'+phone)
             if row['request_type'] == 'service_request':
@@ -1467,15 +1548,7 @@ def render_crm() -> None:
                 with detail_columns[index % 2]:
                     st.caption(ui(label))
                     st.write(value or "—")
-            with st.form('request_status_'+str(row['id'])+'_'+str(row['revision'])):
-                status = st.selectbox(ui('Статус'), REQUEST_STATUSES, index=REQUEST_STATUSES.index(row['status']), format_func=ui)
-                if st.form_submit_button(ui('Сохранить статус'), type='primary'):
-                    try:
-                        update_request_status(DB_PATH,row['id'],status,expected_revision=row['revision'])
-                    except RequestValidationError as exc:
-                        st.error(ui(str(exc)))
-                    else:
-                        rerun_admin_with_success('Статус заявки обновлён.')
+            render_request_status(row)
         display_rows.append({
             "ID": row["id"], "Путь": ui(REQUEST_TYPES[row["request_type"]]),
             "Имя": row["name"], "Телефон": row["phone"], "Услуга": row["service"],
@@ -1649,54 +1722,34 @@ def render_media_slots(
 
 
 def render_scene_admin(settings: dict[str, str]) -> None:
-    st.markdown(
-        ui('<div class="scena-note">Сначала заполните имя, короткую историю и главное фото. Вид страницы можно проверить по кнопке «Открыть Мою Сцену».</div>'),
-        unsafe_allow_html=True,
-    )
+    with st.expander(ui('Как настроить страницу')):
+        st.markdown(
+            ui('<div class="scena-note">Сначала заполните имя, короткую историю и главное фото. Вид страницы можно проверить по кнопке «Открыть Мою Сцену».</div>'),
+            unsafe_allow_html=True,
+        )
     with st.form("scene_settings_v13"):
-        identity, visibility = st.columns([1.35, 1])
-        with identity:
-            st.subheader(ui("Основное"))
-            name = st.text_input(ui("Имя и фамилия · RU"), value=localized_name(settings, "ru"))
-            name_ro = st.text_input("Nume · RO", value=localized_name(settings, "ro"))
-            name_en = st.text_input("Name · EN", value=localized_name(settings, "en"))
-            slug = settings["profile_slug"]
-            with st.expander(ui("Идентификатор страницы")):
-                st.code(slug)
-                st.caption(ui("Это короткое имя для переноса страницы на платформу. Рабочие ссылки и QR-коды находятся в разделе «Продвижение → QR-коды»."))
-            location = st.text_input(ui("Город"), value=settings["location"])
-            instagram = st.text_input("Instagram", value=settings["instagram_url"])
-            telegram = st.text_input("Telegram", value=settings["telegram_url"])
-        with visibility, st.container(key="scena_visibility", border=True):
-            st.subheader(ui("Что показывать"))
-            profile_published = st.toggle(
-                ui("Моя Сцена опубликована"), value=settings["profile_published"] == "1"
-            )
-            profile_indexed = st.toggle(
-                ui("Разрешить поиск в интернете"), value=settings["profile_indexed"] == "1"
-            )
-            professional_in_scene = st.toggle(
-                ui("Professional в навигации и на Сцене"), value=settings["professional_in_scene"] == "1"
-            )
-            model_in_scene = st.toggle(
-                ui("Model в навигации и на Сцене"), value=settings["model_in_scene"] == "1"
-            )
-            pilot_notice = False
-        st.subheader(ui("Моя история"))
-        bio_ru = st.text_area(ui("Текст RU"), value=settings["bio"], height=100)
-        bio_ro = st.text_area("Text RO", value=settings["bio_ro"], height=100)
-        bio_en = st.text_area("Story · EN", value=settings.get("bio_en", ""), height=100)
-        st.subheader(ui("Кнопка записи"))
-        cta_ru = st.text_input(ui("Текст кнопки · RU"), value=content_text(settings, "booking_cta", "ru", "Записаться на макияж"))
-        cta_ro = st.text_input("Text buton · RO", value=content_text(settings, "booking_cta", "ro", "Programare la machiaj"))
-        cta_en = st.text_input("Button text · EN", value=content_text(settings, "booking_cta", "en", "Book makeup"))
-        bio_approved = st.toggle(
-            ui("Языковые версии проверены"),
-            value=settings["bio_translation_approved"] == "1",
-        )
-        submitted = st.form_submit_button(
-            ui("Сохранить Мою Сцену"), type="primary", width="stretch"
-        )
+        language_values = {}
+        for language, tab in zip(('ru','ro','en'), st.tabs(['RU','RO','EN'])):
+            with tab:
+                language_values['name_'+language] = st.text_input({'ru':ui('Имя и фамилия · RU'),'ro':'Nume · RO','en':'Name · EN'}[language], value=localized_name(settings,language))
+                language_values['bio_'+language] = st.text_area({'ru':ui('Текст RU'),'ro':'Text RO','en':'Story · EN'}[language], value=settings.get('bio' if language == 'ru' else 'bio_'+language,''), height=130)
+                language_values['cta_'+language] = st.text_input({'ru':ui('Текст кнопки · RU'),'ro':'Text buton · RO','en':'Button text · EN'}[language],value=content_text(settings,'booking_cta',language,{'ru':'Записаться на макияж','ro':'Programare la machiaj','en':'Book makeup'}[language]))
+        name, name_ro, name_en = (language_values['name_'+lang] for lang in ('ru','ro','en'))
+        bio_ru, bio_ro, bio_en = (language_values['bio_'+lang] for lang in ('ru','ro','en'))
+        cta_ru, cta_ro, cta_en = (language_values['cta_'+lang] for lang in ('ru','ro','en'))
+        slug = settings['profile_slug']
+        with st.expander(ui('Контакты и ссылки')):
+            location = st.text_input(ui('Город'), value=settings['location'])
+            instagram = st.text_input('Instagram', value=settings['instagram_url'])
+            telegram = st.text_input('Telegram', value=settings['telegram_url'])
+        with st.expander(ui('Что показывать')):
+            profile_published = st.toggle(ui('Моя Сцена опубликована'),value=settings['profile_published']=='1')
+            profile_indexed = st.toggle(ui('Разрешить поиск в интернете'),value=settings['profile_indexed']=='1')
+            professional_in_scene = st.toggle(ui('Professional в навигации и на Сцене'),value=settings['professional_in_scene']=='1')
+            model_in_scene = st.toggle(ui('Model в навигации и на Сцене'),value=settings['model_in_scene']=='1')
+        pilot_notice = False
+        bio_approved = st.toggle(ui('Языковые версии проверены'),value=settings['bio_translation_approved']=='1')
+        submitted = st.form_submit_button(ui('Сохранить Мою Сцену'),type='primary',width='stretch')
     if submitted:
         errors: list[str] = []
         if not name.strip():
@@ -1734,19 +1787,21 @@ def render_scene_admin(settings: dict[str, str]) -> None:
 
 
 def render_professional_admin(settings: dict[str, str]) -> None:
-    st.markdown(
-        ui('<div class="scena-note">Здесь настраивается только профессиональная страница. Сами группы и цены находятся в разделе «Работа → Услуги».</div>'),
-        unsafe_allow_html=True,
-    )
+    with st.expander(ui('Как настроить страницу')):
+        st.markdown(
+            ui('<div class="scena-note">Здесь настраивается только профессиональная страница. Сами группы и цены находятся в разделе «Работа → Услуги».</div>'),
+            unsafe_allow_html=True,
+        )
     with st.form("professional_settings_v13"):
         left, right = st.columns([1.45, 1])
         with left:
-            title_ru = st.text_input(ui("Название RU"), value=settings["beauty_title"])
-            title_ro = st.text_input("Denumire RO", value=settings["beauty_title_ro"])
-            title_en = st.text_input("Title · EN", value=settings.get("beauty_title_en", ""))
-            description_ru = st.text_area(ui("Описание RU"), value=settings["beauty_desc"])
-            description_ro = st.text_area("Descriere RO", value=settings["beauty_desc_ro"])
-            description_en = st.text_area("Description · EN", value=settings.get("beauty_desc_en", ""))
+            translations = {}
+            for language, tab in zip(('ru','ro','en'), st.tabs(['RU','RO','EN'])):
+                with tab:
+                    translations['title_'+language] = st.text_input({'ru':ui('Название RU'),'ro':'Denumire RO','en':'Title · EN'}[language],value=settings.get('beauty_title'+('' if language=='ru' else '_'+language),''))
+                    translations['desc_'+language] = st.text_area({'ru':ui('Описание RU'),'ro':'Descriere RO','en':'Description · EN'}[language],value=settings.get('beauty_desc'+('' if language=='ru' else '_'+language),''))
+            title_ru, title_ro, title_en = (translations['title_'+lang] for lang in ('ru','ro','en'))
+            description_ru, description_ro, description_en = (translations['desc_'+lang] for lang in ('ru','ro','en'))
         with right:
             currency = st.text_input(ui("Валюта"), value=settings["currency"], max_chars=8)
             published = st.checkbox(
@@ -1799,58 +1854,62 @@ def render_professional_admin(settings: dict[str, str]) -> None:
 
 
 def render_model_admin(settings: dict[str, str]) -> None:
-    with st.expander(ui("Сценарий, оформление и история Model")):
-        from scena_model_builder import render_model_builder
-        render_model_builder(DB_PATH, settings, APP_DIR, detected_locale(settings))
-    from scena_model_intro import render_intro_editor
-    render_intro_editor(DB_PATH, APP_DIR, settings)
-    st.markdown("<div class='scena-section'></div>", unsafe_allow_html=True)
-    st.subheader(ui("Образы и настройки Model"))
-    with st.form("model_settings_v13"):
-        left, right = st.columns([1.45, 1])
-        with left:
-            title_ru = st.text_input(ui("Название RU"), value=settings["model_title"])
-            title_ro = st.text_input("Denumire RO", value=settings["model_title_ro"])
-            title_en = st.text_input("Title · EN", value=settings.get("model_title_en", ""))
-            description_ru = st.text_area(ui("Описание RU"), value=settings["model_desc"])
-            description_ro = st.text_area("Descriere RO", value=settings["model_desc_ro"])
-            description_en = st.text_area("Description · EN", value=settings.get("model_desc_en", ""))
-        with right:
-            published = st.checkbox(
-                ui("Страница опубликована"), value=settings["model_published"] == "1"
+    locale = detected_locale(settings)
+    intro_tab, images_tab, portfolio_tab, settings_tab = st.tabs([
+        tr(locale,'Визитка','Prezentare','Introduction'), tr(locale,'Образы','Imagini','Looks'),
+        tr(locale,'Портфолио','Portofoliu','Portfolio'), tr(locale,'Настройки','Setări','Settings')])
+    with intro_tab:
+        from scena_model_intro import render_intro_editor
+        render_intro_editor(DB_PATH, APP_DIR, settings)
+    with images_tab:
+        render_model_slider_admin(settings)
+    with portfolio_tab:
+        from scena_portfolio import render_portfolio_editor
+        render_portfolio_editor(DB_PATH, APP_DIR, settings, 'Model')
+    with settings_tab:
+        with st.expander(ui('Сценарий, оформление и история Model')):
+            from scena_model_builder import render_model_builder
+            render_model_builder(DB_PATH, settings, APP_DIR, locale)
+        with st.form("model_settings_v13"):
+            left, right = st.columns([1.45, 1])
+            with left:
+                translations = {}
+                for language, tab in zip(('ru','ro','en'), st.tabs(['RU','RO','EN'])):
+                    with tab:
+                        translations['title_'+language] = st.text_input({'ru':ui('Название RU'),'ro':'Denumire RO','en':'Title · EN'}[language],value=settings.get('model_title'+('' if language=='ru' else '_'+language),''))
+                        translations['desc_'+language] = st.text_area({'ru':ui('Описание RU'),'ro':'Descriere RO','en':'Description · EN'}[language],value=settings.get('model_desc'+('' if language=='ru' else '_'+language),''))
+                title_ru, title_ro, title_en = (translations['title_'+lang] for lang in ('ru','ro','en'))
+                description_ru, description_ro, description_en = (translations['desc_'+lang] for lang in ('ru','ro','en'))
+            with right:
+                published = st.checkbox(
+                    ui("Страница опубликована"), value=settings["model_published"] == "1"
+                )
+                indexed = st.checkbox(
+                    ui("Разрешить поиск в интернете"), value=settings["model_indexed"] == "1"
+                )
+                approved = st.checkbox(
+                    ui("Языковые версии проверены"),
+                    value=settings["model_translation_approved"] == "1",
+                )
+            submitted = st.form_submit_button(
+                ui("Сохранить настройки Model"), type="primary", width="stretch"
             )
-            indexed = st.checkbox(
-                ui("Разрешить поиск в интернете"), value=settings["model_indexed"] == "1"
-            )
-            approved = st.checkbox(
-                ui("Языковые версии проверены"),
-                value=settings["model_translation_approved"] == "1",
-            )
-        submitted = st.form_submit_button(
-            ui("Сохранить настройки Model"), type="primary", width="stretch"
-        )
-    if submitted:
-        if published and not (
-            title_ru.strip() and title_ro.strip() and description_ru.strip()
-            and description_ro.strip() and approved
-        ):
-            st.error(ui("Для публикации заполните и подтвердите версии RU/RO."))
-        else:
-            save_settings(DB_PATH, {
-                "model_title": title_ru, "model_title_ro": title_ro,
-                "model_desc": description_ru, "model_desc_ro": description_ro,
-                "model_title_en": title_en, "model_desc_en": description_en,
-                "model_published": "1" if published else "0",
-                "model_indexed": "1" if indexed else "0",
-                "model_translation_approved": "1" if approved else "0",
-            })
-            rerun_admin_with_success("Настройки Model сохранены.")
-    st.markdown("<div class='scena-section'></div>", unsafe_allow_html=True)
-    render_model_slider_admin(settings)
-    st.subheader(ui("Портфолио Model"))
-    from scena_portfolio import render_portfolio_editor
-    render_portfolio_editor(DB_PATH, APP_DIR, settings, "Model")
-
+        if submitted:
+            if published and not (
+                title_ru.strip() and title_ro.strip() and description_ru.strip()
+                and description_ro.strip() and approved
+            ):
+                st.error(ui("Для публикации заполните и подтвердите версии RU/RO."))
+            else:
+                save_settings(DB_PATH, {
+                    "model_title": title_ru, "model_title_ro": title_ro,
+                    "model_desc": description_ru, "model_desc_ro": description_ro,
+                    "model_title_en": title_en, "model_desc_en": description_en,
+                    "model_published": "1" if published else "0",
+                    "model_indexed": "1" if indexed else "0",
+                    "model_translation_approved": "1" if approved else "0",
+                })
+                rerun_admin_with_success("Настройки Model сохранены.")
 
 
 def _admin_int(settings: dict[str, str], key: str, default: int) -> int:
@@ -2748,76 +2807,84 @@ def render_individual_schedule(settings):
 
 
 def render_schedule_admin(settings: dict[str, str]) -> None:
-    weekday_labels = {0: "Понедельник", 1: "Вторник", 2: "Среда", 3: "Четверг", 4: "Пятница", 5: "Суббота", 6: "Воскресенье"}
-    selected_days = [int(value) for value in settings["schedule_weekdays"].split(",") if value.strip().isdigit()]
-    with st.form("schedule_form"):
-        st.subheader(ui("Регулярный график"))
-        st.caption(tr(st.session_state.get("scena_ui_locale", "ru"), "Общие часы. Индивидуальные настройки дня ниже имеют приоритет.", "Ore generale. Setările individuale de mai jos au prioritate.", "Regular hours. Individual day settings below take precedence."))
-        weekdays = st.multiselect(ui('Рабочие дни'), list(weekday_labels), default=selected_days, format_func=lambda value: ui(weekday_labels[value]))
-        cols = st.columns(4)
-        with cols[0]:
-            start = st.time_input(ui("Начало"), value=time.fromisoformat(settings["schedule_start"]))
-        with cols[1]:
-            end = st.time_input(ui("Конец"), value=time.fromisoformat(settings["schedule_end"]))
-        with cols[2]:
-            break_start = st.time_input(ui("Перерыв с"), value=time.fromisoformat(settings["schedule_break_start"]))
-        with cols[3]:
-            break_end = st.time_input(ui("Перерыв до"), value=time.fromisoformat(settings["schedule_break_end"]))
-        params = st.columns(4)
-        with params[0]:
-            interval = st.number_input(ui("Шаг слотов, мин."), min_value=5, max_value=60, value=int(settings["slot_interval_minutes"]), step=5)
-        with params[1]:
-            lead = st.number_input(ui("Минимум до записи, ч."), min_value=0, max_value=168, value=int(settings["minimum_lead_hours"]))
-        with params[2]:
-            horizon = st.number_input(ui("Глубина, дней"), min_value=1, max_value=365, value=int(settings["booking_horizon_days"]))
-        with params[3]:
-            hold = st.number_input(ui("Удержание, ч."), min_value=1, max_value=168, value=int(settings["pending_hold_hours"]))
-        schedule_submit = st.form_submit_button(ui("Сохранить график"), type="primary")
-    if schedule_submit:
-        if not weekdays or start >= end or break_start >= break_end or break_start <= start or break_end >= end:
-            st.error(ui("Проверьте рабочие дни, начало, конец и перерыв."))
-        else:
-            save_settings(DB_PATH, {
-                "schedule_weekdays": ",".join(str(day) for day in sorted(weekdays)),
-                "schedule_start": start.strftime("%H:%M"), "schedule_end": end.strftime("%H:%M"),
-                "schedule_break_start": break_start.strftime("%H:%M"), "schedule_break_end": break_end.strftime("%H:%M"),
-                "slot_interval_minutes": interval, "minimum_lead_hours": lead,
-                "booking_horizon_days": horizon, "pending_hold_hours": hold,
-            })
-            rerun_admin_with_success(
-                "График сохранён; кнопки времени пересчитаны автоматически."
-            )
-    render_individual_schedule(get_settings(DB_PATH) if schedule_submit else settings)
-    st.subheader(ui("Выходные и дополнительные часы"))
-    with st.form("exception_form"):
-        exception_date = st.date_input(ui("Дата"), min_value=date.today())
-        kind = st.selectbox(ui("Режим"), ["closed", "extra"], format_func=lambda value: ui({"closed": "Закрыть весь день", "extra": "Добавить часы"}[value]))
-        extra_cols = st.columns(2)
-        with extra_cols[0]:
-            extra_start = st.time_input(ui("Дополнительно с"), value=time(18, 0))
-        with extra_cols[1]:
-            extra_end = st.time_input(ui("Дополнительно до"), value=time(20, 0))
-        note = st.text_input(ui("Комментарий"))
-        exception_submit = st.form_submit_button(ui("Добавить исключение"))
-    if exception_submit:
-        try:
-            add_schedule_exception(
-                DB_PATH, exception_date.isoformat(), kind,
-                start_time=extra_start.strftime("%H:%M") if kind == "extra" else "",
-                end_time=extra_end.strftime("%H:%M") if kind == "extra" else "",
-                note=note,
-            )
-        except RequestValidationError as exc:
-            st.error(ui(str(exc)))
-        else:
-            rerun_admin_with_success("Исключение графика добавлено.")
-    exceptions = list_schedule_exceptions(DB_PATH)
-    if exceptions:
-        labels = {item["id"]: f"{item['exception_date']} · {ui('выходной') if item['kind'] == 'closed' else item['start_time'] + '–' + item['end_time']}" for item in exceptions}
-        delete_id = st.selectbox(ui("Удалить исключение"), list(labels), format_func=labels.get)
-        if st.button(ui("Удалить выбранное исключение")):
-            delete_schedule_exception(DB_PATH, delete_id)
-            rerun_admin_with_success("Исключение графика удалено.")
+    locale = st.session_state.get('scena_ui_locale','ru')
+    regular_tab, individual_tab, exceptions_tab = st.tabs([
+        tr(locale,'Общий график','Program general','Regular hours'),
+        tr(locale,'Отдельный день','O anumită zi','Individual day'),
+        tr(locale,'Исключения','Excepții','Exceptions')])
+    with regular_tab:
+        weekday_labels = {0: "Понедельник", 1: "Вторник", 2: "Среда", 3: "Четверг", 4: "Пятница", 5: "Суббота", 6: "Воскресенье"}
+        selected_days = [int(value) for value in settings["schedule_weekdays"].split(",") if value.strip().isdigit()]
+        with st.form("schedule_form"):
+            st.subheader(ui("Регулярный график"))
+            st.caption(tr(st.session_state.get("scena_ui_locale", "ru"), "Часы отдельного дня имеют приоритет над общим графиком.", "Orele unei zile au prioritate față de programul general.", "Individual day hours take precedence over the regular schedule."))
+            weekdays = st.multiselect(ui('Рабочие дни'), list(weekday_labels), default=selected_days, format_func=lambda value: ui(weekday_labels[value]))
+            cols = st.columns(4)
+            with cols[0]:
+                start = st.time_input(ui("Начало"), value=time.fromisoformat(settings["schedule_start"]))
+            with cols[1]:
+                end = st.time_input(ui("Конец"), value=time.fromisoformat(settings["schedule_end"]))
+            with cols[2]:
+                break_start = st.time_input(ui("Перерыв с"), value=time.fromisoformat(settings["schedule_break_start"]))
+            with cols[3]:
+                break_end = st.time_input(ui("Перерыв до"), value=time.fromisoformat(settings["schedule_break_end"]))
+            params = st.columns(4)
+            with params[0]:
+                interval = st.number_input(ui("Шаг слотов, мин."), min_value=5, max_value=60, value=int(settings["slot_interval_minutes"]), step=5)
+            with params[1]:
+                lead = st.number_input(ui("Минимум до записи, ч."), min_value=0, max_value=168, value=int(settings["minimum_lead_hours"]))
+            with params[2]:
+                horizon = st.number_input(ui("Глубина, дней"), min_value=1, max_value=365, value=int(settings["booking_horizon_days"]))
+            with params[3]:
+                hold = st.number_input(ui("Удержание, ч."), min_value=1, max_value=168, value=int(settings["pending_hold_hours"]))
+            schedule_submit = st.form_submit_button(ui("Сохранить график"), type="primary")
+        if schedule_submit:
+            if not weekdays or start >= end or break_start >= break_end or break_start <= start or break_end >= end:
+                st.error(ui("Проверьте рабочие дни, начало, конец и перерыв."))
+            else:
+                save_settings(DB_PATH, {
+                    "schedule_weekdays": ",".join(str(day) for day in sorted(weekdays)),
+                    "schedule_start": start.strftime("%H:%M"), "schedule_end": end.strftime("%H:%M"),
+                    "schedule_break_start": break_start.strftime("%H:%M"), "schedule_break_end": break_end.strftime("%H:%M"),
+                    "slot_interval_minutes": interval, "minimum_lead_hours": lead,
+                    "booking_horizon_days": horizon, "pending_hold_hours": hold,
+                })
+                rerun_admin_with_success(
+                    "График сохранён; кнопки времени пересчитаны автоматически."
+                )
+    with individual_tab:
+        render_individual_schedule(get_settings(DB_PATH) if schedule_submit else settings)
+    with exceptions_tab:
+        st.subheader(ui("Выходные и дополнительные часы"))
+        with st.form("exception_form"):
+            exception_date = st.date_input(ui("Дата"), min_value=date.today())
+            kind = st.selectbox(ui("Режим"), ["closed", "extra"], format_func=lambda value: ui({"closed": "Закрыть весь день", "extra": "Добавить часы"}[value]))
+            extra_cols = st.columns(2)
+            with extra_cols[0]:
+                extra_start = st.time_input(ui("Дополнительно с"), value=time(18, 0))
+            with extra_cols[1]:
+                extra_end = st.time_input(ui("Дополнительно до"), value=time(20, 0))
+            note = st.text_input(ui("Комментарий"))
+            exception_submit = st.form_submit_button(ui("Добавить исключение"))
+        if exception_submit:
+            try:
+                add_schedule_exception(
+                    DB_PATH, exception_date.isoformat(), kind,
+                    start_time=extra_start.strftime("%H:%M") if kind == "extra" else "",
+                    end_time=extra_end.strftime("%H:%M") if kind == "extra" else "",
+                    note=note,
+                )
+            except RequestValidationError as exc:
+                st.error(ui(str(exc)))
+            else:
+                rerun_admin_with_success("Исключение графика добавлено.")
+        exceptions = list_schedule_exceptions(DB_PATH)
+        if exceptions:
+            labels = {item["id"]: f"{item['exception_date']} · {ui('выходной') if item['kind'] == 'closed' else item['start_time'] + '–' + item['end_time']}" for item in exceptions}
+            delete_id = st.selectbox(ui("Удалить исключение"), list(labels), format_func=labels.get)
+            if st.button(ui("Удалить выбранное исключение")):
+                delete_schedule_exception(DB_PATH, delete_id)
+                rerun_admin_with_success("Исключение графика удалено.")
 
 
 def render_posts_admin() -> None:
@@ -3058,19 +3125,8 @@ ADMIN_VIEW_COPY = {
 def render_admin_navigation(locale: str, section: str, view: str) -> None:
     section_keys = tuple(key for key in ADMIN_SECTIONS if key != "home")
     if os.environ.get("SCENA_NATIVE_WEB") == "1":
-        def links(items, active, target_section=None):
-            result = []
-            for key, title in items:
-                destination = page_url('admin', locale, section=target_section or key,
-                    view=key if target_section else next(iter(ADMIN_VIEWS.get(key, {})), ''))
-                result.append('<a data-cabinet-nav href="' + html.escape(destination, quote=True) + '"' +
-                    (' aria-current="page"' if key == active else '') + '>' + html.escape(ui(title)) + '</a>')
-            return '<nav class="scena-admin-tabs">' + ''.join(result) + '</nav>'
-        with st.container(key="scena_admin_main_nav"):
-            st.markdown(links([(key, ADMIN_SECTIONS[key]) for key in section_keys], section), unsafe_allow_html=True)
-        if section in ADMIN_VIEWS:
-            with st.container(key="scena_admin_subnav"):
-                st.markdown(links(ADMIN_VIEWS[section].items(), view, section), unsafe_allow_html=True)
+        from scena_mobile_ui import navigation
+        navigation(locale, section, view, ADMIN_SECTIONS, ADMIN_VIEWS, localized_name(get_settings(DB_PATH),locale))
         return
     with st.container(key="scena_admin_main_nav"):
         selected_section = st.segmented_control(
@@ -3105,6 +3161,10 @@ def render_admin_navigation(locale: str, section: str, view: str) -> None:
 
 
 def render_admin_heading(locale: str, section: str, view: str) -> None:
+    if os.environ.get('SCENA_NATIVE_WEB') == '1':
+        title = ui(ADMIN_VIEW_COPY[(section, view)][0])
+        st.markdown('<h1 class="scena-admin-title">'+clean(title)+'</h1>',unsafe_allow_html=True)
+        return
     if section == "home" or (section == "work" and view == "overview"):
         crumbs = ''
     else:
@@ -3124,12 +3184,33 @@ def render_admin_heading(locale: str, section: str, view: str) -> None:
 
 
 def render_admin_home(locale: str) -> None:
+    if os.environ.get('SCENA_NATIVE_WEB') == '1':
+        from scena_mobile_ui import dashboard
+        dashboard(DB_PATH, locale)
+        return
     from scena_workspace_ui import render_dashboard
     render_dashboard(DB_PATH, APP_DIR, get_settings(DB_PATH), locale, set_admin_route)
 
 
 def render_admin(settings: dict[str, str], locale: str) -> None:
     require_admin(locale)
+    service_focus = (st.query_params.get('section') == 'work' and st.query_params.get('view') == 'requests' and str(st.query_params.get('request','')))
+    order_focus = (st.query_params.get('section') == 'pages' and st.query_params.get('view') == 'shop' and str(st.query_params.get('order','')) and os.environ.get('SCENA_NATIVE_WEB') == '1')
+    if service_focus or order_focus:
+        with st.container(key='scena_request_shell'):
+            destination = page_url('admin',locale,section='work',view='requests') if service_focus else page_url('admin',locale,section='pages',view='shop',orders='1')
+            back = tr(locale,'Все заявки','Toate cererile','All requests') if service_focus else tr(locale,'Все заказы','Toate comenzile','All orders')
+            st.markdown('<nav class="scena-request-nav"><a data-cabinet-nav href="'+clean(destination)+'">← '+clean(back)+'</a><span>SCENA</span></nav>',unsafe_allow_html=True)
+            notice = st.session_state.pop('scena_admin_notice',None)
+            if notice:
+                kind, message = notice
+                getattr(st,kind if kind in {'success','warning','error','info'} else 'info')(ui(message))
+            if service_focus:
+                render_crm()
+            else:
+                from scena_shop import render_shop_admin
+                render_shop_admin(DB_PATH,APP_DIR,settings,locale)
+        return
     render_header("admin", locale, admin=True)
     section = str(st.query_params.get("section", "work"))
     if section not in ADMIN_SECTIONS or section == "home":
@@ -3141,14 +3222,17 @@ def render_admin(settings: dict[str, str], locale: str) -> None:
     if not views:
         view = ""
 
-    with st.container(key="scena_admin_identity_actions"):
-        _, exit_col = st.columns([5, 1])
-        with exit_col:
-            if os.environ.get('SCENA_CLOUD') == '1' or os.environ.get('SCENA_NATIVE_WEB') == '1':
-                st.link_button(ui('Выйти'), '/auth/logout', width='stretch')
-            elif st.button(ui("Выйти"), width="stretch"):
-                st.session_state["scena_admin_authenticated"] = False
-                st.rerun()
+    if os.environ.get('SCENA_NATIVE_WEB') != '1':
+        with st.container(key="scena_admin_identity_actions"):
+            _, exit_col = st.columns([5, 1])
+            with exit_col:
+                if os.environ.get('SCENA_CLOUD') == '1' or os.environ.get('SCENA_NATIVE_WEB') == '1':
+                    st.link_button(ui('Выйти'), '/auth/logout', width='stretch')
+                elif st.button(ui("Выйти"), width="stretch"):
+                    st.session_state["scena_admin_authenticated"] = False
+                    st.rerun()
+
+    render_admin_navigation(locale, section, view)
 
     legacy_success = st.session_state.pop("scena_admin_success", "")
     notice = st.session_state.pop("scena_admin_notice", None)
@@ -3158,7 +3242,6 @@ def render_admin(settings: dict[str, str], locale: str) -> None:
         kind, message = notice
         getattr(st, kind if kind in {"success", "warning", "error", "info"} else "info")(ui(message))
 
-    render_admin_navigation(locale, section, view)
     render_admin_heading(locale, section, view)
 
     if section == "home" or (section == "work" and view == "overview"):
@@ -3198,7 +3281,11 @@ def render_admin(settings: dict[str, str], locale: str) -> None:
         render_sms_admin()
     elif section == "settings" and view == "backup":
         render_backup()
-    render_pro_status_banner(locale)
+    if os.environ.get('SCENA_NATIVE_WEB') == '1':
+        with st.expander(tr(locale, 'Моя подписка', 'Abonamentul meu', 'My subscription')):
+            render_pro_status_banner(locale)
+    else:
+        render_pro_status_banner(locale)
 
 
 def run() -> None:

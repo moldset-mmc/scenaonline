@@ -116,7 +116,7 @@ class WebUI:
         return current.get().add(Node('fieldset', {'class': 'scena-form', 'data-testid': 'stForm', 'data-form-key': key}, group=str(key)))
 
     def expander(self, label, expanded=False, **_):
-        node = Node('details', {'class': 'scena-expander', 'open': '' if expanded else None},
+        node = Node('details', {'class': 'scena-expander', 'id': current.get().identity('expander',label), 'open': '' if expanded else None},
                     [f'<summary>{escape(label)}</summary>'])
         return current.get().add(node)
 
@@ -147,7 +147,13 @@ class WebUI:
     def text_input(self, label, value='', key=None, type='default', max_chars=None, disabled=False, placeholder=None,
                    label_visibility='visible', help=None, **_):
         identity, value = current.get().register('text', label, key, value, disabled=disabled, max_chars=max_chars or 20000)
-        inner = '<input' + attributes(id=identity, name=identity, value='' if type=='password' else value, type='password' if type=='password' else 'text',
+        hint = str(label).lower()
+        phone = type != 'password' and bool(re.search(r'телефон|telefon|phone',hint))
+        email = type != 'password' and bool(re.search(r'e-?mail|электронн.*почт',hint))
+        price = type != 'password' and bool(re.search(r'цена|price|preț',hint))
+        inner = '<input' + attributes(id=identity, name=identity, value='' if type=='password' else value, type='password' if type=='password' else 'tel' if phone else 'email' if email else 'text',
+            inputmode='tel' if phone else 'email' if email else 'decimal' if price else None,
+            autocomplete='tel' if phone else 'email' if email else None,
             maxlength=max_chars, placeholder=placeholder, disabled='' if disabled else None, data_auto='1' if not current.get().group else None) + '>'
         self._label(identity, label, inner, 'TextInput', help, label_visibility)
         return value or ''
@@ -227,6 +233,7 @@ class WebUI:
         identity, value = current.get().register('number', label, key, value, minimum=min_value, maximum=max_value,
             integer=isinstance(value, int), disabled=disabled)
         inner = '<input' + attributes(type='number', id=identity, name=identity, value=value, min=min_value, max=max_value,
+            inputmode='numeric' if isinstance(value,int) else 'decimal',
             step=step or ('1' if isinstance(value,int) else 'any'), disabled='' if disabled else None,
             data_auto='1' if not current.get().group else None) + '>'
         self._label(identity, label, inner, 'NumberInput')
