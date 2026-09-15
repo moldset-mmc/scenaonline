@@ -128,6 +128,26 @@ async def main():
             load_form(part['token'],sid)
             full,_=await request('/?page=booking&lang=ru&service='+str(service['options'][0]))
             print('PASS booking fragment without whole-page render; bytes',len(full.body),'->',len(fragment.body),flush=True)
+            # Simulate zero-request browser selection using registered hidden choices.
+            local=json.loads(re.search(r'<script id="scena-booking-data" type="application/json">(.*?)</script>',full.body.decode(),re.S)[1])
+            selected=next(day for day,slots in local['availability'].items() if slots)
+            hour=local['availability'][selected][0]
+            data=payload(full,'Продолжить',{'_booking_local_date':selected,'_booking_local_time':hour})
+            selection,_=await request('/?page=booking&lang=ru',data=data,headers={'X-Scena-Fragment':'booking'})
+            assert selection.code==200,selection.body
+            assert 'Проверьте вашу запись' in json.loads(selection.body)['html']
+            # Availability changing after the local snapshot must block Continue.
+            full,_=await request('/?page=booking&lang=ru&service='+str(service['options'][0]))
+            data=payload(full,'Продолжить',{'_booking_local_date':selected,'_booking_local_time':hour})
+            from scena_core import save_date_hours
+            save_date_hours(os.environ['SCENA_DB_PATH'],selected,closed=True)
+            stale,_=await request('/?page=booking&lang=ru',data=data,headers={'X-Scena-Fragment':'booking'},instance=1)
+            assert stale.code==200,stale.body
+            assert 'Проверьте вашу запись' not in json.loads(stale.body)['html']
+            assert 'Выбранное время уже недоступно' in json.loads(stale.body)['html']
+            save_date_hours(os.environ['SCENA_DB_PATH'],selected,reset=True)
+            print('PASS local day/time selection validated; stale slot blocked before contact step',flush=True)
+
             path='/?page=admin&lang=ru&section=pages&view=scene'
             response,_=await request(path,owner=True)
             _,saved=form(response)

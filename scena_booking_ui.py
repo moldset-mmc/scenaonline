@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import calendar
 import html
+import json
+import os
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -131,6 +133,33 @@ def _time_blocks(db_path: Path, service_id: int, locale: str, now: datetime, las
                 for column, slot in zip(st.columns(3, gap="small"), period_slots[offset:offset + 3]):
                     column.button(slot, key=f"booking_slot_{slot}", type="primary" if st.session_state.get("booking_time") == slot else "secondary", on_click=_choose_time, args=(slot,), width="stretch")
     return slots
+
+
+def _local_booking_controls(availability, locale, item):
+    from scena_web.context import current
+    ctx = current.get()
+    days = list(availability)
+    times = sorted({slot for slots in availability.values() for slot in slots})
+    selected = st.session_state["booking_date"]
+    chosen = st.session_state.get("booking_time")
+    fields = {}
+    for kind, options, value in (("date", days, selected), ("time", times, chosen)):
+        key = "_booking_local_" + kind
+        ctx.state[key] = value
+        identity, _ = ctx.register('choice', key, key, value, options=options, disabled=False)
+        fields[kind] = identity
+        index = str(options.index(value)) if value in options else ''
+        ctx.add(f'<input type="hidden" name="{identity}" value="{index}">')
+    value = {'availability': availability, 'days':days, 'times':times, 'fields':fields,
+        'selected':selected, 'chosen':chosen, 'month':st.session_state['booking_month'][:7],
+        'dates':{day:_date_label(day, locale) for day in days}, 'service':_name(item,locale),
+        'months':MONTHS[locale], 'weekdays':WEEKDAYS[locale],
+        'morning':_tr(locale,'До обеда','Înainte de prânz','Before noon'),
+        'afternoon':_tr(locale,'После обеда','După prânz','Afternoon'),
+        'empty':_tr(locale,'Свободного времени нет','Nu sunt ore disponibile','No times available'),
+        'nearest':_tr(locale,'Перейти к ближайшей дате','Alege următoarea dată','Go to the next available date')}
+    encoded = json.dumps(value,ensure_ascii=False,separators=(',',':')).replace('<', r'\u003c')
+    ctx.add('<script id="scena-booking-data" type="application/json">'+encoded+'</script>')
 
 
 def _signature(item: dict, settings: dict) -> tuple:
@@ -288,10 +317,22 @@ def render_booking_flow(db_path, app_dir, settings, locale):
         st.markdown('<h3 class="scena-booking-date">'+html.escape(_tr(locale, "2. Выберите день и время", "2. Alegeți ziua și ora", "2. Choose a day and time"))+'</h3>',unsafe_allow_html=True)
         _calendar(db_path, selected_service, locale, now, last_day, availability)
     with time_column:
-        slots = _time_blocks(db_path, selected_service, locale, now, last_day, availability)
+        with st.container(key="booking_times"):
+            slots = _time_blocks(db_path, selected_service, locale, now, last_day, availability)
     chosen_time = st.session_state.get("booking_time")
-    if chosen_time in slots:
-        st.caption(f"{_name(item, locale)} · {_date_label(st.session_state['booking_date'], locale)} · {chosen_time}")
-        if st.button(_tr(locale, "Продолжить", "Continuă"), key="booking_continue", type="primary", width="stretch"):
+    native = os.environ.get("SCENA_NATIVE_WEB") == "1"
+    if native:
+        _local_booking_controls(availability, locale, item)
+    if native or chosen_time in slots:
+        with st.container(key="booking_summary"):
+            st.caption(f"{_name(item, locale)} · {_date_label(st.session_state['booking_date'], locale)} · {chosen_time}" if chosen_time in slots else "")
+        with st.container(key="booking_continue_wrap") as continuation:
+            if native and chosen_time not in slots:
+                continuation.attributes['hidden'] = ''
+            proceed = st.button(_tr(locale, "Продолжить", "Continuă"), key="booking_continue", type="primary", width="stretch")
+        if proceed:
+            if chosen_time not in slots:
+                st.warning(_tr(locale,"Выбранное время уже недоступно. Выберите другое.","Ora aleasă nu mai este disponibilă. Alegeți alta."))
+                return
             st.session_state["booking_confirmation"] = {"service_id": selected_service, "date": st.session_state["booking_date"], "time": chosen_time, "signature": _signature(item, settings)}
             st.rerun()

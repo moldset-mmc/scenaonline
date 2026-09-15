@@ -97,6 +97,68 @@
       status(error.message,true);
     } finally { busy = false; }
   }
+  const escapeHTML = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const monthOffset = (month, delta) => { const d = new Date(month + '-01T12:00:00Z'); d.setUTCMonth(d.getUTCMonth()+delta); return d.toISOString().slice(0,7); };
+  const row = cells => '<div class="scena-columns" data-testid="stHorizontalBlock" data-count="7" style="--scena-cols:1fr 1fr 1fr 1fr 1fr 1fr 1fr">' + cells.map(cell => '<div class="scena-column" data-testid="stColumn">'+cell+'</div>').join('')+'</div>';
+  function localCalendar(data) {
+    const first = new Date(data.month + '-01T12:00:00Z');
+    const back = monthOffset(data.month,-1), next = monthOffset(data.month,1);
+    const controls = '<div class="st-key-booking_month_header" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><strong>'+escapeHTML(data.months[first.getUTCMonth()+1])+' '+first.getUTCFullYear()+'</strong><div style="display:flex;gap:8px">'+
+      '<button type="button" data-booking-month="'+back+'" aria-label="‹" '+(back<data.days[0].slice(0,7)?'disabled':'')+'>‹</button>'+
+      '<button type="button" data-booking-month="'+next+'" aria-label="›" '+(next>data.days.at(-1).slice(0,7)?'disabled':'')+'>›</button></div></div>';
+    const cells = Array((first.getUTCDay()+6)%7).fill('<div class="scena-calendar-blank"></div>');
+    const count = new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth()+1,0)).getUTCDate();
+    for (let d=1;d<=count;d++) {
+      const day=data.month+'-'+String(d).padStart(2,'0'), valid=Object.hasOwn(data.availability,day), selected=day===data.selected;
+      cells.push('<button type="button" style="width:100%" data-booking-day="'+day+'" data-kind="'+(selected?'primary':'secondary')+'" '+(!valid?'disabled':'')+' title="'+escapeHTML(data.dates[day] || day)+'">'+d+(!selected && data.availability[day]?.length?' ·':'')+'</button>');
+    }
+    while (cells.length%7) cells.push('<div class="scena-calendar-blank"></div>');
+    return controls+row(data.weekdays.map(day=>'<div class="scena-calendar-weekday">'+escapeHTML(day)+'</div>'))+Array.from({length:cells.length/7},(_,i)=>row(cells.slice(i*7,i*7+7))).join('');
+  }
+  function localTimes(data) {
+    const available=data.availability[data.selected] || [];
+    let output='<h3 class="scena-booking-date">'+escapeHTML(data.dates[data.selected])+'</h3>';
+    if (!available.length) {
+      const nearest=data.days.find(day=>day>data.selected && data.availability[day].length);
+      return output+'<div class="scena-notice info" role="status">'+escapeHTML(data.empty)+'</div>'+(nearest?'<button type="button" style="width:100%" data-booking-day="'+nearest+'">'+escapeHTML(data.nearest)+' · '+escapeHTML(data.dates[nearest])+'</button>':'');
+    }
+    for (const [kind,title,morning] of [['morning',data.morning,true],['afternoon',data.afternoon,false]]) {
+      const slots=available.filter(slot=>(Number(slot.slice(0,2))<12)===morning);
+      output+='<div class="scena-container scena-bordered st-key-booking_'+kind+'"><h4>'+escapeHTML(title)+'</h4><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">'+
+        (slots.length?slots.map(slot=>'<button type="button" data-booking-time="'+slot+'" data-kind="'+(slot===data.chosen?'primary':'secondary')+'">'+slot+'</button>').join(''):'<p>'+escapeHTML(data.empty)+'</p>')+'</div></div>';
+    }
+    return output;
+  }
+  document.addEventListener('click', event => {
+    const button=event.target.closest('[data-booking-day],[data-booking-time],[data-booking-month]');
+    const state=document.getElementById('scena-booking-data');
+    if (!button || !state || button.disabled) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+    if (busy) return;
+    const started=performance.now(), data=JSON.parse(state.textContent), form=state.closest('form');
+    if (button.dataset.bookingMonth) {
+      data.month=button.dataset.bookingMonth;
+    } else if (button.dataset.bookingDay) {
+      if (!Object.hasOwn(data.availability,button.dataset.bookingDay)) return;
+      data.selected=button.dataset.bookingDay; data.chosen=null; data.month=data.selected.slice(0,7);
+    } else {
+      if (!data.availability[data.selected]?.includes(button.dataset.bookingTime)) return;
+      data.chosen=button.dataset.bookingTime;
+    }
+    form.elements[data.fields.date].value=data.days.indexOf(data.selected);
+    form.elements[data.fields.time].value=data.chosen?data.times.indexOf(data.chosen):'';
+    if (!button.dataset.bookingTime) {
+      form.querySelector('.st-key-booking_calendar').innerHTML=localCalendar(data);
+      form.querySelector('.st-key-booking_times').innerHTML=localTimes(data);
+    } else {
+      for (const item of form.querySelectorAll('[data-booking-time]')) item.dataset.kind=item.dataset.bookingTime===data.chosen?'primary':'secondary';
+    }
+    form.querySelector('.st-key-booking_continue_wrap').hidden=!data.chosen;
+    form.querySelector('.st-key-booking_summary').textContent=data.chosen?data.service+' · '+data.dates[data.selected]+' · '+data.chosen:'';
+    state.textContent=JSON.stringify(data);
+    const meter=document.getElementById('scena-performance');
+    if (meter) meter.dataset.lastInteraction=JSON.stringify({ms:Math.round(performance.now()-started),mode:'booking-local',networkRequests:0});
+  }, true);
   document.addEventListener('submit', event => {
     if (event.target.id !== 'scena-page') return;
     event.preventDefault(); submit(event.target,event.submitter);

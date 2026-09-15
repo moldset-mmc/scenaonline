@@ -7,7 +7,7 @@
     let output=document.getElementById('scena-performance');
     if(!output){output=document.createElement('output');output.id='scena-performance';output.hidden=true;output.setAttribute('aria-hidden','true');document.body.append(output);}
     const nav=performance.getEntriesByType('navigation')[0];
-    if(nav){result.ttfbMs=Math.round(nav.responseStart);result.loadMs=nav.loadEventEnd?Math.round(nav.loadEventEnd):null;}
+    if(nav){result.serverTiming=nav.serverTiming.map(entry=>({name:entry.name,duration:entry.duration}));result.ttfbMs=Math.round(nav.responseStart);result.loadMs=nav.loadEventEnd?Math.round(nav.loadEventEnd):null;}
     const resources=performance.getEntriesByType('resource');
     result.resourceCount=resources.length;result.transferBytes=resources.reduce((sum,r)=>sum+r.transferSize,0);
     output.dataset.metrics=JSON.stringify(result);

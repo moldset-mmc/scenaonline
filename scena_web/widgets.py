@@ -257,7 +257,10 @@ class WebUI:
         identity, _ = current.get().register('button', label, key, False, disabled=disabled,
                                              callback=callback(on_click, args, kwargs))
         current.get().add('<div class="stButton" data-testid="stButton"><button' + attributes(type='submit', name='_action', value=identity,
-            disabled='' if disabled else None, title=help, data_kind=type) + '>' + escape(label) + '</button></div>')
+            disabled='' if disabled else None, title=help, data_kind=type,
+            data_booking_day=str(key).removeprefix('booking_day_') if str(key).startswith('booking_day_') else (args[0] if key == 'booking_nearest_day' and args else None),
+            data_booking_month=args[0][:7] if key in ('booking_month_previous', 'booking_month_next') and args else None,
+            data_booking_time=str(key).removeprefix('booking_slot_') if str(key).startswith('booking_slot_') else None) + '>' + escape(label) + '</button></div>')
         return current.get().action == identity and not disabled
 
     form_submit_button = button

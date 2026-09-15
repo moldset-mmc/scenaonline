@@ -79,3 +79,9 @@ def apply(ctx, previous, values, files):
         if module!='scena_booking_ui' or name not in CALLBACKS:
             raise FormError('Unsupported web callback')
         getattr(importlib.import_module(module),name)(*args,**kwargs)
+
+    # Browser-local day/time selection is accepted only through registered choices.
+    # Continue re-renders fresh availability before revealing the contact form.
+    if trigger.get('key') in {'booking_continue','booking_month_previous','booking_month_next'} and '_booking_local_date' in ctx.state:
+        ctx.state['booking_date'] = ctx.state['_booking_local_date']
+        ctx.state['booking_time'] = ctx.state.get('_booking_local_time')
