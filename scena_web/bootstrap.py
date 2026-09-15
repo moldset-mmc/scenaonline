@@ -73,6 +73,8 @@ def initialize():
                     db.execute('INSERT OR REPLACE INTO app_meta(key,value) VALUES (?,?)',(receipt_key,json.dumps(report)))
                 REPORT.update(report)
                 REPORT['checks_scope']='verified_this_process'
+        from .domain_migration import migrate_public_origin
+        REPORT['seo_domain_migration']=migrate_public_origin(database, os.environ)
         REPORT['startup_seconds']=round(time.monotonic()-started,3)
         os.environ['SCENA_HEALTH_REPORT']=json.dumps(REPORT)
         _ready=True
