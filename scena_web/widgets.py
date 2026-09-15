@@ -299,7 +299,9 @@ class WebUI:
         from .media import display_image
         source = display_image(image)
         max_width = f'max-width:{int(width)}px;' if isinstance(width, (int,float)) else ''
-        current.get().add(f'<figure class="scena-image" style="{max_width}"><img src="{escape(source)}" alt="{escape(caption or "Фотография")}" loading="lazy" decoding="async">' + (f'<figcaption>{escape(caption)}</figcaption>' if caption else '') + '</figure>')
+        from scena_i18n import tr
+        alternative = caption or tr(self.session_state.get('scena_ui_locale', 'ru'), 'Фотография', 'Fotografie', 'Photo')
+        current.get().add(f'<figure class="scena-image" style="{max_width}"><img src="{escape(source)}" alt="{escape(alternative)}" loading="lazy" decoding="async">' + (f'<figcaption>{escape(caption)}</figcaption>' if caption else '') + '</figure>')
 
     def iframe(self, src, height=600, width='stretch', **_):
         # Existing scene/portfolio scripts remain isolated; no framework runtime.
@@ -319,8 +321,10 @@ class WebUI:
             '</tr></thead><tbody>' + ''.join('<tr>'+''.join('<td>'+escape(row.get(k,''))+'</td>' for k in names)+'</tr>' for row in rows) + '</tbody></table></div>')
 
     def chat_input(self, placeholder='Сообщение', key=None, max_chars=4000, **_):
-        value = self.text_input(placeholder, key=key, max_chars=max_chars)
-        if self.button('Отправить', key=str(key)+'_send'):
+        from scena_i18n import translate_literaltext
+        locale = self.session_state.get('scena_ui_locale', 'ru')
+        value = self.text_input(translate_literaltext(locale, placeholder) if placeholder == 'Сообщение' else placeholder, key=key, max_chars=max_chars)
+        if self.button(translate_literaltext(locale, 'Отправить'), key=str(key)+'_send'):
             self.session_state.pop(key, None)
             return value
         return None

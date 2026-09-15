@@ -8,9 +8,22 @@ import re
 import shutil
 import sys
 import tempfile
-from urllib.parse import urlencode
+from urllib.parse import urlencode, parse_qs, urlsplit
+from html.parser import HTMLParser
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+
+class QRLinks(HTMLParser):
+    def __init__(self, document):
+        super().__init__(convert_charrefs=True)
+        self.urls = []
+        self.feed(document)
+
+    def handle_starttag(self, tag, attrs):
+        values = dict(attrs)
+        if tag == 'a' and 'data-qr-link' in values:
+            self.urls.append(values.get('href', ''))
 
 
 async def main():
@@ -88,7 +101,9 @@ async def main():
             assert after['model_intro_image']==before['model_intro_image']
             assert after['model_intro_title_ru']==before['model_intro_title_ru']
             public = await request('/?page=model&lang=ru', owner=False)
-            assert 'page=booking&amp;amp;lang=ru' in public.body.decode()
+            qr_links = QRLinks(public.body.decode()).urls
+            assert any(parse_qs(urlsplit(url).query) == {'page':['booking'], 'lang':['ru']}
+                       for url in qr_links), qr_links
             capture('saved-ru', result)
             second = await request(editor, payload(result, 'Сохранить QR-код', {'Куда ведёт QR-код':'professional'}))
             assert second.code==200 and get_settings(fixture/'test.db')['model_intro_qr_destination']=='professional'

@@ -86,7 +86,7 @@ MEDIA_DIR.mkdir(exist_ok=True)
 Image.MAX_IMAGE_PIXELS = 30_000_000
 
 
-from scena_i18n import tr, localized_name, content_text, translate_literaltext, normalize_locale
+from scena_i18n import tr, localized_name, content_text, translate_literaltext, normalize_locale, language_query
 
 def ui(value: str) -> str:
     """Translate platform copy only; never user content or storage keys."""
@@ -851,21 +851,12 @@ def render_header(page: str, locale: str, *, admin: bool = False) -> None:
                     width="stretch",
                 )
         if selected_locale and selected_locale != locale:
-            set_admin_route(selected_locale, section, view)
+            st.query_params.from_dict(language_query(st.query_params, selected_locale, page="admin"))
             st.rerun()
         return
-    retained = {}
-    if page == "post":
-        retained['post'] = st.query_params.get('post', '')
-    elif page == "posts":
-        retained['destination'] = st.query_params.get('destination', 'scene')
-    elif page == "portfolio":
-        retained['view'] = st.query_params.get('view', 'professional')
-    elif page in {"booking", "course"}:
-        retained['service'] = st.query_params.get('service', '')
-    ru_url = page_url(page, "ru", **retained)
-    ro_url = page_url(page, "ro", **retained)
-    en_url = page_url(page, "en", **retained)
+    ru_url = "?" + urlencode(language_query(st.query_params, "ru", page=page))
+    ro_url = "?" + urlencode(language_query(st.query_params, "ro", page=page))
+    en_url = "?" + urlencode(language_query(st.query_params, "en", page=page))
     mode = tr(locale, "Моя Сцена", "Scena mea")
     st.markdown(
         f"""
@@ -1159,8 +1150,11 @@ def render_professional(settings: dict[str, str], locale: str) -> None:
             detail = format_price(service, settings["currency"], locale)
             if service["kind"] == "appointment":
                 detail += f" · {service['duration']} {tr(locale, 'мин.', 'min.')}"
+            service_copy = service_description(service, locale)
             rows.append(
-                f'<a class="scena-public-service" href="{target}" target="_self"><strong>{clean(service_name(service, locale))}</strong><span>{clean(detail)} →</span></a>'
+                f'<a class="scena-public-service" href="{target}" target="_self"><span><strong>{clean(service_name(service, locale))}</strong>'
+                + (f'<small class="scena-service-description">{clean(service_copy)}</small>' if service_copy else '')
+                + f'</span><span>{clean(detail)} →</span></a>'
             )
         service_html.append(
             f'<div class="scena-public-group"><h3>{clean(group_name)}</h3><p>{clean(group_description)}</p>{"".join(rows)}</div>'
@@ -1170,7 +1164,7 @@ def render_professional(settings: dict[str, str], locale: str) -> None:
     )
     portrait_uri = image_uri(APP_DIR, portrait_value)
     portrait_html = (
-        f'<img src="{clean(portrait_uri)}" alt="{clean(tr(locale, "Профессиональный beauty-портрет Марии", "Portret beauty profesional al Mariei"))}">'
+        f'<img src="{clean(portrait_uri)}" alt="{clean(localized_name(settings, locale))}">'
         if portrait_uri else ""
     )
     empty_html = ""
@@ -1183,12 +1177,14 @@ def render_professional(settings: dict[str, str], locale: str) -> None:
         f'<div class="scena-professional-kicker">SCENA · {clean(localized_name(settings, locale))}</div>'
         f'<h1 class="scena-professional-title">{clean(title)}</h1>'
         f'<p class="scena-professional-lead">{clean(description)}</p>'
+        f'<p class="scena-professional-location">{clean(content_text(settings, "location", locale))}</p>'
         f'<a class="scena-booking-entry" href="{page_url("booking", locale)}" target="_self">'
         f'{clean(tr(locale, "Выбрать услугу и время", "Alege serviciul și ora"))}</a>'
         f'{"".join(service_html)}{empty_html}'
         '</div></section>'
     )
     st.markdown(professional_markup, unsafe_allow_html=True)
+    contact_buttons(settings)
     st.markdown(
         f'<div class="scena-cta-row"><a class="scena-cta" href="{page_url("portfolio", locale, view="professional")}" target="_self">{clean(tr(locale, "Открыть портфолио", "Deschide portofoliul"))}</a></div>',
         unsafe_allow_html=True,
@@ -1206,6 +1202,12 @@ def render_model(settings: dict[str, str], locale: str) -> None:
         return
     slides = model_slides_from_settings(settings, APP_DIR)
     if model_intro_from_settings(settings, APP_DIR) or (settings.get("model_slider_enabled", "1") == "1" and slides):
+        if os.environ.get('SCENA_NATIVE_WEB') == '1':
+            from scena_web.context import current
+            # Publish the visible landing as the actual HTML document, so its
+            # identity, introduction and links are available without an iframe.
+            current.get().document = build_model_landing_html(settings, locale, APP_DIR, standalone=True)
+            return
         st.markdown(
             """
             <style>
@@ -1224,8 +1226,8 @@ def render_model(settings: dict[str, str], locale: str) -> None:
         )
         return
     render_header("model", locale)
-    title = settings.get("model_title", "") if locale == "ru" else settings.get("model_title_ro", "")
-    description = settings.get("model_desc", "") if locale == "ru" else settings.get("model_desc_ro", "")
+    title = content_text(settings, "model_title", locale)
+    description = content_text(settings, "model_desc", locale)
     st.markdown("<div class='scena-eyebrow'>Model</div>", unsafe_allow_html=True)
     st.title(title)
     st.markdown(f"<div class='scena-lead'>{clean(description)}</div>", unsafe_allow_html=True)
@@ -1468,13 +1470,13 @@ def render_focused_request(row, locale) -> None:
                 if value:
                     st.text(ui(label)+': '+value)
             if row['request_type'] == 'service_request':
-                st.caption('Telegram: '+{'sent':'отправлено','queued':'ожидает отправки','retry':'нужна повторная отправка','sending':'отправляется','skipped':'заявка до подключения уведомлений'}.get(row['telegram_status'],'ожидает отправки'))
-                if row.get('telegram_message_id') and st.button('Обновить карточку в Telegram', key='service_tg_refresh_'+str(row['id'])):
-                    from scena_shop_telegram import refresh_lead, ConnectionError
+                st.caption('Telegram: '+ui({'sent':'отправлено','queued':'ожидает отправки','retry':'нужна повторная отправка','sending':'отправляется','skipped':'заявка до подключения уведомлений'}.get(row['telegram_status'],'ожидает отправки')))
+                if row.get('telegram_message_id') and st.button(ui('Обновить карточку в Telegram'), key='service_tg_refresh_'+str(row['id'])):
+                    from scena_shop_telegram import refresh_lead, ConnectionError, connection_error_text
                     try:
                         refresh_lead(DB_PATH, 'service', row['id'])
                     except ConnectionError as error:
-                        st.warning(str(error))
+                        st.warning(connection_error_text(error, locale))
                     else:
                         rerun_admin_with_success('Карточка в Telegram обновлена.')
                 if row['telegram_status'] in ('queued','retry') and st.button(ui('Повторить отправку заявки в Telegram'), key='service_telegram_retry_'+str(row['id'])):
@@ -1521,14 +1523,14 @@ def render_crm() -> None:
                 st.caption(ui('Канал ответа')+': '+CHANNEL_LABELS.get(locale,CHANNEL_LABELS['ru']).get(row['contact_channel'],row['contact_channel']))
                 if (contact := reply_link(row)) and row['contact_channel'] != 'phone':
                     st.link_button(reply_label(row,locale), contact)
-                st.caption('Telegram: '+{'sent':'отправлено','queued':'ожидает отправки','retry':'нужна повторная отправка','sending':'отправляется','skipped':'заявка до подключения уведомлений'}.get(row['telegram_status'],'ожидает отправки'))
-                if row.get('telegram_message_id') and st.button('Обновить карточку в Telegram', key='service_tg_refresh_'+str(row['id'])):
-                    from scena_shop_telegram import refresh_lead, ConnectionError
+                st.caption('Telegram: '+ui({'sent':'отправлено','queued':'ожидает отправки','retry':'нужна повторная отправка','sending':'отправляется','skipped':'заявка до подключения уведомлений'}.get(row['telegram_status'],'ожидает отправки')))
+                if row.get('telegram_message_id') and st.button(ui('Обновить карточку в Telegram'), key='service_tg_refresh_'+str(row['id'])):
+                    from scena_shop_telegram import refresh_lead, ConnectionError, connection_error_text
                     try:
                         refresh_lead(DB_PATH, 'service', row['id'])
-                        st.success('Карточка в Telegram обновлена.')
+                        st.success(ui('Карточка в Telegram обновлена.'))
                     except ConnectionError as error:
-                        st.warning(str(error))
+                        st.warning(connection_error_text(error, locale))
                 if row['telegram_status'] in ('queued','retry') and st.button(ui('Повторить отправку заявки в Telegram'), key='service_telegram_retry_'+str(row['id'])):
                     result = dispatch_service(DB_PATH,request_id=row['id'])
                     if result == 'sent':
@@ -1742,7 +1744,9 @@ def render_scene_admin(settings: dict[str, str]) -> None:
         cta_ru, cta_ro, cta_en = (language_values['cta_'+lang] for lang in ('ru','ro','en'))
         slug = settings['profile_slug']
         with st.expander(ui('Контакты и ссылки')):
-            location = st.text_input(ui('Город'), value=settings['location'])
+            location = st.text_input(ui('Город'), value=content_text(settings, 'location', 'ru'))
+            location_ro = st.text_input('Oraș · RO', value=content_text(settings, 'location', 'ro'))
+            location_en = st.text_input('City · EN', value=content_text(settings, 'location', 'en'))
             instagram = st.text_input('Instagram', value=settings['instagram_url'])
             telegram = st.text_input('Telegram', value=settings['telegram_url'])
         with st.expander(ui('Что показывать')):
@@ -1767,6 +1771,7 @@ def render_scene_admin(settings: dict[str, str]) -> None:
         else:
             save_settings(DB_PATH, {
                 "master_name": name, "master_name_ru": name, "master_name_ro": name_ro, "master_name_en": name_en, "profile_slug": slug, "location": location,
+                "location_ru": location, "location_ro": location_ro, "location_en": location_en,
                 "instagram_url": instagram, "telegram_url": telegram,
                 "profile_published": "1" if profile_published else "0",
                 "profile_indexed": "1" if profile_indexed else "0",
@@ -3051,6 +3056,7 @@ ADMIN_VIEWS = {
         "schedule": "График",
     },
     "promotion": {
+        "search": "Поиск и индексация",
         "posts": "Публикации",
         "qr": "QR-коды",
         "prompts": "Промпты",
@@ -3063,6 +3069,7 @@ ADMIN_VIEWS = {
 }
 
 ADMIN_VIEW_COPY = {
+    ("promotion", "search"): ("Поиск и индексация", ""),
     ("photos", "library"): ("Фото", "Все фотографии и места их использования."),
     ("work", "overview"): ("Ваша работа сегодня", "Записи, услуги и заказы — начните с важного."),
     ("pro", "subscription"): ("SCENA PRO", "Ваш образ, ваш магазин, ваши возможности."),
@@ -3206,7 +3213,8 @@ def render_admin(settings: dict[str, str], locale: str) -> None:
         with st.container(key='scena_request_shell'):
             destination = page_url('admin',locale,section='work',view='requests') if service_focus else page_url('admin',locale,section='pages',view='shop',orders='1')
             back = tr(locale,'Все заявки','Toate cererile','All requests') if service_focus else tr(locale,'Все заказы','Toate comenzile','All orders')
-            st.markdown('<nav class="scena-request-nav"><a data-cabinet-nav href="'+clean(destination)+'">← '+clean(back)+'</a><span>SCENA</span></nav>',unsafe_allow_html=True)
+            from scena_mobile_ui import language_links
+            st.markdown('<nav class="scena-request-nav"><a data-cabinet-nav href="'+clean(destination)+'">← '+clean(back)+'</a><span class="scena-cabinet-languages" aria-label="'+clean(tr(locale, 'Язык', 'Limbă', 'Language'))+'">'+language_links(locale, st.query_params)+'</span></nav>',unsafe_allow_html=True)
             notice = st.session_state.pop('scena_admin_notice',None)
             if notice:
                 kind, message = notice
@@ -3289,6 +3297,9 @@ def render_admin(settings: dict[str, str], locale: str) -> None:
         render_posts_admin()
     elif section == "promotion" and view == "qr":
         render_qr_admin(settings)
+    elif section == "promotion" and view == "search":
+        from scena_seo_ui import render_search_settings
+        render_search_settings(DB_PATH, settings, locale)
     elif section == "settings" and view == "sms":
         render_sms_admin()
     elif section == "settings" and view == "backup":
@@ -3324,6 +3335,9 @@ def run() -> None:
     settings = get_settings(DB_PATH)
     locale = detected_locale(settings)
     st.session_state["scena_ui_locale"] = locale
+    if os.environ.get('SCENA_NATIVE_WEB') == '1':
+        from scena_web.context import current
+        current.get().seo_settings = settings
     from scena_workspace_ui import apply_workspace_styles
     apply_workspace_styles(APP_DIR, settings)
     page = str(st.query_params.get("page", "scene"))
@@ -3334,7 +3348,10 @@ def run() -> None:
         "course", "join-model", "invite-model", "admin", "post", "posts", "shop",
     }
     if page not in allowed_pages:
-        page = "scene"
+        render_header("scene", locale)
+        st.title(tr(locale, "Страница не найдена", "Pagina nu a fost găsită", "Page not found"))
+        st.link_button(tr(locale, "Открыть Мою Сцену", "Deschide Scena mea", "Open My Scene"), page_url("scene", locale))
+        return
     if page == "admin":
         render_admin(settings, locale)
         return

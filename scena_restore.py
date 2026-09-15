@@ -17,7 +17,7 @@ APPLICATION_FILES = (
     "scena_database.py", "scena_media.py", "scena_cloud_auth.py", "scena_cloud_runtime.py",
     "scena_cloud_restore.py", "scena_ui.py",
     "scena_cloud_checks.py", "scena_service_telegram.py",
-    "scena_app.py", "scena_core.py", "scena_cabinet.py", "scena_integrations.py",
+    "scena_app.py", "scena_core.py", "scena_cabinet.py", "scena_integrations.py", "scena_seo.py", "scena_seo_ui.py",
     "scena_publications.py", "scena_publication_ui.py", "scena_social.py", "scena_social_ui.py",
     "scena_transfer.py", "scena_transfer_ui.py", "scena_restore.py", "model_landing.py",
     "start_scena.py", "scena-master-standalone.py", "START-SCENA.cmd", "RESTORE-SCENA.cmd",

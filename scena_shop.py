@@ -846,6 +846,8 @@ def _add_to_bag(st, product_id, locale):
 
 def _render_order_details(db_path, order, locale):
     from scena_ui import st
+    from scena_i18n import translate_literaltext
+    ui = lambda value: translate_literaltext(locale, value)
     st.caption(datetime.fromisoformat(order['created_at']).astimezone(ZoneInfo('Europe/Chisinau')).strftime('%d.%m.%Y · %H:%M'))
     for item in order['items']:
         st.write(f'{item[f"name_{locale}"]} · {item["quantity"]} × {money(item["unit_price_cents"])}')
@@ -872,14 +874,14 @@ def _render_order_details(db_path, order, locale):
 
 
     with st.expander({'ru':'Дополнительно','ro':'Detalii suplimentare','en':'More details'}[locale]):
-        st.caption('Telegram: ' + {'sent':'отправлено', 'queued':'ожидает отправки', 'retry':'нужна повторная отправка', 'sending':'отправляется', 'skipped':'заказ до подключения уведомлений'}.get(order.get('telegram_status'), 'ожидает отправки'))
-        if order.get('telegram_message_id') and st.button('Обновить карточку в Telegram', key='shop_tg_refresh_'+order['id']):
-            from scena_shop_telegram import refresh_lead, ConnectionError
+        st.caption('Telegram: ' + ui({'sent':'отправлено', 'queued':'ожидает отправки', 'retry':'нужна повторная отправка', 'sending':'отправляется', 'skipped':'заказ до подключения уведомлений'}.get(order.get('telegram_status'), 'ожидает отправки')))
+        if order.get('telegram_message_id') and st.button(ui('Обновить карточку в Telegram'), key='shop_tg_refresh_'+order['id']):
+            from scena_shop_telegram import refresh_lead, ConnectionError, connection_error_text
             try:
                 refresh_lead(db_path, 'order', order['id'])
-                st.success('Карточка в Telegram обновлена.')
+                st.success(ui('Карточка в Telegram обновлена.'))
             except ConnectionError as error:
-                st.warning(str(error))
+                st.warning(connection_error_text(error, locale))
 
 def render_shop_orders(db_path, locale, selected_order=''):
     from scena_ui import st

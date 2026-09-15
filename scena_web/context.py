@@ -74,6 +74,9 @@ class RenderContext:
     styles: list = field(default_factory=list)
     stack: list = field(default_factory=list)
     manifest: dict | None = None
+    document: str | None = None
+    seo_settings: dict | None = None
+    seo: dict | None = None
 
     def reset(self):
         self.root = Node(attributes={'class': 'stVerticalBlock', 'data-testid': 'stVerticalBlock'})
@@ -81,6 +84,8 @@ class RenderContext:
         self.widgets = {}
         self.counts = {}
         self.styles = []
+        self.document = None
+        self.seo = None
 
     @property
     def group(self):

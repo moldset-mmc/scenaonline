@@ -41,6 +41,29 @@ def normalize_locale(locale: object, fallback: str = "ru") -> str:
     return candidate if candidate in LOCALES else (fallback if fallback in LOCALES else "ru")
 
 
+
+def language_query(query: Mapping[str, object], locale: str, *, page: str | None = None) -> dict[str, str]:
+    """Keep the current view/object when changing language, never auth/form data.
+
+    The allow-list is intentionally route-specific: no token, redirect, password,
+    arbitrary tracking parameter or transient POST state belongs in a language URL.
+    """
+    current_page = page or str(query.get("page") or "scene")
+    keys = {
+        "admin": ("section", "view", "request", "order", "orders", "photo", "target", "mode", "filter"),
+        "post": ("post",),
+        "posts": ("destination",),
+        "portfolio": ("view",),
+        "booking": ("service",),
+        "course": ("service",),
+    }.get(current_page, ())
+    result = {"page": current_page, "lang": normalize_locale(locale)}
+    for key in keys:
+        value = query.get(key)
+        if value not in (None, ""):
+            result[key] = str(value)
+    return result
+
 def localized_name(settings: Mapping[str, object], locale: str = "ru") -> str:
     """Use the owner's chosen spelling; never transliterate custom identities."""
     lang = normalize_locale(locale)
@@ -2090,3 +2113,80 @@ _load_rows(r'''
 Не удалось сохранить визитку. Повторите попытку.|Prezentarea nu a fost salvată. Încercați din nou.|Could not save the introduction. Try again.
 Визитка сохранена.|Prezentarea a fost salvată.|Introduction saved.
 ''')
+
+# Confirmed gaps from the complete native RU/RO/EN route inventory.
+_load_rows(r'''
+Как настроить страницу|Cum configurezi pagina|How to set up the page
+Контакты и ссылки|Contacte și linkuri|Contacts and links
+Сценарий, оформление и история Model|Scenariu, design și istoric Model|Model scenario, design and history
+Канал ответа|Canal de răspuns|Reply channel
+Повторить отправку заявки в Telegram|Retrimite cererea în Telegram|Retry sending the request to Telegram
+Уведомление пока не отправлено. Проверьте подключение Telegram в Market → Витрина и повторите позже.|Notificarea nu a fost trimisă încă. Verificați conexiunea Telegram în Market → Vitrină și încercați mai târziu.|The notification has not been sent yet. Check the Telegram connection in Market → Storefront and try again later.
+Позвонить|Sună|Call
++ Новая публикация|+ Publicație nouă|+ New post
+Отправить|Trimite|Send
+Сообщение|Mesaj|Message
+''')
+
+_load_rows(r'''
+Подключите личный Telegram, указанный в «Моя сцена», чтобы получать заказы из маркета.|Conectați contul personal Telegram indicat în „Scena mea” pentru a primi comenzile din Market.|Connect the personal Telegram account listed in My Scene to receive Market orders.
+Если бот уже создан, используйте его токен из @BotFather. Новый бот нужен только при отсутствии собственного бота. Токен вставьте только сюда.|Dacă aveți deja un bot, folosiți tokenul său din @BotFather. Creați un bot nou doar dacă nu aveți unul. Introduceți tokenul numai aici.|If you already have a bot, use its token from @BotFather. Create a new bot only if you do not have one. Enter the token only here.
+Токен бота из @BotFather|Tokenul botului din @BotFather|Bot token from @BotFather
+Получить код подключения|Obține codul de conectare|Get connection code
+Заявки и заказы отправляются в Telegram @|Cererile și comenzile sunt trimise în Telegram @|Bookings and orders are sent to Telegram @
+В лидах: переход к заявке или заказу и меню «Сменить статус». Номер телефона указан в тексте.|Mesajele includ linkul către cerere sau comandă și meniul „Schimbă starea”. Numărul de telefon este inclus în text.|Lead messages include a link to the request or order and a Change status menu. The phone number appears in the text.
+Для старых сообщений нажмите «Обновить карточку в Telegram» в нужной заявке или заказе.|Pentru mesajele vechi, apăsați „Actualizează fișa în Telegram” în cererea sau comanda respectivă.|For older messages, select Refresh card in Telegram in the relevant request or order.
+Включить кнопки в Telegram|Activează butoanele în Telegram|Enable Telegram buttons
+Открыть @|Deschide @|Open @
+Отправьте из @|Trimiteți din @|From @
+ это сообщение боту:| acest mesaj botului:|, send this message to the bot:
+Код действует 10 минут. Отправьте его своему боту, затем нажмите кнопку ниже.|Codul este valabil 10 minute. Trimiteți-l botului dvs., apoi apăsați butonul de mai jos.|The code is valid for 10 minutes. Send it to your bot, then press the button below.
+Код отправлен — подключить Telegram|Cod trimis — conectează Telegram|Code sent — connect Telegram
+Получить новый код без повторного ввода токена|Obține un cod nou fără a reintroduce tokenul|Get a new code without entering the token again
+Повторить отправку ожидающего заказа|Retrimite comanda în așteptare|Retry sending the pending order
+Уведомление отправлено.|Notificarea a fost trimisă.|Notification sent.
+Нет заказов, готовых к повторной отправке.|Nu există comenzi pregătite pentru retrimitere.|There are no orders ready to resend.
+Telegram пока недоступен. Заказ остаётся в очереди.|Telegram nu este disponibil momentan. Comanda rămâne în coadă.|Telegram is temporarily unavailable. The order remains queued.
+Для подключения Telegram нужен ключ защищённого хранилища сайта.|Pentru conectarea Telegram este necesară cheia stocării securizate a site-ului.|Connecting Telegram requires the site's secure storage key.
+Подключите Telegram снова: сохранённое подключение недоступно.|Reconectați Telegram: conexiunea salvată nu este disponibilă.|Reconnect Telegram: the saved connection is unavailable.
+Подключение изменилось. Обновите страницу и повторите включение кнопок.|Conexiunea s-a modificat. Reîncărcați pagina și activați din nou butoanele.|The connection has changed. Reload the page and enable the buttons again.
+Сначала подтвердите подключение личного Telegram.|Mai întâi confirmați conectarea contului personal Telegram.|First confirm your personal Telegram connection.
+Для кнопок нужен опубликованный сайт SCENA с HTTPS.|Butoanele necesită un site SCENA publicat cu HTTPS.|The buttons require a published SCENA website with HTTPS.
+Этот бот подключён к другому сервису. Используйте отдельного бота для SCENA.|Acest bot este conectat la alt serviciu. Folosiți un bot separat pentru SCENA.|This bot is connected to another service. Use a separate bot for SCENA.
+Не удалось включить кнопки Telegram. Заказы сохранены; повторите включение.|Butoanele Telegram nu au fost activate. Comenzile sunt salvate; încercați din nou.|Could not enable the Telegram buttons. Orders are saved; try enabling them again.
+Сначала укажите ваш личный Telegram в «Моя сцена», например @username.|Mai întâi indicați contul personal Telegram în „Scena mea”, de exemplu @username.|First enter your personal Telegram in My Scene, for example @username.
+Вставьте полный токен вашего бота из @BotFather.|Introduceți tokenul complet al botului dvs. din @BotFather.|Enter the complete bot token from @BotFather.
+Не удалось проверить бота. Проверьте токен и повторите попытку.|Botul nu a putut fi verificat. Verificați tokenul și încercați din nou.|Could not verify the bot. Check the token and try again.
+Код действует 10 минут. Создайте новый код подключения.|Codul este valabil 10 minute. Generați un cod de conectare nou.|The code is valid for 10 minutes. Generate a new connection code.
+Telegram в профиле изменился. Создайте новый код подключения.|Contul Telegram din profil s-a modificat. Generați un cod de conectare nou.|The profile's Telegram account has changed. Generate a new connection code.
+Не удалось прочитать код. Повторите попытку; используйте отдельного бота SCENA без другого сервиса.|Codul nu a putut fi citit. Încercați din nou; folosiți un bot SCENA separat, neconectat la alt serviciu.|Could not read the code. Try again with a dedicated SCENA bot that is not connected to another service.
+Свежий код не найден в личном чате @|Codul nou nu a fost găsit în conversația privată @|No current code was found in the private chat @
+. Отправьте код указанному боту и нажмите ещё раз.|. Trimiteți codul botului indicat și apăsați din nou.|. Send the code to the specified bot and press again.
+Telegram в профиле изменился. Подключите бота для нового аккаунта.|Contul Telegram din profil s-a modificat. Conectați botul pentru noul cont.|The profile's Telegram account has changed. Connect the bot to the new account.
+Сначала подключите Telegram владельца.|Mai întâi conectați Telegram-ul proprietarului.|First connect the owner's Telegram account.
+У этой заявки пока нет отправленной карточки.|Această cerere nu are încă o fișă trimisă.|This request does not have a sent card yet.
+Не удалось подтвердить обновление. Проверьте карточку в Telegram.|Actualizarea nu a putut fi confirmată. Verificați fișa în Telegram.|Could not confirm the update. Check the card in Telegram.
+''')
+
+register_copy("Поиск и индексация", "Căutare și indexare", "Search and indexing")
+
+_load_rows(r'''
+отправлено|trimis|sent
+ожидает отправки|în așteptare|queued
+нужна повторная отправка|retrimiteți|retry needed
+отправляется|se trimite|sending
+заявка до подключения уведомлений|cerere creată înainte de conectarea notificărilor|request created before notifications were connected
+заказ до подключения уведомлений|comandă creată înainte de conectarea notificărilor|order created before notifications were connected
+Обновить карточку в Telegram|Actualizează fișa în Telegram|Refresh card in Telegram
+Карточка в Telegram обновлена.|Fișa din Telegram a fost actualizată.|The Telegram card has been updated.
+Уведомление отправлено в Telegram.|Notificarea a fost trimisă în Telegram.|The notification was sent to Telegram.
+Вход в кабинет|Acces în cabinet|Workspace sign-in
+Ваши страницы, записи и настройки.|Paginile, programările și setările dvs.|Your pages, bookings and settings.
+Открыть мою Сцену|Deschide Scena mea|Open My Scene
+Обновите страницу входа и повторите попытку.|Reîncărcați pagina de autentificare și încercați din nou.|Reload the sign-in page and try again.
+Подождите одну минуту перед следующей попыткой.|Așteptați un minut înainte de a încerca din nou.|Wait one minute before trying again.
+Неверный пароль.|Parolă incorectă.|Incorrect password.
+Версия доступа изменилась. Откройте актуальный адрес вашей Сцены.|Datele de acces s-au modificat. Deschideți adresa actuală a Scenei dvs.|Access has changed. Open your Scene's current address.
+''')
+
+register_copy("Создано: ", "Creată: ", "Created: ")

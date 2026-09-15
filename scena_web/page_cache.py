@@ -4,6 +4,7 @@ Never caches forms, owner views or error responses. Database triggers advance
 one revision in the same transaction as an edit; a concurrent stale render
 cannot be inserted under the new revision. Expiry also covers time-based content.
 """
+from contextlib import closing
 import hashlib
 import os
 import time
@@ -30,19 +31,19 @@ def initialize(db):
             END''')
 
 
-def key(query, browser_locale="ru"):
+def key(query, browser_locale="ru", host=""):
     # Bound the key space; parameters with a functional effect are retained.
     if set(query) - {'page', 'lang', 'post', 'destination'}:
         return None
     if query.get('page', 'scene') not in {'scene', 'portfolio', 'professional', 'model', 'posts', 'post', 'shop'}:
         return None
     language_variant = next((v for v in ('ru', 'ro', 'en') if browser_locale.lower().startswith(v)), 'default') if query.get('lang') not in {'ru', 'ro', 'en'} else ''
-    source = os.environ.get('VERCEL_GIT_COMMIT_SHA', 'local') + '|' + language_variant + '|' + urlencode(sorted(query.items()))
+    source = 'seo-v1|' + str(host).lower() + '|' + os.environ.get('VERCEL_GIT_COMMIT_SHA', 'local') + '|' + language_variant + '|' + urlencode(sorted(query.items()))
     return hashlib.sha256(source.encode()).hexdigest()
 
 
 def lookup(cache_key):
-    with connect(os.environ['SCENA_DB_PATH']) as db:
+    with closing(connect(os.environ['SCENA_DB_PATH'], isolation_level=None)) as db:
         row = db.execute('''SELECT r.version,p.document,p.url FROM scena_web_page_revision r
             LEFT JOIN scena_web_pages p ON p.key=? AND p.version=r.version AND p.expires>?
             WHERE r.id=1''', (cache_key, time.time())).fetchone()
@@ -50,9 +51,11 @@ def lookup(cache_key):
 
 
 def save(cache_key, version, document, url):
-    with connect(os.environ['SCENA_DB_PATH']) as db:
-        db.execute('DELETE FROM scena_web_pages WHERE expires<=?', (time.time(),))
+    with closing(connect(os.environ['SCENA_DB_PATH'], isolation_level=None)) as db:
         # INSERT ... SELECT guards against edits during the render, across replicas.
         db.execute('''INSERT OR REPLACE INTO scena_web_pages(key,version,document,url,expires)
             SELECT ?,version,?,?,? FROM scena_web_page_revision WHERE id=1 AND version=?''',
             (cache_key, document, url, time.time() + TTL, version))
+        # Cleanup is independent of the atomic cache insert; no transaction
+        # remains open while another request/round trip is in progress.
+        db.execute('DELETE FROM scena_web_pages WHERE expires<=?', (time.time(),))

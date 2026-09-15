@@ -189,7 +189,10 @@ def save_form(browser_id, state, query, widgets):
     token = secrets.token_urlsafe(32)
     body = json.dumps(pack({'state':state, 'query':dict(query), 'widgets':widgets}, browser_id), ensure_ascii=False, separators=(',',':')).encode()
     encrypted = cipher().encrypt(body).decode()
-    with connection() as db:
+    # A rendered form is one independent insert, not an interactive transaction.
+    # Remote libSQL may expire a stream before a separate COMMIT can arrive.
+    from contextlib import closing
+    with closing(connect(os.environ['SCENA_DB_PATH'], isolation_level=None)) as db:
         db.execute('INSERT INTO scena_web_forms(token,browser_id,payload,expires) VALUES (?,?,?,?)',
                    (token,browser_id,encrypted,time.time()+TTL))
     return token

@@ -451,29 +451,44 @@ duplicate message on retry; the stable order reference identifies the same lead.
         return 'retry'
 
 
+def connection_error_text(error, locale):
+    """Translate known connection errors while preserving the owner's username."""
+    from scena_i18n import translate_literaltext
+    message = str(error)
+    prefix = 'Свежий код не найден в личном чате @'
+    suffix = '. Отправьте код указанному боту и нажмите ещё раз.'
+    if message.startswith(prefix) and message.endswith(suffix):
+        username = message[len(prefix):-len(suffix)]
+        if re.fullmatch(r'[A-Za-z0-9_]{5,32}', username):
+            return translate_literaltext(locale, prefix) + username + translate_literaltext(locale, suffix)
+    return translate_literaltext(locale, message)
+
+
 def render_settings(db, locale):
     from scena_ui import st
+    from scena_i18n import translate_literaltext
+    ui = lambda text: translate_literaltext(locale, text)
     st.subheader('Telegram · '+{'ru':'заявки и заказы','ro':'cereri și comenzi','en':'bookings and orders'}[locale])
     try:
         try:
             status = connection_status(db)
         except ConnectionError as error:
-            st.warning(str(error))
+            st.warning(connection_error_text(error, locale))
             status = {'connected':False,'pending':{}}
         if status['connected']:
-            st.success('Заявки и заказы отправляются в Telegram @'+status['username'])
+            st.success(ui('Заявки и заказы отправляются в Telegram @')+status['username'])
             if status.get('actions_ready'):
-                st.caption('В лидах: переход к заявке или заказу и меню «Сменить статус». Номер телефона указан в тексте.')
-                st.caption('Для старых сообщений нажмите «Обновить карточку в Telegram» в нужной заявке или заказе.')
-            elif os.environ.get('SCENA_NATIVE_WEB') == '1' and st.button('Включить кнопки в Telegram'):
+                st.caption(ui('В лидах: переход к заявке или заказу и меню «Сменить статус». Номер телефона указан в тексте.'))
+                st.caption(ui('Для старых сообщений нажмите «Обновить карточку в Telegram» в нужной заявке или заказе.'))
+            elif os.environ.get('SCENA_NATIVE_WEB') == '1' and st.button(ui('Включить кнопки в Telegram')):
                 enable_actions(db)
                 st.rerun()
         else:
-            st.info('Подключите личный Telegram, указанный в «Моя сцена», чтобы получать заказы из маркета.')
-        st.caption('Если бот уже создан, используйте его токен из @BotFather. Новый бот нужен только при отсутствии собственного бота. Токен вставьте только сюда.')
+            st.info(ui('Подключите личный Telegram, указанный в «Моя сцена», чтобы получать заказы из маркета.'))
+        st.caption(ui('Если бот уже создан, используйте его токен из @BotFather. Новый бот нужен только при отсутствии собственного бота. Токен вставьте только сюда.'))
         with st.form('shop_telegram_connect'):
-            token = st.text_input('Токен бота из @BotFather', type='password', max_chars=230)
-            if st.form_submit_button('Получить код подключения'):
+            token = st.text_input(ui('Токен бота из @BotFather'), type='password', max_chars=230)
+            if st.form_submit_button(ui('Получить код подключения')):
                 begin_connection(db, token)
                 # Do not retain a credential in the rendered form or its state.
                 if os.environ.get('SCENA_NATIVE_WEB') == '1':
@@ -485,23 +500,23 @@ def render_settings(db, locale):
                 st.rerun()
         if status['pending']:
             pending = status['pending']
-            st.link_button('Открыть @'+pending['bot'], 'https://t.me/'+pending['bot'])
-            st.write('Отправьте из @'+pending['username']+' это сообщение боту:')
+            st.link_button(ui('Открыть @')+pending['bot'], 'https://t.me/'+pending['bot'])
+            st.write(ui('Отправьте из @')+pending['username']+ui(' это сообщение боту:'))
             st.code(pending['code'])
-            st.caption('Код действует 10 минут. Отправьте его своему боту, затем нажмите кнопку ниже.')
-            if st.button('Код отправлен — подключить Telegram'):
+            st.caption(ui('Код действует 10 минут. Отправьте его своему боту, затем нажмите кнопку ниже.'))
+            if st.button(ui('Код отправлен — подключить Telegram')):
                 try:
                     confirm_connection(db)
                     if os.environ.get('SCENA_NATIVE_WEB') == '1' and public_origin(db):
                         enable_actions(db)
                     st.rerun()
                 except ConnectionError as error:
-                    st.warning(str(error))
-            if st.button('Получить новый код без повторного ввода токена'):
+                    st.warning(connection_error_text(error, locale))
+            if st.button(ui('Получить новый код без повторного ввода токена')):
                 refresh_code(db)
                 st.rerun()
-        if status['connected'] and st.button('Повторить отправку ожидающего заказа'):
+        if status['connected'] and st.button(ui('Повторить отправку ожидающего заказа')):
             result = dispatch(db)
-            st.success('Уведомление отправлено.' if result == 'sent' else 'Нет заказов, готовых к повторной отправке.') if result in ('sent','idle') else st.warning('Telegram пока недоступен. Заказ остаётся в очереди.')
+            st.success(ui('Уведомление отправлено.' if result == 'sent' else 'Нет заказов, готовых к повторной отправке.')) if result in ('sent','idle') else st.warning(ui('Telegram пока недоступен. Заказ остаётся в очереди.'))
     except ConnectionError as error:
-        st.warning(str(error))
+        st.warning(connection_error_text(error, locale))

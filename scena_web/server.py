@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import sqlite3
 import time
 from urllib.parse import urlencode, urlsplit, quote
 import tornado.web
@@ -66,11 +67,36 @@ def render_page(ctx, previous=None, values=None, files=None):
         styles='\n'.join(ctx.styles)
         body=ctx.root.render()
         page = 'admin' if ctx.query.get('admin') == '1' else ctx.query.get('page','scene')
+        from scena_seo import build_metadata, render_head, NOINDEX, public_base
+        settings = ctx.seo_settings or {}
+        locale = ctx.state.get('scena_ui_locale', ctx.query.get('lang', 'ru'))
+        def public_image(value):
+            if str(value).startswith('https://'):
+                return value
+            # Social previews must use durable public renditions, never a
+            # signed owner image or a private-original download.
+            return media.manifest().get(str(value), {}).get('public_url') or media.assets().get(str(value), '')
+        ctx.seo = build_metadata(settings, ctx.query, locale,
+                                 db_path=os.environ['SCENA_DB_PATH'], image_resolver=public_image)
+        canonical_host = urlsplit(public_base(settings)).netloc
+        preview_host = (os.environ.get('SCENA_WEB_TESTING') != '1' and canonical_host
+                        and ctx.headers.get('Host', '').lower() != canonical_host)
+        if ctx.submitted or ctx.state.get('booking_confirmation') or ctx.state.get('booking_receipt') or preview_host:
+            ctx.seo.update(robots=NOINDEX, indexable=False, alternates={}, json_ld={}, image='', description='')
+        if page == 'scene' and not ctx.submitted and not preview_host:
+            ctx.seo['verification'] = {'google-site-verification':settings.get('seo_google_verification', ''),
+                                       'msvalidate.01':settings.get('seo_bing_verification', '')}
+        seo_head = render_head(ctx.seo)
+        if ctx.document:
+            document = ctx.document.replace('<html ', '<html data-scena-runtime="native-html" ', 1)
+            document = document.replace('<body>', '<body data-scena-page="model">', 1)
+            document = document.replace('</head>', seo_head + f'\n<link rel="icon" href="{favicon}"><script>{measure}</script></head>', 1)
+            return document, ctx.url, False, round((time.monotonic()-started)*1000,1)
         # The existing scene markup supplies dimensions; the first visible image
         # is prioritized rather than competing with every below-fold photograph.
         body=re.sub(r'(<img\b[^>]*)(>)',lambda m:m[1].replace('loading="lazy"','loading="eager"')+' fetchpriority="high"'+m[2],body,count=1)
         document=f'''<!doctype html><html lang="{html.escape(ctx.state.get('scena_ui_locale',ctx.query.get('lang','ru')))}" data-scena-runtime="native-html"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>{html.escape(ctx.title)}</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">{seo_head}
 <link rel="icon" href="{favicon}"><link rel="stylesheet" href="{css}"><style>{styles}</style><link rel="stylesheet" href="{mobile_css}"><script>{measure}</script><script src="{js}" defer></script><link rel="stylesheet" href="{qr_css}"><script src="{qr_js}" defer></script></head>
 <body data-scena-page="{html.escape(str(page),quote=True)}"><div class="stApp" data-testid="stApp"><main class="stMain" data-testid="stMain"><div class="block-container stMainBlockContainer" data-testid="stMainBlockContainer">
 <form id="scena-page" method="post" action="{html.escape(ctx.url,quote=True)}" enctype="multipart/form-data" novalidate>
@@ -99,6 +125,7 @@ class Base(tornado.web.RequestHandler):
 
     def set_default_headers(self):
         self.set_header('Cache-Control','no-store')
+        self.set_header('X-Robots-Tag','noindex, nofollow')
         self.set_header('X-Content-Type-Options','nosniff')
         self.set_header('Referrer-Policy','strict-origin-when-cross-origin')
         self.set_header('X-Frame-Options','SAMEORIGIN')
@@ -115,26 +142,42 @@ class Base(tornado.web.RequestHandler):
         self.set_cookie(BROWSER_COOKIE,self.browser_id,secure=True,httponly=True,samesite='Lax',path='/',max_age=storage.TTL)
 
     def write_error(self,status_code,**kwargs):
+        from scena_i18n import tr, normalize_locale, translate_literaltext
         self.set_header('Cache-Control','no-store')
-        message=self._reason if status_code<500 else 'Не удалось открыть страницу. Повторите попытку.'
-        self.finish('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SCENA</title><main style="max-width:600px;margin:12vh auto;padding:24px;font:18px system-ui"><h1>SCENA</h1><p>'+html.escape(message)+'</p><a href="'+html.escape(self.request.uri,quote=True)+'">Открыть страницу снова</a></main></html>')
+        locale = normalize_locale(self.get_query_argument('lang', 'ru'))
+        message = translate_literaltext(locale, self._reason) if status_code < 500 else tr(locale,
+            'Не удалось открыть страницу. Повторите попытку.', 'Pagina nu a putut fi deschisă. Încercați din nou.', 'Could not open the page. Please try again.')
+        if status_code == 404:
+            message = tr(locale, 'Страница не найдена.', 'Pagina nu a fost găsită.', 'Page not found.')
+        retry = tr(locale, 'Открыть страницу снова', 'Deschide pagina din nou', 'Open the page again')
+        self.finish('<!doctype html><html lang="'+locale+'"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>SCENA</title><main style="max-width:600px;margin:12vh auto;padding:24px;font:18px system-ui"><h1>SCENA</h1><p>'+html.escape(message)+'</p><a href="'+html.escape(self.request.uri,quote=True)+'">'+retry+'</a></main></html>')
 
 
 class Page(Base):
+    async def head(self):
+        await self.get()
+
     async def get(self):
         query=Query({k:self.get_query_argument(k) for k in self.request.query_arguments})
         if (query.get('page')=='admin' or query.get('admin')=='1') and not self.owner:
             self.redirect('/auth/login?'+urlencode({'next':self.request.uri}));return
-        self.cache_key = page_cache.key(query, self.request.headers.get('Accept-Language', 'ru').split(',')[0]) if not self.owner else None
+        self.cache_key = page_cache.key(query, self.request.headers.get('Accept-Language', 'ru').split(',')[0], self.request.host) if not self.owner else None
         if self.cache_key:
             started = time.monotonic()
-            self.cache_version, saved = await asyncio.to_thread(page_cache.lookup, self.cache_key)
+            try:
+                self.cache_version, saved = await asyncio.to_thread(page_cache.lookup, self.cache_key)
+            except sqlite3.DatabaseError:
+                logging.getLogger(__name__).warning('Public page cache lookup unavailable; rendering page')
+                self.cache_key, saved = None, None
+                self.set_header('X-Scena-Page-Cache', 'BYPASS')
             if saved:
                 self.set_header('Content-Type', 'text/html; charset=utf-8')
                 self.set_header('X-Scena-Page-Cache', 'HIT')
                 self.set_header('X-Scena-Runtime', 'native-html')
                 self.set_header('Server-Timing', f'page-cache;dur={(time.monotonic()-started)*1000:.1f}')
                 self.set_header('X-Scena-URL', saved[1])
+                policy = re.search(r'<meta name="robots" content="([^"]+)"', saved[0])
+                self.set_header('X-Robots-Tag', policy[1] if policy else 'noindex, nofollow')
                 self.finish(saved[0]);return
         await self.output(RenderContext({},query,self.context_headers(),session_id=self.browser_id,private=self.owner))
 
@@ -194,12 +237,19 @@ class Page(Base):
         self.set_header('Server-Timing',f'render;dur={elapsed}')
         self.set_header('X-Scena-URL',url)
         self.set_header('X-Scena-Runtime','native-html')
+        status = ctx.seo.get('status', 200) if ctx.seo else 200
+        self.set_status(status)
+        self.set_header('X-Robots-Tag', ctx.seo['robots'] if ctx.seo else 'noindex, nofollow')
         if interactive:self.remember_browser()
         # No cookie/form token/personal state is ever stored in a shared cache.
-        if not interactive and not self.owner and self.request.method=='GET':
+        if status == 200 and not interactive and not self.owner and self.request.method=='GET':
             if getattr(self, 'cache_key', None):
-                await asyncio.to_thread(page_cache.save, self.cache_key, self.cache_version, document, url)
-                self.set_header('X-Scena-Page-Cache', 'MISS')
+                try:
+                    await asyncio.to_thread(page_cache.save, self.cache_key, self.cache_version, document, url)
+                    self.set_header('X-Scena-Page-Cache', 'MISS')
+                except sqlite3.DatabaseError:
+                    logging.getLogger(__name__).warning('Public page cache save unavailable; returning rendered page')
+                    self.set_header('X-Scena-Page-Cache', 'BYPASS')
             # Shared DB snapshots are immediately invalidated by content edits.
             # Do not layer an independently stale CDN HTML cache above them.
         self.finish(document)
@@ -281,6 +331,27 @@ class NativeLogin(Base,Login):pass
 class NativeLogout(Base,Logout):pass
 
 
+class SearchDocument(Base):
+    async def head(self, name):
+        await self.get(name)
+
+    async def get(self, name):
+        from scena_core import get_settings
+        from scena_seo import robots_txt, sitemap_xml, llms_txt
+        def document():
+            settings = get_settings(os.environ['SCENA_DB_PATH'])
+            if name == 'robots.txt':
+                return robots_txt(settings)
+            return (sitemap_xml if name == 'sitemap.xml' else llms_txt)(settings, db_path=os.environ['SCENA_DB_PATH'])
+        self.set_header('Content-Type', 'application/xml; charset=utf-8' if name == 'sitemap.xml' else 'text/plain; charset=utf-8')
+        self.finish(await asyncio.to_thread(document))
+
+
+class NotFound(Base):
+    def prepare(self):
+        raise tornado.web.HTTPError(404)
+
+
 class Health(Base):
     def get(self):self.write(bootstrap.REPORT)
 
@@ -308,10 +379,12 @@ def application():
     return tornado.web.Application([
         (r'/healthz',Health),(r'/auth/login',NativeLogin),(r'/auth/logout',NativeLogout),
         (r'/scena-telegram',TelegramWebhook),
+        (r'/(robots\.txt|sitemap\.xml|llms\.txt)',SearchDocument),
         (r'/scena-assets/(.*)',Assets,{'path':str(ROOT/'public/scena-assets')}),
         (r'/scena-upload',UploadChunk),(r'/scena-download/([a-f0-9]{64})',Download),
         (r'/scena-media/([^/]+)',Media),(r'/',Page),
         (r'/scena-photo/([a-f0-9]{64})',PhotoOriginal),
+        (r'/.*',NotFound),
     ],compress_response=True)
 
 

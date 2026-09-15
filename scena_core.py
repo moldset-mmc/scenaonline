@@ -107,6 +107,8 @@ DEFAULT_SETTINGS = {
     "booking_horizon_days": "90",
     "pending_hold_hours": "24",
     "public_base_url": "http://localhost:8501",
+    "seo_google_verification": "",
+    "seo_bing_verification": "",
     "model_slider_enabled": "1",
     "model_slider_autoplay": "1",
     "model_slider_first": "1",

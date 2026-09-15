@@ -221,13 +221,14 @@ def model_intro_from_settings(
 
 
 def build_model_landing_html(
-    settings: Mapping[str, str], locale: str, app_dir: Path
+    settings: Mapping[str, str], locale: str, app_dir: Path, *, standalone: bool = False
 ) -> str:
     """Build the self-contained responsive landing embedded by Streamlit."""
 
     from scena_model_builder import parse_model_design
     design = parse_model_design(settings.get("model_design_json"))
     language = locale if locale in {"ru", "ro", "en"} else "ro"
+    navigation_target = '_self' if standalone else '_blank'
     slides = model_slides_from_settings(settings, app_dir)
     intro = model_intro_from_settings(settings, app_dir)
     if intro and settings.get("model_slider_enabled", "1") != "1":
@@ -504,13 +505,13 @@ blockquote{{margin:0;max-width:900px;color:var(--paper);font-family:ScenaSerif,G
   <section class="stage" aria-roledescription="carousel" aria-label="SCENA — {html.escape(master_name, quote=True)}">
     <div class="slides" aria-live="off">{image_markup}</div>
     <header class="header">
-      <a class="wordmark" target="_blank" rel="noopener noreferrer" href="{html.escape(scene_url, quote=True)}" aria-label="SCENA">SCENA</a>
-      <nav aria-label="Navigation">{intro_return_markup}<a target="_blank" rel="noopener noreferrer" href="{html.escape(scene_url, quote=True)}">{copy["scene"]}</a><span class="separator"></span><div class="languages"><a target="_blank" rel="noopener noreferrer" href="{html.escape(model_url_ru, quote=True)}" class="{"current" if language == "ru" else ""}">RU</a><span>/</span><a target="_blank" rel="noopener noreferrer" href="{html.escape(model_url_ro, quote=True)}" class="{"current" if language == "ro" else ""}">RO</a><span>/</span><a target="_blank" rel="noopener noreferrer" href="{html.escape(model_url_en, quote=True)}" class="{"current" if language == "en" else ""}">EN</a></div></nav>
+      <a class="wordmark" target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(scene_url, quote=True)}" aria-label="SCENA">SCENA</a>
+      <nav aria-label="Navigation">{intro_return_markup}<a target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(scene_url, quote=True)}">{copy["scene"]}</a><span class="separator"></span><div class="languages"><a target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(model_url_ru, quote=True)}" class="{"current" if language == "ru" else ""}">RU</a><span>/</span><a target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(model_url_ro, quote=True)}" class="{"current" if language == "ro" else ""}">RO</a><span>/</span><a target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(model_url_en, quote=True)}" class="{"current" if language == "en" else ""}">EN</a></div></nav>
     </header>
     <div class="identity"><p class="role">{html.escape(role)}</p><h1><span class="first">{html.escape(first_name)}</span><span class="last">{html.escape(last_name)}</span></h1><span class="location">{html.escape(location_line)}</span><div class="hero-actions" id="show-invite-slot"></div></div>
     {intro_markup}
   </section>
-  <section class="manifest" id="manifesto"><a class="portfolio-link" target="_blank" rel="noopener noreferrer" href="{html.escape(portfolio_url, quote=True)}">{copy["portfolio"]}<img class="icon" src="{icons["arrow-right"]}" alt=""></a><div class="manifest-copy" aria-live="polite"><div class="manifest-label"><span>{copy["manifesto"]}</span><span id="counter"></span></div><blockquote id="statement">“{html.escape(initial_statement)}”</blockquote></div><a class="invite" target="_blank" rel="noopener noreferrer" href="{html.escape(invite_url, quote=True)}">{copy["invite"]}<img class="icon" src="{icons["arrow-right"]}" alt=""></a><div class="controls"><div class="dots">{dot_markup}</div><div class="transport"><button id="previous" type="button" aria-label="{html.escape(copy["previous"], quote=True)}"><img class="icon" src="{icons["arrow-left"]}" alt=""></button><button id="toggle" type="button"><img class="icon" id="toggle-icon" alt=""></button><button id="next" type="button" aria-label="{html.escape(copy["next"], quote=True)}"><img class="icon" src="{icons["arrow-right"]}" alt=""></button></div></div><div class="progress" id="progress"><span></span></div></section>
+  <section class="manifest" id="manifesto"><a class="portfolio-link" target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(portfolio_url, quote=True)}">{copy["portfolio"]}<img class="icon" src="{icons["arrow-right"]}" alt=""></a><div class="manifest-copy" aria-live="polite"><div class="manifest-label"><span>{copy["manifesto"]}</span><span id="counter"></span></div><blockquote id="statement">“{html.escape(initial_statement)}”</blockquote></div><a class="invite" target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(invite_url, quote=True)}">{copy["invite"]}<img class="icon" src="{icons["arrow-right"]}" alt=""></a><div class="controls"><div class="dots">{dot_markup}</div><div class="transport"><button id="previous" type="button" aria-label="{html.escape(copy["previous"], quote=True)}"><img class="icon" src="{icons["arrow-left"]}" alt=""></button><button id="toggle" type="button"><img class="icon" id="toggle-icon" alt=""></button><button id="next" type="button" aria-label="{html.escape(copy["next"], quote=True)}"><img class="icon" src="{icons["arrow-right"]}" alt=""></button></div></div><div class="progress" id="progress"><span></span></div></section>
 </main>{qr_dialog}
 <script>{qr_script}</script>
 <script>

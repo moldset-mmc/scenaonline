@@ -2,13 +2,20 @@
 from html import escape
 from urllib.parse import urlencode
 
-from scena_i18n import tr, translate_literaltext
+from scena_i18n import tr, translate_literaltext, language_query
 from scena_ui import st
 
 
 def cabinet_url(locale, section, view, **extra):
     return '/?' + urlencode(dict(page='admin', lang=locale, section=section, view=view, **extra))
 
+
+
+def language_links(locale, query):
+    """Compact language links shared by the menu and focused request cards."""
+    return ''.join('<a data-cabinet-nav href="'+escape('/?'+urlencode(language_query(query, lang)), quote=True)+'"'+
+        (' aria-current="page"' if lang == locale else '')+' hreflang="'+lang+'">'+lang.upper()+'</a>'
+        for lang in ('ru', 'ro', 'en'))
 
 def navigation(locale, section, view, sections, views, owner):
     def label(value):
@@ -19,14 +26,14 @@ def navigation(locale, section, view, sections, views, owner):
 
     choices = ''.join(link(label(title), cabinet_url(locale, key, next(iter(views.get(key, {})), '')), key == section)
                       for key, title in sections.items() if key != 'home')
-    languages = ''.join(link(lang.upper(), cabinet_url(lang, section, view), lang == locale) for lang in ('ru','ro','en'))
+    languages = language_links(locale, {**dict(st.query_params), 'page':'admin', 'section':section, 'view':view})
     with st.container(key='scena_cabinet_chrome'):
         st.markdown('<header class="scena-cabinet-header">'+link('SCENA', '/?'+urlencode(dict(page='scene',lang=locale)))+
             '<span class="scena-cabinet-current">'+label(sections[section])+'</span>'+
             '<details class="scena-cabinet-menu"><summary>'+escape(tr(locale,'Меню','Meniu','Menu'))+'</summary>'+
             '<div class="scena-cabinet-panel"><p>'+escape(owner)+'</p><nav aria-label="'+escape(tr(locale,'Разделы кабинета','Secțiuni','Workspace sections'))+'">'+choices+'</nav>'+
             '<nav class="scena-cabinet-languages" aria-label="'+escape(tr(locale,'Язык','Limbă','Language'))+'">'+languages+'</nav>'+
-            link(label('Выйти'), '/auth/logout')+'</div></details></header>', unsafe_allow_html=True)
+            link(label('Выйти'), '/auth/logout?'+urlencode({'lang':locale}))+'</div></details></header>', unsafe_allow_html=True)
     if len(views.get(section, {})) > 1:
         st.markdown('<nav class="scena-cabinet-tabs" aria-label="'+escape(tr(locale,'Подразделы','Subsecțiuni','Views'))+'">'+
             ''.join(link(label(title), cabinet_url(locale,section,key), key == view) for key,title in views[section].items())+'</nav>', unsafe_allow_html=True)

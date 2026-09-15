@@ -178,7 +178,7 @@ def connect(database, timeout=5, **kwargs):
         token = os.environ.get('SCENA_TURSO_TURSO_AUTH_TOKEN', '')
         if not url or not token:
             raise RuntimeError('SCENA database credentials are missing.')
-        native = _call(libsql.connect, url, auth_token=token, timeout=timeout)
+        native = _call(libsql.connect, url, auth_token=token, timeout=timeout, **kwargs)
     else:
         native = _call(libsql.connect, str(database), timeout=timeout, **kwargs)
     return Connection(native, remote=remote)

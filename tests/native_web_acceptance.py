@@ -13,6 +13,7 @@ import time
 from urllib.parse import urlencode
 import sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+from tests.seo_http import Document
 
 async def main():
     from tornado.httpclient import AsyncHTTPClient, HTTPRequest
@@ -46,8 +47,8 @@ async def main():
         cookie=COOKIE+'='+make_session()+'; '+BROWSER_COOKIE+'='+sid
         async def request(path,*,owner=False,data=None,instance=0,headers=None):
             start=time.monotonic()
-            h={'Cookie':cookie if owner else BROWSER_COOKIE+'='+sid,**(headers or {})}
-            if data is not None:h.update({'Origin':urls[instance],'Content-Type':'application/x-www-form-urlencoded'})
+            h={'Cookie':cookie if owner else BROWSER_COOKIE+'='+sid,'Host':'scena-fixture.test',**(headers or {})}
+            if data is not None:h.update({'Origin':'http://'+h['Host'],'Content-Type':'application/x-www-form-urlencoded'})
             response=await client.fetch(HTTPRequest(urls[instance]+path,method='POST' if data is not None else 'GET',headers=h,body=urlencode(data,doseq=True) if data is not None else None,follow_redirects=False,request_timeout=40),raise_error=False)
             return response,round((time.monotonic()-start)*1000)
         failures=[]
@@ -56,10 +57,13 @@ async def main():
                 for page in ('scene','portfolio','professional','model','booking','course','join-model','invite-model','post','posts','shop'):
                     response,elapsed=await request('/?page='+page+'&lang='+locale)
                     print('PUBLIC',locale,page,response.code,elapsed,len(response.body),flush=True)
-                    if response.code!=200:failures.append(locale+'/'+page)
+                    expected = 404 if page in ('course', 'post') else 200
+                    if response.code!=expected:failures.append(locale+'/'+page)
+                    elif expected == 404:
+                        assert response.headers.get('X-Robots-Tag') == 'noindex, nofollow'
                     else:
                         assert b'data-scena-runtime="native-html"' in response.body
-                        assert ('<html lang="'+locale+'"') in response.body.decode()
+                        assert Document(response.body.decode()).language == locale
                         capture('public-'+page+'-'+locale,response)
             response,_=await request('/?page=admin',headers={'X-Scena-Session':make_session()})
             assert response.code==302,'Spoofed auth header accepted'

@@ -119,3 +119,6 @@ body[data-scena-page=admin] .st-key-scena_request_card .scena-form { border: 0; 
   html { scroll-behavior: auto !important; }
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+/* Visible service facts support comparison on a phone and in search. */
+.scena-service-description{display:block;margin-top:.4rem;font-size:.875rem;font-weight:400;line-height:1.5;color:var(--scena-muted,#736c62);overflow-wrap:anywhere}
+.scena-professional-location{margin:.5rem 0 1rem;font-size:1rem;line-height:1.5}
