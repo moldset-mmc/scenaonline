@@ -120,14 +120,15 @@ class WebUI:
                     [f'<summary>{escape(label)}</summary>'])
         return current.get().add(node)
 
-    def tabs(self, labels, **_):
+    def tabs(self, labels, *, default=None, **_):
+        selected = labels.index(default) if default in labels else 0
         parent = current.get().add(Node(attributes={'class': 'scena-tabs'}))
         number = current.get().identity('tabs', labels)
         parent.children.append('<div role="tablist">' + ''.join(
-            f'<button type="button" role="tab" id="{number}-tab-{i}" aria-controls="{number}-{i}" aria-selected="{str(i==0).lower()}" tabindex="{0 if i==0 else -1}">{escape(label)}</button>'
+            f'<button type="button" role="tab" id="{number}-tab-{i}" aria-controls="{number}-{i}" aria-selected="{str(i==selected).lower()}" tabindex="{0 if i==selected else -1}">{escape(label)}</button>'
             for i, label in enumerate(labels)) + '</div>')
         result = [Node(attributes={'id': f'{number}-{i}', 'role': 'tabpanel',
-                  'aria-labelledby': f'{number}-tab-{i}', 'hidden': '' if i else None,
+                  'aria-labelledby': f'{number}-tab-{i}', 'hidden': '' if i != selected else None,
                   'class': 'scena-tabpanel'}) for i in range(len(labels))]
         parent.children.extend(result)
         return result

@@ -258,9 +258,29 @@ class Health(Base):
     def get(self):self.write(bootstrap.REPORT)
 
 
+class TelegramWebhook(Base):
+    async def post(self):
+        if len(self.request.body) > 64 * 1024:
+            raise tornado.web.HTTPError(413)
+        from scena_shop_telegram import receive_update
+        try:
+            update = json.loads(self.request.body)
+            await asyncio.to_thread(receive_update, os.environ['SCENA_DB_PATH'], update,
+                self.request.headers.get('X-Telegram-Bot-Api-Secret-Token', ''))
+        except PermissionError:
+            raise tornado.web.HTTPError(403, reason='Invalid Telegram webhook') from None
+        except (ValueError, TypeError, KeyError, AttributeError):
+            raise tornado.web.HTTPError(400, reason='Invalid Telegram update') from None
+        except Exception:
+            # Return a retryable code without logging provider credentials.
+            raise tornado.web.HTTPError(503, reason='Telegram update unavailable') from None
+        self.write({'ok':True})
+
+
 def application():
     return tornado.web.Application([
         (r'/healthz',Health),(r'/auth/login',NativeLogin),(r'/auth/logout',NativeLogout),
+        (r'/scena-telegram',TelegramWebhook),
         (r'/scena-assets/(.*)',Assets,{'path':str(ROOT/'public/scena-assets')}),
         (r'/scena-upload',UploadChunk),(r'/scena-download/([a-f0-9]{64})',Download),
         (r'/scena-media/([^/]+)',Media),(r'/',Page),

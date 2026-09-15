@@ -237,6 +237,11 @@ async def main():
                 with patch.object(tg.TelegramBotAdapter,'_call',return_value=update):
                     response,_=await request(market,owner=True,data=payload(response,'Код отправлен — подключить Telegram'))
                 assert response.code==200 and tg.connection_status(os.environ['SCENA_DB_PATH'])['connected']
+                # Activate through an owner POST, with every Telegram call intercepted.
+                save_settings(os.environ['SCENA_DB_PATH'],{'public_base_url':'https://scena.example'})
+                with patch.object(tg.TelegramBotAdapter,'_call',side_effect=[{'url':''},True,{'url':'https://scena.example/scena-telegram'}]):
+                    response,_=await request(market,owner=True,data=payload(response,'Включить кнопки в Telegram'))
+                assert response.code==200 and tg.connection_status(os.environ['SCENA_DB_PATH'])['actions_ready']
                 shop,_=await request('/?page=shop&lang=ru',data=payload(shop,'В корзину'))
                 shop,_=await request('/?page=shop&lang=ru',data=payload(shop,'Перейти к оформлению'))
                 shop,_=await request('/?page=shop&lang=ru',data=payload(shop,'Проверить заказ',{'Ваше имя':'Fixture buyer','Телефон':'+37360000111','Согласна на обработку контактов для этого заказа':True}))
@@ -250,9 +255,49 @@ async def main():
                 cabinet_orders,_=await request(market,owner=True)
                 assert 'href="tel:+37360000111"' in cabinet_orders.body.decode()
                 assert 'Телефон: +37360000111' in sender.call_args.args[1]['text']
+                order=list_orders(os.environ['SCENA_DB_PATH'])[0]
+                buttons=sender.call_args.args[1]['reply_markup']['inline_keyboard']
+                assert [row[0]['text'] for row in buttons]==['Открыть заказ','Связались']
+                direct=tg.order_path(order['id'])
+                anonymous,_=await request(direct)
+                from urllib.parse import parse_qs, urlsplit
+                assert anonymous.code==302 and parse_qs(urlsplit(anonymous.headers['Location']).query)['next']==[direct]
+                # Login page retains the exact order destination.
+                login,_=await request(anonymous.headers['Location'])
+                import html
+                assert direct in html.unescape(login.body.decode())
+                focused,_=await request(direct,owner=True,instance=1)
+                assert focused.code==200 and order['reference'] in focused.body.decode()
+                assert re.search(r'role="tab"[^>]*aria-selected="true"[^>]*>Заказы</button>',focused.body.decode())
+                assert re.search(r'<details[^>]* open=', focused.body.decode())
+                assert 'Все заказы' in focused.body.decode()
+                all_orders,_=await request(market+'&orders=1',owner=True)
+                assert re.search(r'role="tab"[^>]*aria-selected="true"[^>]*>Заказы</button>',all_orders.body.decode())
+                config=tg._load(os.environ['SCENA_DB_PATH'])
+                update={'update_id':51,'callback_query':{'id':'fixture-action','from':{'id':501,'is_bot':False},
+                    'message':{'message_id':123,'chat':{'id':501,'type':'private'}},'data':buttons[1][0]['callback_data']}}
+                async def webhook(secret,body,instance=0):
+                    return await client.fetch(HTTPRequest(urls[instance]+'/scena-telegram',method='POST',
+                        headers={'Content-Type':'application/json','X-Telegram-Bot-Api-Secret-Token':secret},
+                        body=body,request_timeout=40),raise_error=False)
+                with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as calls:
+                    forbidden=await webhook('wrong-secret',json.dumps(update))
+                    assert forbidden.code==403
+                    calls.assert_not_called()
+                    malformed=await webhook(config['webhook_secret'],'[]')
+                    assert malformed.code==400
+                    assert (await webhook(config['webhook_secret'],json.dumps(update))).code==200
+                    assert (await webhook(config['webhook_secret'],json.dumps(update),instance=1)).code==200
+                updated=list_orders(os.environ['SCENA_DB_PATH'])[0]
+                assert updated['status']=='contacted' and updated['revision']==2
+                focused,_=await request(direct,owner=True)
+                assert 'Связались' in focused.body.decode() and 'tel:+37360000111' in focused.body.decode()
+                missing,_=await request(tg.order_path('00000000-0000-0000-0000-000000000000'),owner=True)
+                assert missing.code==200 and order['reference'] not in missing.body.decode()
                 duplicate,_=await request('/?page=shop&lang=ru',data=data)
                 assert duplicate.code==409
             print('PASS native Telegram binding and checkout: one committed order, one lead to verified owner',flush=True)
+            print('PASS Telegram owner callback across replicas, duplicate idempotency, direct order/login destination and selected Orders tab',flush=True)
             # Create a public inquiry; do not call any configured external sender.
             inquiry='/?page=join-model&lang=ru'
             response,_=await request(inquiry)

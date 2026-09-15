@@ -115,3 +115,126 @@ class ShopTelegramTests(unittest.TestCase):
         with sqlite3.connect(self.db) as con:
             _remove_runtime_state(con)
             self.assertFalse(con.execute("SELECT 1 FROM sqlite_master WHERE name='shop_telegram_connection'").fetchone())
+
+    def active_actions(self):
+        code = self.bind()
+        with patch.object(tg.TelegramBotAdapter, '_call', return_value=self.update(code)):
+            tg.confirm_connection(self.db, now=1002)
+        patcher = patch.dict(os.environ, {'SCENA_NATIVE_WEB':'1', 'SCENA_PUBLIC_BASE_URL':'https://scena.example'})
+        patcher.start(); self.addCleanup(patcher.stop)
+        with patch.object(tg.TelegramBotAdapter, '_call', side_effect=[{'url':''}, True, {'url':'https://scena.example/scena-telegram'}]) as api:
+            tg.enable_actions(self.db)
+        self.assertEqual([c.args[0] for c in api.call_args_list], ['getWebhookInfo','setWebhook','getWebhookInfo'])
+        registration = api.call_args_list[1].args[1]
+        self.assertFalse(registration['drop_pending_updates'])
+        self.assertEqual(registration['allowed_updates'], ['message','callback_query'])
+        self.assertTrue(tg.connection_status(self.db)['actions_ready'])
+        self.assertNotIn('secret', json.dumps(tg.connection_status(self.db)))
+        return tg._load(self.db)
+
+    def delivered_action(self):
+        config = self.active_actions()
+        order = self.buy()
+        with patch.object(tg.TelegramBotAdapter, '_call', return_value={'message_id':99}) as api:
+            self.assertEqual(tg.dispatch(self.db, order_id=order['id']), 'sent')
+        buttons = api.call_args.args[1]['reply_markup']['inline_keyboard']
+        self.assertEqual([row[0]['text'] for row in buttons], ['Открыть заказ','Связались'])
+        self.assertEqual(buttons[0][0]['url'], 'https://scena.example'+tg.order_path(order['id']))
+        self.assertLessEqual(len(buttons[1][0]['callback_data'].encode()), 64)
+        callback = {'update_id':77, 'callback_query':{'id':'fixture-query', 'from':{'id':501,'is_bot':False},
+            'message':{'message_id':99, 'chat':{'id':501,'type':'private'}}, 'data':buttons[1][0]['callback_data']}}
+        return config, order, callback
+
+    def test_owner_callback_commits_once_updates_same_message_and_removes_action(self):
+        config, order, update = self.delivered_action()
+        with patch.object(tg.TelegramBotAdapter, '_call', return_value=True) as api:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                list(pool.map(lambda _: tg.receive_update(self.db, update, config['webhook_secret']), range(2)))
+        saved = list_orders(self.db)[0]
+        self.assertEqual((saved['status'], saved['revision']), ('contacted',2))
+        self.assertEqual(saved['items'], order['items'])
+        edits = [c.args[1] for c in api.call_args_list if c.args[0] == 'editMessageText']
+        self.assertEqual(len(edits), 2)
+        for edit in edits:
+            self.assertEqual(edit['message_id'], 99)
+            self.assertEqual(edit['chat_id'], '501')
+            self.assertIn('Статус: Связались', edit['text'])
+            self.assertEqual(len(edit['reply_markup']['inline_keyboard']), 1)
+
+    def test_callback_rejects_wrong_header_owner_chat_message_signature_and_old_binding(self):
+        import copy
+        config, order, update = self.delivered_action()
+        with patch.object(tg.TelegramBotAdapter, '_call') as api, self.assertRaises(PermissionError):
+            tg.receive_update(self.db, update, 'wrong-header')
+        api.assert_not_called()
+        variants = []
+        for path, value in [(('from','id'),999), (('message','message_id'),100), (('message','chat'),{'id':501,'type':'group'})]:
+            changed = copy.deepcopy(update)
+            changed['callback_query'][path[0]][path[1]] = value
+            variants.append(changed)
+        tampered = copy.deepcopy(update)
+        tampered['callback_query']['data'] += 'x'
+        variants.append(tampered)
+        with patch.object(tg.TelegramBotAdapter, '_call', return_value=True) as api:
+            for variant in variants:
+                tg.receive_update(self.db, variant, config['webhook_secret'])
+            config['action_secret'] = 'replacement-binding-key'
+            tg._save(self.db, config)
+            tg.receive_update(self.db, update, config['webhook_secret'])
+        self.assertTrue(all(c.args[0]=='answerCallbackQuery' for c in api.call_args_list))
+        self.assertEqual(list_orders(self.db)[0]['status'], 'new')
+
+    def test_old_callback_never_downgrades_cabinet_status_or_overwrites_new_revision(self):
+        from scena_shop import update_order_status
+        config, order, update = self.delivered_action()
+        for status in ('confirmed','fulfilled','cancelled','new'):
+            saved = list_orders(self.db)[0]
+            update_order_status(self.db, order['id'], status, expected_revision=saved['revision'])
+            before = list_orders(self.db)[0]
+            with patch.object(tg.TelegramBotAdapter, '_call', return_value=True):
+                tg.receive_update(self.db, update, config['webhook_secret'])
+            self.assertEqual(list_orders(self.db)[0], before)
+
+    def test_edit_failure_keeps_saved_status_and_repeated_tap_retries_message_only(self):
+        config, order, update = self.delivered_action()
+        with patch.object(tg.TelegramBotAdapter, '_call', side_effect=[TimeoutError('never expose token'),True]) as api:
+            tg.receive_update(self.db, update, config['webhook_secret'])
+        self.assertEqual(list_orders(self.db)[0]['status'], 'contacted')
+        self.assertIn('В SCENA сохранён', api.call_args.args[1]['text'])
+        with patch.object(tg.TelegramBotAdapter, '_call', return_value=True):
+            tg.receive_update(self.db, update, config['webhook_secret'])
+        self.assertEqual(list_orders(self.db)[0]['revision'], 2)
+
+    def test_registration_never_replaces_foreign_hook_and_can_retry_timeout(self):
+        config = self.active_actions()
+        with patch.object(tg.TelegramBotAdapter, '_call', return_value={'url':'https://other.example/bot'}) as api, self.assertRaises(tg.ConnectionError):
+            tg.enable_actions(self.db)
+        api.assert_called_once_with('getWebhookInfo', {})
+        self.assertEqual(tg._load(self.db), config)
+        with patch.object(tg.TelegramBotAdapter, '_call', side_effect=[{'url':config['webhook_url']},TimeoutError('private-token')]), self.assertRaises(tg.ConnectionError) as error:
+            tg.enable_actions(self.db)
+        self.assertNotIn('private-token', str(error.exception))
+        self.assertFalse(tg.connection_status(self.db)['actions_ready'])
+        with patch.object(tg.TelegramBotAdapter, '_call', side_effect=[{'url':config['webhook_url']},True,{'url':config['webhook_url']}]) as api:
+            tg.enable_actions(self.db)
+        self.assertEqual(api.call_args_list[1].args[1]['secret_token'], config['webhook_secret'])
+        self.assertTrue(tg.connection_status(self.db)['actions_ready'])
+
+    def test_rebinding_uses_webhook_challenge_and_refresh_revokes_previous_code(self):
+        config = self.active_actions()
+        with patch.object(tg.TelegramBotAdapter, '_call', return_value={'is_bot':True,'username':'OwnerTestBot'}):
+            pending = tg.begin_connection(self.db, TOKEN, now=2000)['pending']
+        message = self.update(pending['code'], date=2001)[0]
+        tg.receive_update(self.db, message, config['webhook_secret'], now=2002)
+        tg.refresh_code(self.db, now=2003)
+        with patch.object(tg.TelegramBotAdapter, '_call') as api, self.assertRaises(tg.ConnectionError):
+            tg.confirm_connection(self.db, now=2004)
+        api.assert_not_called()
+        pending = tg.connection_status(self.db)['pending']
+        tg.receive_update(self.db, self.update(pending['code'], date=2004)[0], config['webhook_secret'], now=2005)
+        with patch.object(tg.TelegramBotAdapter, '_call') as api:
+            self.assertTrue(tg.confirm_connection(self.db, now=2006)['connected'])
+        api.assert_not_called()
+        rebound = tg._load(self.db)
+        self.assertEqual(rebound['webhook_secret'], config['webhook_secret'])
+        self.assertNotEqual(rebound['action_secret'], config['action_secret'])

@@ -849,7 +849,9 @@ def render_shop_admin(db_path, app_dir, settings, locale='ru'):
     st.write(_t('admin_intro', locale))
     if message := st.session_state.pop('shop_admin_notice', None):
         st.success(message)
-    product_tab, order_tab, settings_tab = st.tabs([_t(key, locale) for key in ('products_tab', 'orders_tab', 'settings_tab')])
+    selected_order = str(st.query_params.get('order', ''))
+    labels = [_t(key, locale) for key in ('products_tab', 'orders_tab', 'settings_tab')]
+    product_tab, order_tab, settings_tab = st.tabs(labels, **({'default':labels[1]} if selected_order or st.query_params.get('orders') == '1' else {}))
     with product_tab, st.container(key='shop_admin_products'):
         active = _is_pro(db_path)
         if not active:
@@ -930,11 +932,18 @@ def render_shop_admin(db_path, app_dir, settings, locale='ru'):
                         except ShopError as exc:
                             st.error(_error(exc, locale))
     with order_tab, st.container(key='shop_admin_orders'):
-        orders = list_orders(db_path)
+        if selected_order:
+            with _connect(db_path) as con:
+                selected = _order(con, selected_order)
+            orders = [selected] if selected else []
+            st.link_button({'ru':'Все заказы', 'ro':'Toate comenzile', 'en':'All orders'}[locale],
+                '/?page=admin&lang='+locale+'&section=pages&view=shop&orders=1')
+        else:
+            orders = list_orders(db_path)
         if not orders:
             st.info(_t('no_orders', locale))
         for order in orders:
-            with st.expander(f'{order["reference"]} · {order["customer_name"]} · {money(order["total_cents"])} · {_t(order["status"],locale)}', expanded=order['status'] == 'new'):
+            with st.expander(f'{order["reference"]} · {order["customer_name"]} · {money(order["total_cents"])} · {_t(order["status"],locale)}', expanded=bool(selected_order) or order['status'] == 'new'):
                 st.caption(datetime.fromisoformat(order['created_at']).astimezone(ZoneInfo('Europe/Chisinau')).strftime('%d.%m.%Y · %H:%M'))
                 for item in order['items']:
                     st.write(f'{item[f"name_{locale}"]} · {item["quantity"]} × {money(item["unit_price_cents"])}')
