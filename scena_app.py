@@ -1128,6 +1128,10 @@ def render_professional(settings: dict[str, str], locale: str) -> None:
         st.info(tr(locale, "Страница пока не опубликована.", "Pagina nu este încă publicată."))
         return
     title = content_text(settings, "beauty_title", locale)
+    if settings.get("seo_content_v1") == "1":
+        place = content_text(settings, "location", locale)
+        service_heading = tr(locale, "Макияж", "Machiaj", "Makeup")
+        title = " · ".join(value for value in (service_heading, place, title) if value)
     description = content_text(settings, "beauty_desc", locale)
     offerings = list_services(DB_PATH, "Professional")
     groups = list_service_groups(DB_PATH, "Professional")
