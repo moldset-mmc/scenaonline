@@ -195,7 +195,7 @@ def _descriptor(settings, query, locale, data, resolver=None):
     # Tracking is intentionally dropped; private/form/context data is never
     # advertised as a separate searchable URL or copied into canonical URLs.
     allowed = {'page', 'lang', 'view', 'destination', 'service', 'post', 'utm_source',
-               'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'fbclid'}
+               'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'fbclid', '_ym_debug'}
     private_query = any(key not in allowed for key in query)
     visible = known and not invalid and _published(settings, area)
     if page in ('post', 'posts'):
