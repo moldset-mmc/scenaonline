@@ -95,7 +95,13 @@ def render_feed(db_path, app_dir, settings, locale, destination='scene', *, all_
     if destination != 'scene' and settings.get(destination + '_published', '1') != '1':
         st.info(tr(locale, 'Эта страница пока не опубликована.', 'Această pagină nu este încă publicată.'))
         return
-    st.header(tr(locale, 'Публикации', 'Publicații'))
+    if all_posts:
+        labels = {'scene': ('Истории и новости', 'Povești și noutăți', 'Stories and updates'),
+                  'professional': ('Публикации о макияже', 'Publicații despre machiaj', 'Makeup publications'),
+                  'model': ('Модельные съёмки и проекты', 'Ședințe foto și proiecte de model', 'Modelling shoots and projects')}
+        st.title(tr(locale, *labels[destination]))
+    else:
+        st.header(tr(locale, 'Публикации', 'Publicații'))
     posts = _public_posts(db_path, destination)
     if not posts:
         st.info(tr(locale, 'Здесь появятся фотографии, истории и новые проекты.', 'Aici vor apărea fotografii, istorii și proiecte noi.'))

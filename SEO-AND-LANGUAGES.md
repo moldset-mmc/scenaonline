@@ -1,5 +1,7 @@
 # Multilingual search delivery
 
+Current domain: **https://mbstudio.scena.life**. The September 16 correction, clean URLs, empty-section indexing policy, Yandex setup and validation are documented in [docs/MBSTUDIO-SEO.md](docs/MBSTUDIO-SEO.md). The earlier baseline below is historical.
+
 Baseline: d6a1b48ecad9deb99446100999a82a441f5ff5ce. Prepared September 15, 2026; publication requires the reviewed artifact approval.
 
 The native HTML renderer previously emitted one Russian title with no canonical, description, hreflang or structured data. Search flags did not reach HTTP. Model content was embedded in an iframe. Cabinet language links lost record/photo context, and several controls/auth pages were Russian-only. Public crawling also reproduced libSQL idle transaction expiry while storing temporary forms or public page cache snapshots.

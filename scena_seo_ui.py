@@ -66,6 +66,8 @@ def render_search_settings(db_path, settings, locale):
             address = st.text_input(t('Публичный HTTPS-адрес', 'Adresa publică HTTPS', 'Public HTTPS address'), value=settings.get('public_base_url', ''))
             google = st.text_input('Google Search Console · verification', value=settings.get('seo_google_verification', ''))
             bing = st.text_input('Bing Webmaster Tools · verification', value=settings.get('seo_bing_verification', ''))
+            yandex = st.text_input('Яндекс Вебмастер · verification', value=settings.get('seo_yandex_verification', ''))
+            counter = st.text_input('Яндекс Метрика · ID', value=settings.get('seo_yandex_counter', ''))
             st.caption(t('Вставьте только значение content из метатега подтверждения. Это не пароль. Пустое поле удаляет подтверждение.',
                          'Introduceți doar valoarea content din metaeticheta de verificare. Nu este o parolă. Un câmp gol elimină verificarea.',
                          'Enter only the content value from the verification meta tag. This is not a password. An empty field removes verification.'))
@@ -74,6 +76,10 @@ def render_search_settings(db_path, settings, locale):
             validated_base = public_base({'public_base_url': address})
             try:
                 values = {'seo_google_verification': verification_token(google), 'seo_bing_verification': verification_token(bing)}
+                values['seo_yandex_verification'] = verification_token(yandex)
+                if counter.strip() and not re.fullmatch(r'[1-9][0-9]{4,12}', counter.strip()):
+                    raise ValueError('Invalid analytics counter')
+                values['seo_yandex_counter'] = counter.strip()
                 if not validated_base:
                     raise ValueError('Invalid public address')
             except ValueError:

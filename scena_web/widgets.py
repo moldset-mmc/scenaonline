@@ -306,6 +306,10 @@ class WebUI:
     def iframe(self, src, height=600, width='stretch', **_):
         # Existing scene/portfolio scripts remain isolated; no framework runtime.
         value = 'srcdoc' if str(src).lstrip().startswith('<') else 'src'
+        from scena_urls import enabled, rewrite_links
+        settings = current.get().seo_settings or {}
+        if value == 'srcdoc' and enabled(settings):
+            src = rewrite_links(src, settings.get('public_base_url', ''))
         current.get().add('<iframe class="scena-embed"' + attributes(**{value:src}, title='SCENA', height=height,
             style=f'width:{int(width)}px;max-width:100%' if isinstance(width,int) else 'width:100%',
             sandbox='allow-scripts allow-same-origin allow-popups allow-downloads allow-popups-to-escape-sandbox',

@@ -52,6 +52,10 @@ def public_page_url(
     if locale in {"ru", "ro", "en"}:
         query["lang"] = locale
     query.update({key: str(value) for key, value in params.items() if value not in (None, "")})
+    from scena_urls import enabled, public_path
+    if enabled(settings):
+        query.setdefault('lang', settings.get('default_locale', 'ro'))
+        return normalize_public_base_url(settings.get('public_base_url')) + public_path(query)
     return f"{normalize_public_base_url(settings.get('public_base_url'))}/?{urlencode(query)}"
 
 
@@ -323,6 +327,7 @@ def build_model_landing_html(
     portfolio_url = internal_page_url("portfolio", locale=language, view="model")
     invite_url = internal_page_url("invite-model", locale=language)
     initial_statement = str(slides[first_index]["manifesto"][language]) if slides else ""
+    identity_tag = "h2" if intro else "h1"
     intro_markup = ""
     intro_return_markup = ""
     if intro:
@@ -335,10 +340,10 @@ def build_model_landing_html(
             '<div class="intro-copy" tabindex="0" role="region" '
             f'aria-label="{html.escape(copy["introduction"], quote=True)}">'
             f'<p class="intro-kicker">{html.escape(copy["introduction"])}</p>'
-            f'<h2 id="intro-title">{html.escape(str(intro["title"][language]))}</h2>'
+            f'<h1 id="intro-title">{html.escape(str(intro["title"][language]))}</h1>'
             f'<p class="intro-text">{html.escape(str(intro["text"][language]))}</p>'
-            f'{intro_details}<div class="intro-signature"><h1 class="intro-name"><span class="first">{html.escape(first_name)}</span>'
-            f'<span class="last">{html.escape(last_name)}</span></h1><span class="intro-role">{html.escape(role)}</span></div></div>' 
+            f'{intro_details}<div class="intro-signature"><h2 class="intro-name"><span class="first">{html.escape(first_name)}</span>'
+            f'<span class="last">{html.escape(last_name)}</span></h2><span class="intro-role">{html.escape(role)}</span></div></div>'
             '<figure class="intro-photo" data-qr-photo '
             f'style="--dx:{intro["desktop_x"]}%;--dy:{intro["desktop_y"]}%;'
             f'--mx:{intro["mobile_x"]}%;--my:{intro["mobile_y"]}%">'
@@ -408,8 +413,8 @@ button,a{{-webkit-tap-highlight-color:transparent}}button{{font:inherit}}button:
 .header nav{{display:flex;align-items:center;gap:28px;pointer-events:auto}}.header nav>a,.languages{{color:rgba(255,255,255,.8);font-size:11px;letter-spacing:.23em;line-height:1;text-decoration:none}}
 .separator{{width:1px;height:18px;background:rgba(255,255,255,.25)}}.languages{{display:flex;align-items:center;gap:8px}}.languages a{{color:rgba(255,255,255,.48);text-decoration:none}}.languages a.current{{color:#fff}}
 .identity{{position:absolute;left:clamp(48px,5vw,76px);top:50%;width:min(52vw,760px);z-index:4;transform:translateY(-42%);text-shadow:0 2px 32px rgba(0,0,0,.9)}}
-.role{{margin:0 0 14px;color:#c9c1b5;font-size:10px;letter-spacing:.42em;text-transform:uppercase}}.identity h1{{margin:0 0 22px;color:#fff;font-family:ScenaSerif,Georgia,serif;font-weight:400;line-height:.84;letter-spacing:-.035em;text-transform:uppercase}}
-.identity h1 span{{display:block}}.first{{font-size:clamp(52.5px,6.6vw,99px)}}.last{{font-size:clamp(25.5px,3.3vw,49.5px)}}.location{{display:block;color:rgba(255,255,255,.74);font-size:10px;letter-spacing:.24em}}
+.role{{margin:0 0 14px;color:#c9c1b5;font-size:10px;letter-spacing:.42em;text-transform:uppercase}}.identity .identity-name{{margin:0 0 22px;color:#fff;font-family:ScenaSerif,Georgia,serif;font-weight:400;line-height:.84;letter-spacing:-.035em;text-transform:uppercase}}
+.identity .identity-name span{{display:block}}.first{{font-size:clamp(52.5px,6.6vw,99px)}}.last{{font-size:clamp(25.5px,3.3vw,49.5px)}}.location{{display:block;color:rgba(255,255,255,.74);font-size:10px;letter-spacing:.24em}}
 .hero-actions{{margin-top:30px;display:flex;gap:12px}}.hero-actions a,.invite{{min-height:48px;min-width:190px;padding:0 18px;border:1px solid rgba(255,255,255,.46);display:inline-flex;align-items:center;justify-content:space-between;gap:24px;color:var(--paper);background:rgba(3,3,3,.3);font-size:10px;letter-spacing:.16em;text-decoration:none}}
 .hero-actions a:last-child{{border-color:#c9c1b5;background:#161513}}.icon{{width:18px;height:18px;display:block}}
 .manifest{{height:182px;padding:24px clamp(26px,4vw,64px) 20px;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;align-items:center;column-gap:clamp(28px,5vw,84px);row-gap:18px;position:relative;z-index:5;background:#030303;border-top:1px solid var(--hairline)}}
@@ -420,14 +425,14 @@ blockquote{{margin:0;max-width:900px;color:var(--paper);font-family:ScenaSerif,G
 .transport{{display:flex;align-items:center;gap:8px}}.transport button{{width:38px;height:38px;padding:0;border:1px solid rgba(255,255,255,.2);border-radius:50%;display:grid;place-items:center;background:transparent;cursor:pointer}}.transport button:hover{{border-color:rgba(255,255,255,.8);background:rgba(255,255,255,.08)}}
 .progress{{position:absolute;inset:auto 0 0;height:2px;overflow:hidden;background:rgba(255,255,255,.08)}}.progress span{{display:block;width:100%;height:100%;background:rgba(255,255,255,.82);transform-origin:left center;animation:progress var(--duration) linear both}}@keyframes progress{{from{{transform:scaleX(0)}}to{{transform:scaleX(1)}}}}
 @media(max-width:720px){{.stage{{height:67vh;min-height:500px}}.slide img{{width:100%;margin:0;object-fit:cover;object-position:var(--mx) var(--my)}}.stage:after{{background:linear-gradient(180deg,rgba(3,3,3,.16) 0%,transparent 24%,rgba(3,3,3,.08) 58%,rgba(3,3,3,.92) 100%),linear-gradient(90deg,rgba(3,3,3,.28),transparent 34%,transparent 76%,rgba(3,3,3,.12))}}.header{{height:82px;padding:24px 20px}}.wordmark{{font-size:26px}}.header nav{{gap:15px}}.header nav>a,.separator{{display:none}}.languages{{font-size:10px}}
-.identity{{left:20px;right:20px;bottom:24px;top:auto;width:auto;transform:none}}.role{{margin-bottom:9px;color:rgba(255,255,255,.75);font-size:9px;letter-spacing:.34em}}.identity h1{{margin-bottom:10px;max-width:100%;font-size:clamp(22.5px,6.375vw,30px);line-height:.88;white-space:nowrap}}.first,.last{{font-size:inherit}}.location{{font-size:8px;letter-spacing:.17em}}.hero-actions{{display:none}}
+.identity{{left:20px;right:20px;bottom:24px;top:auto;width:auto;transform:none}}.role{{margin-bottom:9px;color:rgba(255,255,255,.75);font-size:9px;letter-spacing:.34em}}.identity .identity-name{{margin-bottom:10px;max-width:100%;font-size:clamp(22.5px,6.375vw,30px);line-height:.88;white-space:nowrap}}.first,.last{{font-size:inherit}}.location{{font-size:8px;letter-spacing:.17em}}.hero-actions{{display:none}}
 .manifest{{height:33vh;min-height:0;padding:20px 20px max(17px,env(safe-area-inset-bottom));grid-template-columns:1fr auto;grid-template-rows:auto auto auto;column-gap:14px;row-gap:15px}}.manifest-copy,.invite,.controls{{grid-column:1/-1}}.manifest-label{{margin-bottom:8px;justify-content:space-between;font-size:8px}}blockquote{{max-width:32ch;font-size:clamp(21px,6.4vw,28px);line-height:1.06}}.invite{{width:100%;min-height:48px;padding:0 16px;font-size:10px}}.dots{{gap:3px}}.dot{{width:22px}}.transport{{gap:5px}}.transport button{{width:34px;height:34px}}}}
 @media(max-width:380px),(max-height:720px){{.stage{{height:64vh;min-height:420px}}.manifest{{height:36vh;padding-top:14px;row-gap:10px}}blockquote{{font-size:20px}}.invite{{min-height:43px}}}}
 .introduction{{position:absolute;inset:112px clamp(30px,5vw,76px) 28px;z-index:3;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.9fr);grid-template-rows:minmax(0,1fr) auto;column-gap:clamp(30px,6vw,92px);row-gap:24px}}
 .intro-copy{{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#555 transparent;padding:8px 18px 8px 0;align-self:stretch;overflow-wrap:anywhere}}
 .intro-kicker{{margin:0 0 24px;color:#d6c7ae;font-size:10px;letter-spacing:.32em;text-transform:uppercase}}
 .intro-name{{margin:0 0 32px;font-family:ScenaSerif,Georgia,serif;font-weight:400;line-height:.88;letter-spacing:-.035em;text-transform:uppercase}}.intro-name span{{display:block}}
-.intro-copy h2{{margin:0 0 20px;font-family:ScenaSerif,Georgia,serif;font-size:clamp(27px,2.7vw,40px);font-weight:400;line-height:1.14;white-space:pre-line}}
+.intro-copy #intro-title{{margin:0 0 20px;font-family:ScenaSerif,Georgia,serif;font-size:clamp(27px,2.7vw,40px);font-weight:400;line-height:1.14;white-space:pre-line}}
 .intro-text,.intro-details{{white-space:pre-wrap;font-size:clamp(15px,1.15vw,18px);line-height:1.65;margin:0 0 18px;color:#d0ceca}}
 .intro-details{{padding-top:18px;border-top:1px solid var(--hairline);color:#a7a4a0;font-size:14px}}
 .intro-photo{{grid-column:2;grid-row:1/3;margin:0;min-height:0;display:flex;align-items:center;justify-content:center;position:relative;background:radial-gradient(ellipse at center,rgba(177,168,141,.1),transparent 68%)}}
@@ -444,7 +449,7 @@ blockquote{{margin:0;max-width:900px;color:var(--paper);font-family:ScenaSerif,G
   .intro-photo:after{{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,transparent 75%,rgba(3,3,3,.12) 87%,#030303 100%)}}
   .intro-copy{{grid-column:1;grid-row:2;padding:2px 8px 2px 0}}.intro-kicker{{margin-bottom:12px;font-size:9px;letter-spacing:.24em}}
   .intro-name{{margin-bottom:18px;line-height:.94}}.intro-name .first,.intro-name .last{{font-size:clamp(22.5px,6.375vw,30px)}}
-  .intro-copy h2{{font-size:25px;margin-bottom:12px}}.intro-text{{font-size:15px;line-height:1.55;margin-bottom:14px}}.intro-details{{font-size:13px}}
+  .intro-copy #intro-title{{font-size:25px;margin-bottom:12px}}.intro-text{{font-size:15px;line-height:1.55;margin-bottom:14px}}.intro-details{{font-size:13px}}
   .intro-enter{{grid-row:3;width:100%;min-height:48px;justify-self:stretch;padding:12px 18px}}
   .shell.intro-open .stage{{height:calc(100vh - 80px)}}.shell.intro-open .manifest{{height:80px;padding:13px 20px 17px}}.shell.intro-open .invite{{min-width:0;width:100%;min-height:48px}}
   .header nav .return-intro{{display:inline-block;font-size:11px}}.header nav:has(.return-intro:not([hidden])){{gap:12px}}
@@ -463,7 +468,7 @@ blockquote{{margin:0;max-width:900px;color:var(--paper);font-family:ScenaSerif,G
 .intro-photo:before{{content:"";position:absolute;inset:4% 7%;border-radius:50% 50% 0 0;border:1px solid #d0c5ae33;pointer-events:none;box-shadow:0 0 80px #d4c5a312}}
 .intro-photo>img{{position:relative;z-index:1;object-fit:contain;mask-image:linear-gradient(to bottom,#000 88%,transparent)}}
 .intro-kicker{{font-size:12px;color:#c3b49b;margin-bottom:22px;letter-spacing:.27em}}
-.intro-copy{{display:flex;flex-direction:column;padding-top:38px}}.intro-copy h2{{font-size:clamp(33px,3.8vw,58px);max-width:14ch;letter-spacing:-.015em;line-height:1.05}}
+.intro-copy{{display:flex;flex-direction:column;padding-top:38px}}.intro-copy #intro-title{{font-size:clamp(33px,3.8vw,58px);max-width:14ch;letter-spacing:-.015em;line-height:1.05}}
 .intro-text{{max-width:42ch;color:#c9c4bb;font-size:17px;line-height:1.65}}.intro-signature{{margin-top:auto;padding-top:26px}}.intro-name{{margin-bottom:10px}}.intro-name .first{{font-size:clamp(36px,4vw,58px)}}.intro-name .last{{font-size:clamp(25px,2.8vw,39px)}}.intro-role{{color:#bfb4a2;font-size:12px;letter-spacing:.18em;text-transform:uppercase}}
 .intro-actions{{grid-column:1;grid-row:2;display:flex;flex-direction:column;gap:10px;align-items:stretch;max-width:400px}}.intro-actions .invite{{width:100%;min-width:0}}.intro-enter{{grid-row:auto;min-height:46px;background:transparent;border:1px solid #6c655c;justify-content:center;gap:22px;font-size:13px;letter-spacing:.08em;width:100%;padding:12px 18px}}
 
@@ -471,15 +476,15 @@ blockquote{{margin:0;max-width:900px;color:var(--paper);font-family:ScenaSerif,G
   .header{{padding:22px 20px}}.languages{{font-size:12px;gap:7px}}.languages a{{min-height:28px;display:inline-flex;align-items:center}}.header nav{{gap:12px}}.header nav .return-intro{{font-size:12px}}
   .introduction{{inset:78px 20px 18px;grid-template-rows:minmax(200px,37%) minmax(0,1fr) auto;gap:15px;grid-template-columns:minmax(0,1fr)}}
   .intro-photo{{border-radius:44% 44% 0 0;grid-column:1;grid-row:1}}.intro-photo>img{{object-fit:contain}}.intro-photo:after{{display:none}}.intro-qr span{{display:none}}
-  .intro-copy{{grid-row:2;display:block;padding:0 4px 0 0}}.intro-kicker{{font-size:10px;margin-bottom:10px}}.intro-copy h2{{font-size:30px;max-width:20ch;margin-bottom:12px}}.intro-text{{font-size:15px;line-height:1.5}}.intro-details{{font-size:14px}}
+  .intro-copy{{grid-row:2;display:block;padding:0 4px 0 0}}.intro-kicker{{font-size:10px;margin-bottom:10px}}.intro-copy #intro-title{{font-size:30px;max-width:20ch;margin-bottom:12px}}.intro-text{{font-size:15px;line-height:1.5}}.intro-details{{font-size:14px}}
   .intro-signature{{padding-top:8px;margin-top:14px}}.intro-name .first,.intro-name .last{{font-size:26px;line-height:1}}.intro-name{{margin-bottom:8px}}.intro-role{{font-size:11px;letter-spacing:.11em}}
   .intro-actions{{grid-row:3;max-width:none;width:100%;gap:8px}}.intro-actions .invite{{min-height:48px;font-size:11px}}.intro-enter{{min-height:44px;font-size:12px;padding:10px}}
   .identity{{bottom:22px;left:20px;right:20px}}.identity .hero-actions{{display:flex;margin-top:17px;max-width:none}}.identity .invite{{min-width:0;width:100%;font-size:11px;min-height:48px}}.identity .location{{font-size:10px;line-height:1.5}}
   .manifest{{grid-template-rows:auto auto auto;row-gap:12px}}.manifest-copy{{grid-column:1/-1;grid-row:1}}.portfolio-link{{grid-column:1/-1;grid-row:2;min-height:43px;font-size:11px}}.controls{{grid-row:3}}.transport button{{width:40px;height:40px}}
 }}
-@media(max-height:660px) and (max-width:720px){{.introduction{{top:72px;grid-template-rows:185px minmax(0,1fr) auto;gap:10px}}.intro-copy h2{{font-size:25px}}.intro-enter{{min-height:42px}}}}
+@media(max-height:660px) and (max-width:720px){{.introduction{{top:72px;grid-template-rows:185px minmax(0,1fr) auto;gap:10px}}.intro-copy #intro-title{{font-size:25px}}.intro-enter{{min-height:42px}}}}
 
-@media(max-width:340px){{.header nav .return-intro{{position:absolute;right:20px;top:57px;min-height:32px;font-size:11px}}.intro-copy h2{{font-size:27px}}.intro-name .first,.intro-name .last{{font-size:23px}}.intro-text{{font-size:14px}}.intro-actions .invite{{font-size:10px;letter-spacing:.02em;gap:10px}}.hero-actions .invite{{letter-spacing:0;font-size:10px;gap:12px}}}}
+@media(max-width:340px){{.header nav .return-intro{{position:absolute;right:20px;top:57px;min-height:32px;font-size:11px}}.intro-copy #intro-title{{font-size:27px}}.intro-name .first,.intro-name .last{{font-size:23px}}.intro-text{{font-size:14px}}.intro-actions .invite{{font-size:10px;letter-spacing:.02em;gap:10px}}.hero-actions .invite{{letter-spacing:0;font-size:10px;gap:12px}}}}
 {design_css}
 /* Mobile text and controls remain reachable with a short browser viewport. */
 @media(max-width:720px){{
@@ -495,7 +500,7 @@ blockquote{{margin:0;max-width:900px;color:var(--paper);font-family:ScenaSerif,G
   .shell.intro-open .stage{{height:auto;min-height:100svh}}
   .introduction{{position:relative;inset:auto;padding:80px max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));grid-template-rows:clamp(220px,38svh,360px) auto auto;gap:20px}}
   .intro-copy{{overflow:visible;padding:0}}.intro-text,.intro-details{{font-size:16px;line-height:1.55}}.intro-actions{{padding-top:4px}}
-  .intro-enter,.portfolio-link{{min-height:44px;font-size:13px}}.intro-name,.identity h1{{overflow-wrap:anywhere}}
+  .intro-enter,.portfolio-link{{min-height:44px;font-size:13px}}.intro-name,.identity .identity-name{{overflow-wrap:anywhere}}
 }}
 {qr_css}
 </style>
@@ -508,7 +513,7 @@ blockquote{{margin:0;max-width:900px;color:var(--paper);font-family:ScenaSerif,G
       <a class="wordmark" target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(scene_url, quote=True)}" aria-label="SCENA">SCENA</a>
       <nav aria-label="Navigation">{intro_return_markup}<a target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(scene_url, quote=True)}">{copy["scene"]}</a><span class="separator"></span><div class="languages"><a target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(model_url_ru, quote=True)}" class="{"current" if language == "ru" else ""}">RU</a><span>/</span><a target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(model_url_ro, quote=True)}" class="{"current" if language == "ro" else ""}">RO</a><span>/</span><a target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(model_url_en, quote=True)}" class="{"current" if language == "en" else ""}">EN</a></div></nav>
     </header>
-    <div class="identity"><p class="role">{html.escape(role)}</p><h1><span class="first">{html.escape(first_name)}</span><span class="last">{html.escape(last_name)}</span></h1><span class="location">{html.escape(location_line)}</span><div class="hero-actions" id="show-invite-slot"></div></div>
+    <div class="identity"><p class="role">{html.escape(role)}</p><{identity_tag} class="identity-name"><span class="first">{html.escape(first_name)}</span><span class="last">{html.escape(last_name)}</span></{identity_tag}><span class="location">{html.escape(location_line)}</span><div class="hero-actions" id="show-invite-slot"></div></div>
     {intro_markup}
   </section>
   <section class="manifest" id="manifesto"><a class="portfolio-link" target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(portfolio_url, quote=True)}">{copy["portfolio"]}<img class="icon" src="{icons["arrow-right"]}" alt=""></a><div class="manifest-copy" aria-live="polite"><div class="manifest-label"><span>{copy["manifesto"]}</span><span id="counter"></span></div><blockquote id="statement">“{html.escape(initial_statement)}”</blockquote></div><a class="invite" target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(invite_url, quote=True)}">{copy["invite"]}<img class="icon" src="{icons["arrow-right"]}" alt=""></a><div class="controls"><div class="dots">{dot_markup}</div><div class="transport"><button id="previous" type="button" aria-label="{html.escape(copy["previous"], quote=True)}"><img class="icon" src="{icons["arrow-left"]}" alt=""></button><button id="toggle" type="button"><img class="icon" id="toggle-icon" alt=""></button><button id="next" type="button" aria-label="{html.escape(copy["next"], quote=True)}"><img class="icon" src="{icons["arrow-right"]}" alt=""></button></div></div><div class="progress" id="progress"><span></span></div></section>

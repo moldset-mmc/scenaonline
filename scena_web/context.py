@@ -97,6 +97,9 @@ class RenderContext:
 
     @property
     def url(self):
+        from scena_urls import enabled, public_path
+        if enabled(self.seo_settings or {}):
+            return public_path(self.query)
         return '/?' + urlencode(self.query)
 
     def add(self, node):

@@ -73,7 +73,7 @@ class ScenaAppTestCase(unittest.TestCase):
     def test_separate_public_routes_render_without_exceptions(self):
         expected = {
             "scene": None,
-            "portfolio": "Портфолио",
+            "portfolio": "Портфолио макияжа",
             "professional": None,
             "model": "Модель",
             "join-model": None,

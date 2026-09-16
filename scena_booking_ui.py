@@ -291,6 +291,7 @@ def render_booking_flow(db_path, app_dir, settings, locale):
         return
     if st.session_state.get("booking_receipt"):
         receipt = st.session_state["booking_receipt"]
+        st.markdown(f'<span hidden data-scena-conversion="booking_request" data-scena-conversion-key="{int(receipt["id"])}"></span>', unsafe_allow_html=True)
         st.success(_tr(locale, f"Спасибо! Заявка №{receipt['id']} принята. Мастер свяжется с вами, чтобы подтвердить встречу.", f"Mulțumim! Cererea #{receipt['id']} a fost primită. Specialistul vă va contacta pentru a confirma întâlnirea."))
         service_name = receipt.get(f"service_{locale}", receipt["service"])
         st.write(f"{service_name} · {_date_label(receipt['date'], locale)} · {receipt['time']}")

@@ -75,6 +75,14 @@ def initialize():
                 REPORT['checks_scope']='verified_this_process'
         from .domain_migration import migrate_public_origin
         REPORT['seo_domain_migration']=migrate_public_origin(database, os.environ)
+        from .mbstudio_migration import migrate
+        REPORT['mbstudio_migration']=migrate(database, os.environ)
+        if os.environ.get('VERCEL_ENV') == 'production':
+            with connect(database) as db:
+                origin = db.execute("SELECT value FROM profile_settings WHERE key='public_base_url'").fetchone()
+            if origin and str(origin[0]).startswith('https://'):
+                os.environ['SCENA_PUBLIC_BASE_URL'] = origin[0]
+                REPORT['public_origin'] = origin[0]
         REPORT['startup_seconds']=round(time.monotonic()-started,3)
         os.environ['SCENA_HEALTH_REPORT']=json.dumps(REPORT)
         _ready=True

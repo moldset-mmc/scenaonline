@@ -70,6 +70,11 @@ def render_page(ctx, previous=None, values=None, files=None):
         from scena_seo import build_metadata, render_head, NOINDEX, public_base
         settings = ctx.seo_settings or {}
         locale = ctx.state.get('scena_ui_locale', ctx.query.get('lang', 'ru'))
+        if not ctx.private and not ctx.submitted and not ctx.document:
+            from scena_search_content import page_content
+            help_copy = page_content(settings, ctx.query, locale)
+            footer = '<div class="scena-footer">'
+            body = body.replace(footer, help_copy + footer, 1) if footer in body else body + help_copy
         def public_image(value):
             if str(value).startswith('https://'):
                 return value
@@ -85,12 +90,18 @@ def render_page(ctx, previous=None, values=None, files=None):
             ctx.seo.update(robots=NOINDEX, indexable=False, alternates={}, json_ld={}, image='', description='')
         if page == 'scene' and not ctx.submitted and not preview_host:
             ctx.seo['verification'] = {'google-site-verification':settings.get('seo_google_verification', ''),
-                                       'msvalidate.01':settings.get('seo_bing_verification', '')}
+                                       'msvalidate.01':settings.get('seo_bing_verification', ''),
+                                       'yandex-verification':settings.get('seo_yandex_verification', '')}
         seo_head = render_head(ctx.seo)
+        from scena_analytics import render_analytics
+        seo_head += render_analytics(settings, ctx.seo, private=ctx.private, submitted=ctx.submitted, preview=bool(preview_host))
         if ctx.document:
             document = ctx.document.replace('<html ', '<html data-scena-runtime="native-html" ', 1)
             document = document.replace('<body>', '<body data-scena-page="model">', 1)
             document = document.replace('</head>', seo_head + f'\n<link rel="icon" href="{favicon}"><script>{measure}</script></head>', 1)
+            from scena_urls import enabled, rewrite_links
+            if enabled(settings):
+                document = rewrite_links(document, public_base(settings))
             return document, ctx.url, False, round((time.monotonic()-started)*1000,1)
         # The existing scene markup supplies dimensions; the first visible image
         # is prioritized rather than competing with every below-fold photograph.
@@ -102,6 +113,9 @@ def render_page(ctx, previous=None, values=None, files=None):
 <form id="scena-page" method="post" action="{html.escape(ctx.url,quote=True)}" enctype="multipart/form-data" novalidate>
 <input type="hidden" name="_token" value="{form_token}">{body}</form></div></main></div>
 <div id="scena-operation" role="status" aria-live="polite" hidden></div></body></html>'''
+        from scena_urls import enabled, rewrite_links
+        if enabled(settings):
+            document = rewrite_links(document, public_base(settings))
         return document,ctx.url,bool(ctx.widgets),round((time.monotonic()-started)*1000,1)
     finally:
         current.reset(token)
@@ -154,11 +168,23 @@ class Base(tornado.web.RequestHandler):
 
 
 class Page(Base):
-    async def head(self):
-        await self.get()
+    async def head(self, route=None):
+        await self.get(route)
 
-    async def get(self):
-        query=Query({k:self.get_query_argument(k) for k in self.request.query_arguments})
+    async def get(self, route=None):
+        from scena_urls import query_from_path, public_path
+        decoded = query_from_path(self.request.path) if route is not None else {}
+        if decoded is None:
+            raise tornado.web.HTTPError(404)
+        query=Query({**decoded, **{k:self.get_query_argument(k) for k in self.request.query_arguments}})
+        if route is not None:
+            normalized = public_path(query)
+            if normalized != self.request.uri:
+                self.redirect(normalized, status=308); return
+        elif self.request.host.split(':')[0] == 'mbstudio.scena.life' and query.get('lang') in ('ru', 'ro', 'en'):
+            normalized = public_path(query)
+            if not normalized.startswith('/?'):
+                self.redirect(normalized, status=308); return
         if (query.get('page')=='admin' or query.get('admin')=='1') and not self.owner:
             self.redirect('/auth/login?'+urlencode({'next':self.request.uri}));return
         self.cache_key = page_cache.key(query, self.request.headers.get('Accept-Language', 'ru').split(',')[0], self.request.host) if not self.owner else None
@@ -186,7 +212,7 @@ class Page(Base):
         if self.owner:headers['X-Scena-Session']=self.get_cookie(COOKIE)
         return headers
 
-    async def post(self):
+    async def post(self, route=None):
         self.require_origin()
         try:
             previous=await asyncio.to_thread(storage.load_form,self.get_body_argument('_token',''),self.browser_id)
@@ -383,6 +409,7 @@ def application():
         (r'/scena-assets/(.*)',Assets,{'path':str(ROOT/'public/scena-assets')}),
         (r'/scena-upload',UploadChunk),(r'/scena-download/([a-f0-9]{64})',Download),
         (r'/scena-media/([^/]+)',Media),(r'/',Page),
+        (r'/((?:ru|ro|en)(?:/.*)?)',Page),
         (r'/scena-photo/([a-f0-9]{64})',PhotoOriginal),
         (r'/.*',NotFound),
     ],compress_response=True)

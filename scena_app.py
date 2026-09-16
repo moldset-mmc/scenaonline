@@ -1073,10 +1073,10 @@ def render_portfolio_page(settings: dict[str, str], locale: str) -> None:
         f"<div class='scena-eyebrow'>SCENA · {clean(tr(locale, 'История в кадрах', 'Poveste în imagini'))}</div>",
         unsafe_allow_html=True,
     )
-    st.title(tr(locale, "Портфолио", "Portofoliu"))
     view = str(st.query_params.get("view", "professional"))
     if view not in {"professional", "model"}:
         view = "professional"
+    st.title(tr(locale, "Модельное портфолио", "Portofoliu de model", "Modelling portfolio") if view == "model" else tr(locale, "Портфолио макияжа", "Portofoliu de machiaj", "Makeup portfolio"))
     tabs = st.columns(2)
     with tabs[0]:
         st.link_button(
@@ -1407,6 +1407,7 @@ def render_course(settings: dict[str, str], locale: str) -> None:
             st.success(
                 tr(locale, f'Заявка №{request_id} сохранена. Мастер свяжется с вами, чтобы обсудить программу и подтвердить место.', f'Cererea #{request_id} a fost salvată. Specialistul vă va contacta pentru a discuta programul și a confirma locul.', f'Request #{request_id} saved. The specialist will contact you to discuss the program and confirm your place.')
             )
+            st.markdown(f'<span hidden data-scena-conversion="course_request" data-scena-conversion-key="{int(request_id)}"></span>', unsafe_allow_html=True)
 
 
 def render_request_status(row) -> None:

@@ -776,6 +776,7 @@ def render_shop(db_path, app_dir, settings, locale='ru'):
         st.markdown(f'<section class="shop-intro"><div class="shop-kicker">SCENA · MARKET</div><h1>{html.escape(title)}</h1><p>{html.escape(description)}</p><div class="shop-owner">{html.escape(_owner(settings,locale))} · {html.escape(_t("owner_note",locale))}</div></section>', unsafe_allow_html=True)
         receipt = st.session_state.get('shop_receipt')
         if receipt:
+            st.markdown('<span hidden data-scena-conversion="shop_order" data-scena-conversion-key="'+html.escape(str(receipt['reference']),quote=True)+'"></span>', unsafe_allow_html=True)
             st.success(f'{_t("success",locale)} · {receipt["reference"]}')
             st.write(_t('success_note', locale))
             st.write(money(receipt['total_cents']))

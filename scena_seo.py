@@ -67,10 +67,14 @@ def _text(value, limit=180):
     return value if len(value) <= limit else value[:limit - 1].rsplit(' ', 1)[0].rstrip(' .,;:') + '…'
 
 
-def _url(base, page, locale, params=None):
+def _url(base, page, locale, params=None, *, pretty=False):
     if not base:
         return ''
-    return base + '/?' + urlencode({'page': page, 'lang': locale, **(params or {})})
+    query = {'page': page, 'lang': locale, **(params or {})}
+    if pretty:
+        from scena_urls import public_path
+        return base + public_path(query)
+    return base + '/?' + urlencode(query)
 
 
 def _published(settings, area):
@@ -153,6 +157,8 @@ def _safe_same_as(settings):
 def _descriptor(settings, query, locale, data, resolver=None):
     lang = normalize_locale(locale)
     base = public_base(settings)
+    from scena_urls import enabled
+    route = lambda page, lang, params=None: _url(base, page, lang, params, pretty=enabled(settings))
     page = str(query.get('page', 'scene'))
     known = page in PUBLIC_PAGES and str(query.get('admin', '')) != '1'
     safe_page = page if known else 'scene'
@@ -205,6 +211,12 @@ def _descriptor(settings, query, locale, data, resolver=None):
                                       for place in ('scene', 'professional', 'model'))
     if page == 'shop':
         indexable = indexable and str(settings.get('shop_enabled', '1')) == '1'
+    if settings.get('seo_empty_sections_noindex') == '1':
+        if page == 'posts':
+            indexable = indexable and any(p.get('show_' + area) and _text(p.get('body_' + lang)) for p in data['posts'])
+        elif page == 'portfolio' and not invalid:
+            from scena_portfolio import effective_slots
+            indexable = indexable and any(effective_slots(settings, area).values())
     name = _text(localized_name(settings, lang), 100)
     place = _text(content_text(settings, 'location', lang), 80)
     label = tr(lang, *PAGE_NAMES[safe_page])
@@ -220,6 +232,10 @@ def _descriptor(settings, query, locale, data, resolver=None):
                 label = content_text(settings, 'beauty_title', lang) or label
             else:
                 label += ' · ' + tr(lang, 'Model' if area == 'model' else 'Макияж', 'Model' if area == 'model' else 'Machiaj', 'Model' if area == 'model' else 'Makeup')
+                description = tr(lang,
+                    f'Модельное портфолио {name}: фотографии и образы для знакомства перед съёмкой.' if area == 'model' else f'Портфолио макияжа {name}: опубликованные образы для выбора перед записью.',
+                    f'Portofoliul de model al {name}: fotografii pentru a o cunoaște înaintea unei ședințe foto.' if area == 'model' else f'Portofoliul de machiaj al {name}: lookuri publicate pentru alegerea imaginii înainte de programare.',
+                    f'Modelling portfolio of {name}: photographs and looks to explore before a shoot.' if area == 'model' else f'Makeup portfolio of {name}: published looks to explore before booking.')
             image = (settings.get('model_image_1') or settings.get('model_intro_image')) if area == 'model' else (settings.get('professional_cover_image') or settings.get('beauty_image_1') or settings.get('professional_hero_image'))
         elif page == 'model':
             description = content_text(settings, 'model_intro_text', lang) if settings.get('model_intro_enabled', '1') == '1' else content_text(settings, 'model_desc', lang)
@@ -236,7 +252,12 @@ def _descriptor(settings, query, locale, data, resolver=None):
             description = tr(lang, 'Предложите модели съёмку или проект. Укажите формат, сроки и контакты.', 'Propuneți modelului o ședință foto sau un proiect. Indicați formatul, perioada și contactele.', 'Invite the model to a shoot or project. Share the format, dates and contact details.')
         elif page == 'posts':
             label += ' · ' + tr(lang, *PAGE_NAMES[area])
-            description = tr(lang, 'Опубликованные фотографии, истории и предложения.', 'Fotografii, povești și oferte publicate.', 'Published photographs, stories and offers.')
+            descriptions = {
+                'scene': ('Личные истории, фотографии и новости', 'Povești personale, fotografii și noutăți', 'Personal stories, photographs and updates'),
+                'professional': ('Макияж, рабочие образы и новости мастера', 'Machiaj, lookuri și noutățile specialistului', 'Makeup looks and updates from the artist'),
+                'model': ('Модельные образы, съёмки и творческие проекты', 'Lookuri de model, ședințe foto și proiecte creative', 'Modelling looks, shoots and creative projects'),
+            }
+            description = tr(lang, *descriptions[area]) + ' · ' + name + '.'
         elif page == 'post' and post:
             label = post.get('title_' + lang) or label
             description = post.get('body_' + lang, '')
@@ -249,8 +270,8 @@ def _descriptor(settings, query, locale, data, resolver=None):
     locales = tuple(language for language in LOCALES if not post or _text(post.get('body_' + language)))
     if post and lang not in locales:
         indexable = False
-    canonical = _url(base, safe_page, lang, params) if known and not invalid else ''
-    alternates = {language: _url(base, safe_page, language, params) for language in locales} if indexable else {}
+    canonical = route(safe_page, lang, params) if known and not invalid else ''
+    alternates = {language: route(safe_page, language, params) for language in locales} if indexable else {}
     if alternates:
         default = normalize_locale(settings.get('default_locale', 'ro'))
         alternates['x-default'] = alternates.get(default) or next(iter(alternates.values()))
@@ -268,7 +289,7 @@ def _descriptor(settings, query, locale, data, resolver=None):
         return metadata
     person = {'@type': 'Person', '@id': base + '/#person', 'name': name}
     if _enabled(settings, 'scene'):
-        person['url'] = _url(base, 'scene', lang)
+        person['url'] = route('scene', lang)
     if _safe_same_as(settings):
         person['sameAs'] = _safe_same_as(settings)
     if image and page in ('scene', 'model'):
@@ -278,7 +299,13 @@ def _descriptor(settings, query, locale, data, resolver=None):
                'name': title, 'description': description, 'inLanguage': lang}
     if place:
         webpage['spatialCoverage'] = {'@type': 'Place', 'name': place}
-    graph = [person, webpage]
+    website = {'@type': 'WebSite', '@id': base + '/#website', 'url': route('scene', lang), 'name': content_text(settings, 'beauty_title', lang) or name, 'inLanguage': list(LOCALES)}
+    webpage['isPartOf'] = {'@id': website['@id']}
+    breadcrumb = {'@type': 'BreadcrumbList', '@id': canonical + '#breadcrumb', 'itemListElement': [{'@type': 'ListItem', 'position': 1, 'name': tr(lang, 'Моя Сцена', 'Scena mea', 'My Scene'), 'item': route('scene', lang)}]}
+    if page != 'scene':
+        breadcrumb['itemListElement'].append({'@type': 'ListItem', 'position': 2, 'name': label, 'item': canonical})
+    webpage['breadcrumb'] = {'@id': breadcrumb['@id']}
+    graph = [website, person, webpage, breadcrumb]
     if page in ('scene', 'model'):
         webpage['mainEntity'] = {'@id': person['@id']}
     else:
@@ -300,7 +327,7 @@ def _descriptor(settings, query, locale, data, resolver=None):
             item = {'@type': 'Service', '@id': base + '/#service-' + str(row['id']),
                     'name': service_name(row, lang), 'description': service_description(row, lang),
                     'provider': {'@id': person['@id']},
-                    'url': _url(base, 'course' if row['kind'] == 'course' else 'booking', lang, {'service': row['id']})}
+                    'url': route('course' if row['kind'] == 'course' else 'booking', lang, {'service': row['id']})}
             if place:
                 item['areaServed'] = {'@type': 'Place', 'name': place}
             graph.append(item)
@@ -313,7 +340,7 @@ def _descriptor(settings, query, locale, data, resolver=None):
 def build_metadata(settings, query, locale, *, db_path=None, image_resolver=None):
     """Metadata for one route. Caller supplies real final locale after rendering."""
     page = str(query.get('page', 'scene'))
-    data = _read_public(db_path) if page in ('course', 'post', 'professional', 'booking') else {'services': [], 'posts': []}
+    data = _read_public(db_path) if page in ('course', 'post', 'posts', 'professional', 'booking') else {'services': [], 'posts': []}
     return _descriptor(settings, query, locale, data, image_resolver)
 
 
@@ -322,7 +349,7 @@ def render_head(metadata):
     tags = ['<title>' + esc(metadata['title']) + '</title>',
             '<meta name="robots" content="' + esc(metadata['robots']) + '">']
     for key, value in metadata.get('verification', {}).items():
-        if key in ('google-site-verification', 'msvalidate.01') and re.fullmatch(r'[A-Za-z0-9_-]{8,256}', str(value)):
+        if key in ('google-site-verification', 'msvalidate.01', 'yandex-verification') and re.fullmatch(r'[A-Za-z0-9_-]{8,256}', str(value)):
             tags.append('<meta name="' + key + '" content="' + esc(value) + '">')
     if metadata['description']:
         tags.append('<meta name="description" content="' + esc(metadata['description']) + '">')

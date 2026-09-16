@@ -8,11 +8,12 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+from urllib.parse import parse_qsl
 from tornado.routing import Matcher, Rule
 from tornado.web import RequestHandler
 
 LEGACY_HOST = "scenaonline.vercel.app"
-PUBLIC_ORIGIN = "https://scena.life"
+PUBLIC_ORIGIN = "https://mbstudio.scena.life"
 PUBLIC_DOCUMENTS = frozenset(("/", "/robots.txt", "/sitemap.xml", "/llms.txt"))
 
 
@@ -20,6 +21,7 @@ class PublicReadMatcher(Matcher):
     def match(self, request):
         if request.method in ("GET", "HEAD") and (
             request.path in PUBLIC_DOCUMENTS or request.path.startswith("/scena-assets/")
+            or re.match(r'^/(ru|ro|en)(/|$)', request.path)
         ):
             return {}
         return None
@@ -30,14 +32,18 @@ class LegacyPublicRedirect(RequestHandler):
         # request.uri retains path, query ordering, encoding and language.
         # The origin is a constant, never a forwarded Host or user parameter.
         self.set_header("Cache-Control", "public, max-age=300")
-        self.redirect(PUBLIC_ORIGIN + self.request.uri, status=308)
+        target = self.request.uri
+        if self.request.path == '/' and self.request.query:
+            from scena_urls import public_path
+            target = public_path(dict(parse_qsl(self.request.query, keep_blank_values=True)))
+        self.redirect(PUBLIC_ORIGIN + target, status=308)
 
     def head(self):
         self.get()
 
 
 def with_legacy_redirects(application):
-    application.add_handlers(re.escape(LEGACY_HOST), [Rule(PublicReadMatcher(), LegacyPublicRedirect)])
+    application.add_handlers('(?:' + re.escape(LEGACY_HOST) + '|' + re.escape('scena.life') + ')', [Rule(PublicReadMatcher(), LegacyPublicRedirect)])
     return application
 
 
