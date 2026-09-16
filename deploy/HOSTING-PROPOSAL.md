@@ -1,5 +1,8 @@
 # SCENA hosting: connection inventory and provisioning receipt
 
+> Historical provisioning receipt from 14 September 2026. Its pending-work statements and allowances describe that date only. Current runtime, completed adapters and installation status: [DEPLOYMENT.md](../DEPLOYMENT.md) and [MBSTUDIO-CHECKPOINT.md](../docs/MBSTUDIO-CHECKPOINT.md). Do not recreate the pilot resources from this receipt.
+
+
 Date: 2026-09-14 UTC. The three resources below have now been approved, created and connected. Application adaptation and production publication are not completed.
 
 ## Verified state

@@ -1,5 +1,7 @@
 # SCENA native Vercel web runtime
 
+Runtime architecture reference. Current installation and dated results: [DEPLOYMENT.md](DEPLOYMENT.md), [MBSTUDIO-CHECKPOINT.md](docs/MBSTUDIO-CHECKPOINT.md). Baseline performance measurements below remain historical.
+
 ## Change and purpose
 
 The cloud image starts `deploy/start_web.py`: one Tornado HTTP process returns
@@ -11,8 +13,8 @@ The existing public pages, forms and cabinet invoke the existing domain
 validation and SQL transactions. A small server-side HTML component layer and
 plain JavaScript implement the controls. No new provider or paid service.
 
-- Main site: https://scenaonline.vercel.app
-- Cabinet: https://scenaonline.vercel.app/auth/login
+- Main site: https://mbstudio.scena.life
+- Cabinet: https://mbstudio.scena.life/auth/login
 - Turso remains the authoritative database; the existing public/private Blob
   stores and administrator password remain the configured resources.
 - Forms are encrypted in Turso, expire after 12 hours and have single-use tokens

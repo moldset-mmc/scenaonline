@@ -1,5 +1,7 @@
 # MBStudio search release — 16 September 2026
 
+Installation checkpoint and recorded external results: [MBSTUDIO-CHECKPOINT.md](MBSTUDIO-CHECKPOINT.md). Reusable principles: [SEO-STANDARD.md](SEO-STANDARD.md). This file describes the pilot release, not a generic installer.
+
 ## Approved target and scope
 
 The owner explicitly corrected the intended pilot origin to **https://mbstudio.scena.life** and requested deployment plus the complete SEO checklist. This supersedes the earlier handoff that deferred the subdomain. The existing `moldset-mmc/scenaonline` repository, Vercel project and persistent data remain in use.
@@ -36,7 +38,7 @@ Other route mappings are deterministic in `scena_urls.py`. Query-based links rem
 - No WordPress demo pages were found. No owner content is deleted. Yoast is not applicable to the custom Python application.
 - `robots.txt`, XML sitemap and the optional `llms.txt` directory use the canonical origin and current published catalog.
 
-## Semantic core
+## Preliminary intent map (frequency unmeasured)
 
 `MBSTUDIO-keywords.csv` maps RU/RO/EN intent clusters to specific pages. Sources checked on 16 September 2026:
 
