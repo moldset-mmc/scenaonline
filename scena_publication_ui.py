@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
 from scena_ui import st
+from scena_home_style import scene_font_css
 from scena_i18n import localized_name, tr as translate
 
 from model_landing import image_uri, resolve_media_path
@@ -121,7 +122,8 @@ def render_feed(db_path, app_dir, settings, locale, destination='scene', *, all_
         body = post_text(post, 'body', locale)
         price = f'<strong>{esc(post["price_text"])}</strong>' if post.get('price_text') else ''
         cards.append(f'<article tabindex="0">{photo}<div class="copy"><h3>{esc(title)}</h3><p>{esc(body[:180])}</p>{price}<a href="{esc(post_url(post["public_id"], locale), quote=True)}" target="_blank" rel="noopener noreferrer">{tr(locale,"Открыть публикацию","Deschide publicația")} ↗</a></div></article>')
-    st.iframe('''<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+    feed_class = 'scene-feed' if destination == 'scene' else ''
+    st.iframe('''<!doctype html><html lang="''' + locale + '''"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>''' + (scene_font_css() if destination == 'scene' else '') + '''
     *{box-sizing:border-box}body{margin:0;color:#293b33;font:15px Arial,sans-serif;background:transparent}
     .controls{display:flex;justify-content:space-between;align-items:center;margin:0 0 12px}.buttons{display:flex;gap:8px}
     button{background:#f5f2e9;border:1px solid #c8c5b9;border-radius:50%;width:42px;height:42px;color:#293b33;font-size:23px;cursor:pointer}
@@ -131,13 +133,34 @@ def render_feed(db_path, app_dir, settings, locale, destination='scene', *, all_
     img,.empty{display:block;width:100%;height:310px;flex-shrink:0;object-fit:contain;background:#f5f1e8}.empty{display:grid;place-items:center;letter-spacing:6px;font:30px Georgia;color:#9b835b}
     .copy{padding:16px;display:flex;flex-direction:column;flex:1;min-height:0}h3{margin:0 0 10px;font:23px/1.15 Georgia;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}p{line-height:1.5;margin:0 0 10px;height:45px;overflow:hidden}strong{display:block;margin-bottom:4px}a{color:#365745;text-underline-offset:4px;display:inline-block;padding:5px 0;margin-top:auto}
     @media(max-width:650px){article{flex-basis:88%;min-width:0}.track{gap:12px}h3{font-size:22px}}
+    .scene-feed{color:#201b17;font-family:SceneText,system-ui,sans-serif}
+    .scene-feed .controls{gap:12px;margin-bottom:12px;color:#71695f;line-height:1.45}
+    .scene-feed .controls>span{min-width:0;font-size:14px}
+    .scene-feed .buttons{gap:2px;flex-shrink:0}
+    .scene-feed .buttons[hidden]{display:none}
+    .scene-feed button{width:44px;height:44px;background:transparent;border:0;border-radius:0;color:#705d43;font-size:26px}
+    .scene-feed .track{gap:16px;padding:4px 0 12px;align-items:stretch}
+    .scene-feed article{flex-basis:calc((100% - 32px)/3);min-width:0;height:auto;border:0;border-radius:0;background:transparent}
+    .scene-feed img,.scene-feed .empty{height:auto;aspect-ratio:4/5;object-fit:contain;background:transparent;border-radius:4px}
+    .scene-feed .copy{padding:12px 0 0;gap:8px}
+    .scene-feed h3{margin:0;font:500 26px/1.2 SceneEditorial,Georgia,serif}
+    .scene-feed p{height:auto;margin:0;color:#71695f;font-size:16px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+    .scene-feed a{min-height:44px;margin-top:4px;padding:6px 0;display:inline-flex;align-items:center;align-self:flex-start;color:#705d43;font-size:15px}
+    @media(max-width:650px){.scene-feed article{flex-basis:100%}}
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
-    </style></head><body><div class="controls"><span>''' + tr(locale, 'Истории и предложения', 'Povești și oferte') + '''</span><div class="buttons"><button id="prev" aria-label="''' + tr(locale, 'Предыдущая публикация', 'Publicația precedentă') + '''">‹</button><button id="next" aria-label="''' + tr(locale, 'Следующая публикация', 'Publicația următoare') + '''">›</button></div></div><section class="track" aria-label="''' + tr(locale, 'Карусель публикаций', 'Carusel de publicații') + '''">''' + ''.join(cards) + '''</section><script>
+    </style></head><body class="''' + feed_class + '''"><div class="controls"><span>''' + tr(locale, 'Истории и предложения', 'Povești și oferte') + '''</span><div class="buttons"><button id="prev" aria-label="''' + tr(locale, 'Предыдущая публикация', 'Publicația precedentă') + '''">‹</button><button id="next" aria-label="''' + tr(locale, 'Следующая публикация', 'Publicația următoare') + '''">›</button></div></div><section class="track" aria-label="''' + tr(locale, 'Карусель публикаций', 'Carusel de publicații') + '''">''' + ''.join(cards) + '''</section><script>
     const track=document.querySelector('.track'),prev=document.querySelector('#prev'),next=document.querySelector('#next');
     function state(){prev.disabled=track.scrollLeft<4;next.disabled=track.scrollLeft+track.clientWidth>=track.scrollWidth-4}
-    function move(dir){track.scrollBy({left:dir*(track.querySelector('article').offsetWidth+18),behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'})}
+    function move(dir){const gap=parseFloat(getComputedStyle(track).columnGap)||0;track.scrollBy({left:dir*(track.querySelector('article').offsetWidth+gap),behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'})}
     prev.onclick=()=>move(-1);next.onclick=()=>move(1);track.addEventListener('scroll',state);window.addEventListener('resize',state);
     track.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();move(e.key==='ArrowRight'?1:-1)}});state();
+    if(document.body.classList.contains('scene-feed')){
+      document.querySelector('.buttons').hidden=track.children.length<2;
+      // Same-origin native embeds grow with their content instead of clipping
+      // photos/captions or reserving a fixed-height empty card.
+      const fit=()=>{try{const frame=window.frameElement;if(frame){const height=Math.ceil(document.body.getBoundingClientRect().height)+2;if(Math.abs(frame.getBoundingClientRect().height-height)>1)frame.style.height=height+'px'}}catch(_){}};
+      new ResizeObserver(fit).observe(document.body);fit();
+    }
     </script></body></html>''', height=585)
     st.link_button(tr(locale, 'Все публикации', 'Toate publicațiile'), '?' + urlencode({'page': 'posts', 'lang': locale, 'destination': destination}))
 
@@ -243,14 +266,19 @@ def render_publication_workspace(db_path, app_dir, settings, locale):
     frame_format = st.pills(tr(locale, 'Формат публикации', 'Formatul publicației', 'Post format'), list(formats),
                            default=current_format if current_format in formats else 'portrait', format_func=formats.get,
                            selection_mode='single', key='post_frame_format_'+suffix) or 'portrait'
+    logo_styles = {'editorial': tr(locale, 'Журнально', 'Editorial', 'Editorial'),
+                   'compact': tr(locale, 'Компактно', 'Compact', 'Compact')}
+    logo_style = st.pills(tr(locale, 'Логотип на фотографии', 'Logoul pe fotografie', 'Logo on photo'), list(logo_styles),
+                          default=current.get('logo_style', 'editorial'), format_func=logo_styles.get,
+                          selection_mode='single', key='post_logo_style_'+suffix) or 'editorial'
     if current.get('original_image_path'):
         try:
             raw = managed_original(app_dir, current['original_image_path']).read_bytes()
-            st.image(render_publication_image(app_dir, raw, frame_style=frame_style, frame_format=frame_format), width=330)
+            st.image(render_publication_image(app_dir, raw, frame_style=frame_style, frame_format=frame_format, logo_style=logo_style), width=330)
         except (OSError, PublicationValidationError):
             pass
     with st.form('publication_editor_' + suffix):
-        values = {'frame_style': frame_style, 'frame_format': frame_format}
+        values = {'frame_style': frame_style, 'frame_format': frame_format, 'logo_style': logo_style}
         for tab, language in zip(st.tabs(['RU', 'RO', 'EN']), ('ru', 'ro', 'en')):
             with tab:
                 title_label = {'ru':'Заголовок RU','ro':'Titlu RO','en':'Title EN'}[language]
@@ -274,13 +302,13 @@ def render_publication_workspace(db_path, app_dir, settings, locale):
         try:
             photo_warning = ''
             if uploaded:
-                photo = store_publication_image(app_dir, uploaded.getvalue(), uploaded.name, frame_style=frame_style, frame_format=frame_format)
+                photo = store_publication_image(app_dir, uploaded.getvalue(), uploaded.name, frame_style=frame_style, frame_format=frame_format, logo_style=logo_style)
                 if not photo['publication_allowed']:
                     photo_warning = ' '.join(photo['warnings'])
                 values['image_url'] = photo['image_url'] if photo['publication_allowed'] else ''
                 values['original_image_path'] = photo['original_image_path']
-            elif current.get('original_image_path') and (current.get('needs_frame_refresh') or frame_style != current.get('frame_style') or frame_format != current.get('frame_format')):
-                values.update(restyle_publication_image(app_dir, current['original_image_path'], frame_style=frame_style, frame_format=frame_format))
+            elif current.get('original_image_path') and (current.get('needs_frame_refresh') or frame_style != current.get('frame_style') or frame_format != current.get('frame_format') or logo_style != current.get('logo_style')):
+                values.update(restyle_publication_image(app_dir, current['original_image_path'], frame_style=frame_style, frame_format=frame_format, logo_style=logo_style))
             saved = save_draft(db_path, None if selected == 'new' else selected, expected_revision=st.session_state.get(revision_key), **values)
         except (PublicationValidationError, OSError) as error:
             st.error(str(error))

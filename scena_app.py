@@ -16,6 +16,7 @@ from PIL import Image, UnidentifiedImageError
 
 from model_landing import (
     build_model_landing_html,
+    data_uri_for_file,
     image_uri,
     model_slides_from_settings,
     model_intro_from_settings,
@@ -24,6 +25,7 @@ from model_landing import (
     qr_png_bytes,
 )
 
+from scena_home_style import scene_font_css
 from scena_core import (
     CHISINAU,
     REQUEST_STATUSES,
@@ -858,10 +860,22 @@ def render_header(page: str, locale: str, *, admin: bool = False) -> None:
     ro_url = "?" + urlencode(language_query(st.query_params, "ro", page=page))
     en_url = "?" + urlencode(language_query(st.query_params, "en", page=page))
     mode = tr(locale, "Моя Сцена", "Scena mea")
+    logo, logo_class, logo_label = "SCENA", "scena-logo", "SCENA"
+    if page == "scene":
+        static = Path(__file__).resolve().parent / "scena_web/static"
+        wordmark = data_uri_for_file(static / "scena-live-ink.svg")
+        st.markdown('<style>' + scene_font_css() + '</style>', unsafe_allow_html=True)
+        logo_class += " scene-home-brand"
+        logo_label = "MB Studio. SCENA.live"
+        logo = (
+            '<span class="scene-brand-badge"><span class="scene-brand-initials">MB</span>'
+            '<span class="scene-brand-studio">Studio.</span></span>'
+            f'<img class="scene-brand-logo" src="{clean(wordmark)}" width="104" height="18" alt="SCENA.live">'
+        )
     st.markdown(
         f"""
         <div class="scena-top">
-          <a class="scena-logo" href="{page_url('scene', locale)}" target="_self">SCENA</a>
+          <a class="{logo_class}" href="{page_url('scene', locale)}" target="_self" aria-label="{logo_label}">{logo}</a>
           <span class="scena-muted">{clean(mode)}</span>
           <div class="scena-locale">
             <a class="{'active' if locale == 'ru' else ''}" href="{ru_url}" target="_self">RU</a>
@@ -874,17 +888,19 @@ def render_header(page: str, locale: str, *, admin: bool = False) -> None:
     )
     items = [
         ("scene", tr(locale, "Моя Сцена", "Scena mea")),
-        ("portfolio", tr(locale, "Портфолио", "Portofoliu")),
         ("professional", tr(locale, "Услуги и курсы", "Servicii și cursuri")),
+        ("portfolio", tr(locale, "Портфолио", "Portofoliu")),
         ("model", "Model"),
         ("join-model", tr(locale, "Стать моделью", "Devino model")),
     ]
     settings = get_settings(DB_PATH)
     items = [(key, label) for key, label in items if key != "model" or (settings.get("model_in_scene", "1") == "1" and settings.get("model_published", "1") == "1")]
     if settings.get("shop_enabled", "0") == "1":
-        items.insert(-1, ("shop", "Market"))
+        items.insert(2, ("shop", "shop"))
     links = "".join(
-        f'<a class="{"active" if key == page else ""}" href="{page_url(key, locale)}" target="_self">{clean(label)}</a>'
+        f'<a class="{"active" if key == page else ""}{" scene-shop-link" if key == "shop" else ""}"'
+        + (' aria-current="page"' if key == page else '')
+        + f' href="{page_url(key, locale)}" target="_self">{clean(label)}</a>'
         for key, label in items
     )
     st.markdown(f'<nav class="scena-nav">{links}</nav>', unsafe_allow_html=True)
@@ -1021,6 +1037,46 @@ def render_portfolio_grid(settings: dict[str, str], locale: str, kind: str) -> N
     render_portfolio(APP_DIR, settings, locale, kind)
 
 
+def scene_service_intro(settings: dict[str, str], locale: str) -> str:
+    """Show the owner's introduction immediately before the service-selection link."""
+    if any(settings.get(key, "1") != "1" for key in ("professional_published", "professional_in_scene")):
+        return ""
+    text = content_text(settings, "scene_services_text", locale)
+    if not text:
+        return ""
+    return f'<div class="scene-service-intro"><p>{clean(text)}</p></div>'
+
+
+def scene_contact_links(settings: dict[str, str], locale: str) -> str:
+    icons = {
+        "instagram": '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".75" fill="currentColor" stroke="none"/>',
+        "telegram": '<path d="m3 11 18-7-4 17-6-5-4 3 1-6 9-6-6 9"/>',
+    }
+    links = []
+
+    def link(label: str, url: str, icon: str) -> str:
+        return (
+            f'<a class="scene-social-link" href="{clean(url)}" target="_self">'
+            '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" '
+            f'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{icons[icon]}</svg>'
+            f'<span>{clean(label)}</span></a>'
+        )
+
+    if settings.get("model_published", "1") == "1" and settings.get("model_in_scene", "1") == "1":
+        crown = data_uri_for_file(Path(__file__).resolve().parent / "scena_web/static/model-crown.svg")
+        label = tr(locale, "Открыть model SCENA", "Deschide model SCENA", "Open model SCENA")
+        links.append(
+            f'<a class="scene-social-link scene-model-mark" href="{page_url("model", locale)}" target="_self" aria-label="{clean(label)}">'
+            f'<span class="scene-model-word"><img src="{clean(crown)}" width="24" height="12" alt="" aria-hidden="true"><span>model</span></span>'
+            ' <span>SCENA</span></a>'
+        )
+    for label, key, icon in (("Instagram", "instagram_url", "instagram"), ("Telegram", "telegram_url", "telegram")):
+        url = settings.get(key, "").strip()
+        if urlparse(url).scheme in {"http", "https"}:
+            links.append(link(label, url, icon))
+    return '<div class="scene-secondary-links">' + "".join(links) + '</div>' if links else ""
+
+
 def render_scene(settings: dict[str, str], locale: str) -> None:
     if settings.get("profile_published", "1") != "1":
         st.title(tr(locale, "Моя Сцена", "Scena mea"))
@@ -1035,37 +1091,39 @@ def render_scene(settings: dict[str, str], locale: str) -> None:
         f'alt="{clean(localized_name(settings, locale))}">'
         if hero_uri else ""
     )
-    actions: list[str] = []
+    services_html = ""
     if settings.get("professional_published", "1") == "1" and settings.get("professional_in_scene", "1") == "1":
-        actions.append(
+        services_title = content_text(settings, "scene_services_title", locale)
+        heading = f'<h2 id="scene-services-title" class="scene-section-title">{clean(services_title)}</h2>' if services_title else ""
+        label = ' aria-labelledby="scene-services-title"' if services_title else ""
+        services_html = (
+            f'<section class="scene-services-section"{label}>'
+            f'{heading}{scene_service_intro(settings, locale)}'
+            '<div class="scena-cta-row">'
             f'<a class="scena-cta primary" href="{page_url("booking", locale)}" target="_self">'
             f'{clean(content_text(settings, "booking_cta", locale, tr(locale, "Записаться на макияж", "Programare la machiaj", "Book makeup")))}</a>'
-        )
-    if settings.get("model_published", "1") == "1" and settings.get("model_in_scene", "1") == "1":
-        actions.append(
-            f'<a class="scena-cta" href="{page_url("model", locale)}" target="_self">'
-            f'{clean(tr(locale, "Открыть Model", "Deschide Model"))}</a>'
+            '</div></section>'
         )
     bio = content_text(settings, "bio", locale)
+    signature = localized_name(settings, locale).split(maxsplit=1)[0]
     st.markdown(
         f"""
         <section class="scena-editorial-scene">
           {hero_html}
           <div class="scene-identity">
-          <div class="scena-eyebrow">{clean(tr(locale, 'Моя Сцена · знакомство', 'Scena mea · cunoaște-mă'))}</div>
           <h1 class="scena-personal-name">{clean(localized_name(settings, locale))}</h1>
           <p class="scena-personal-role">Model &amp; Makeup Artist</p>
-          <p>{clean(bio)}</p>
-          <small class="scena-muted">{clean(content_text(settings, 'location', locale))}</small>
-          <div class="scena-cta-row">{''.join(actions)}</div>
+          <p class="scene-manifesto">{clean(bio)}</p>
+          <span class="scene-signature">{clean(signature)}</span>
+          {services_html}
+          {scene_contact_links(settings, locale)}
           </div>
         </section>
         """,
         unsafe_allow_html=True,
     )
-    contact_buttons(settings)
-    st.markdown("<div class='scena-section'></div>", unsafe_allow_html=True)
-    render_posts(locale, "scene")
+    with st.container(key="scene_publications"):
+        render_posts(locale, "scene")
 
 
 def render_portfolio_page(settings: dict[str, str], locale: str) -> None:
@@ -1743,9 +1801,14 @@ def render_scene_admin(settings: dict[str, str]) -> None:
             with tab:
                 language_values['name_'+language] = st.text_input({'ru':ui('Имя и фамилия · RU'),'ro':'Nume · RO','en':'Name · EN'}[language], value=localized_name(settings,language))
                 language_values['bio_'+language] = st.text_area({'ru':ui('Текст RU'),'ro':'Text RO','en':'Story · EN'}[language], value=settings.get('bio' if language == 'ru' else 'bio_'+language,''), height=130)
+                language_values['services_title_'+language] = st.text_input(ui('Заголовок блока услуг')+' · '+language.upper(), value=settings.get('scene_services_title_'+language,''))
+                language_values['services_'+language] = st.text_area(ui('Описание услуг перед кнопкой')+' · '+language.upper(), value=settings.get('scene_services_text_'+language,''), height=150)
                 language_values['cta_'+language] = st.text_input({'ru':ui('Текст кнопки · RU'),'ro':'Text buton · RO','en':'Button text · EN'}[language],value=content_text(settings,'booking_cta',language,{'ru':'Записаться на макияж','ro':'Programare la machiaj','en':'Book makeup'}[language]))
+        st.caption(ui('Опишите, что вы предлагаете. Этот текст появится перед кнопкой выбора услуги и времени. Пустое описание не показывается.'))
         name, name_ro, name_en = (language_values['name_'+lang] for lang in ('ru','ro','en'))
         bio_ru, bio_ro, bio_en = (language_values['bio_'+lang] for lang in ('ru','ro','en'))
+        services_title_ru, services_title_ro, services_title_en = (language_values['services_title_'+lang] for lang in ('ru','ro','en'))
+        services_ru, services_ro, services_en = (language_values['services_'+lang] for lang in ('ru','ro','en'))
         cta_ru, cta_ro, cta_en = (language_values['cta_'+lang] for lang in ('ru','ro','en'))
         slug = settings['profile_slug']
         with st.expander(ui('Контакты и ссылки')):
@@ -1770,6 +1833,10 @@ def render_scene_admin(settings: dict[str, str]) -> None:
             errors.append("Адрес может содержать буквы, цифры, дефис и подчёркивание.")
         if profile_published and not (bio_ru.strip() and bio_ro.strip() and bio_approved):
             errors.append("Для публикации заполните и подтвердите текст RU/RO.")
+        if profile_published and any(text.strip() for text in (services_ru, services_ro, services_en)) and not (services_ru.strip() and services_ro.strip()):
+            errors.append("Для описания услуг заполните версии RU/RO.")
+        if profile_published and any(text.strip() for text in (services_title_ru, services_title_ro, services_title_en)) and not (services_title_ru.strip() and services_title_ro.strip()):
+            errors.append("Для заголовка услуг заполните версии RU/RO.")
         if errors:
             for error in errors:
                 st.error(error)
@@ -1784,6 +1851,8 @@ def render_scene_admin(settings: dict[str, str]) -> None:
                 "model_in_scene": "1" if model_in_scene else "0",
                 "pilot_notice": "1" if pilot_notice else "0",
                 "bio": bio_ru, "bio_ro": bio_ro, "bio_en": bio_en,
+                "scene_services_title_ru": services_title_ru, "scene_services_title_ro": services_title_ro, "scene_services_title_en": services_title_en,
+                "scene_services_text_ru": services_ru, "scene_services_text_ro": services_ro, "scene_services_text_en": services_en,
                 "booking_cta_ru": cta_ru, "booking_cta_ro": cta_ro, "booking_cta_en": cta_en,
                 "bio_translation_approved": "1" if bio_approved else "0",
             })

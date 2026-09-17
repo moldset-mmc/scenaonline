@@ -11,10 +11,11 @@ def apply_workspace_styles(app_dir, settings):
     portrait = image_uri(app_dir, settings.get('professional_hero_image', 'media/scena-v13/professional-portrait.webp'))
     stage = image_uri(app_dir, public_model_image(app_dir, settings, 1))
     st.markdown('''<style>
-    .scena-nav{gap:8px!important;padding:14px 0!important;align-items:center}
-    .scena-nav a{display:inline-flex;align-items:center;min-height:44px;padding:8px 15px!important;border:1px solid transparent;border-radius:24px;font-size:16px!important;font-weight:550!important;transition:background .18s,border-color .18s}
-    .scena-nav a:hover{background:#e9dfcd;border-color:#c3aa7b}
-    .scena-nav a.active{background:#eadcc2;color:#65481b!important;border-color:#b29259;box-shadow:0 4px 12px #8d6b3020}
+    .scena-nav{gap:22px!important;padding:4px 0 8px!important;align-items:center;margin-inline:0}
+    .scena-nav a{display:inline-flex;align-items:center;flex-shrink:0;min-height:44px;padding:8px 0!important;border:0;border-bottom:2px solid transparent;border-radius:0;font-size:15px!important;font-weight:400!important;background:transparent;box-shadow:none;transition:color .18s,border-color .18s}
+    .scena-nav a:hover{color:var(--ink)!important;border-bottom-color:var(--line)}
+    .scena-nav a.active{color:var(--ink)!important;border-bottom-color:var(--accent);font-weight:500!important}
+    .scena-nav a:focus-visible{outline:2px solid var(--accent-dark);outline-offset:2px}
     .scena-locale a{min-width:42px;min-height:42px;display:grid;place-items:center}
     .scena-workspace-title{text-align:center;font-size:clamp(18px,2.2vw,23px);font-weight:600;line-height:1.25;padding-bottom:2px;color:#332e26}
     .scena-owner-name{text-align:center;font-family:Georgia,serif;font-size:20px;padding:6px 0 18px;line-height:1.3}
@@ -66,7 +67,7 @@ def apply_workspace_styles(app_dir, settings):
       .st-key-scena_admin_subnav{padding:4px 0 10px!important}
 
       .block-container{padding-top:.6rem!important;padding-inline:16px!important}
-      .scena-top>.scena-muted{display:none}.scena-nav a{padding:8px 13px!important;font-size:15px!important}
+      .scena-top>.scena-muted{display:none}.scena-nav a{font-size:14px!important}
       .scena-owner-name{font-size:19px;padding:4px 0 8px}.scena-workspace-title{font-size:18px}
       .scena-model-opportunities{grid-template-columns:1fr;gap:12px}.scena-model-opportunities article{padding:18px 20px}.scena-model-opportunities h3{margin:0 0 8px!important}
       .scena-dashboard-card-content{min-height:120px}.scena-dashboard-card-content h3{font-size:24px!important}

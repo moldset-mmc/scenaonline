@@ -52,8 +52,34 @@ class PublicationFramesV17Test(unittest.TestCase):
             self.assertLess(max(abs(a-b) for a,b in zip(image.getpixel((540, 1300)), (210,192,163))), 4)
             self.assertGreater(min(image.getpixel((540, 1345))), 235)
             # Signature is in the upper photo, with contrast against the flat source.
-            crop = image.crop((65, 40, 330, 125)).convert('L')
+            crop = image.crop((370, 40, 710, 125)).convert('L')
             self.assertGreater(ImageStat.Stat(crop).stddev[0], 25)
+
+    def test_both_logo_modes_are_distinct_and_do_not_touch_the_photo_center(self):
+        editorial = Image.open(BytesIO(render_publication_image(ROOT, raw_photo(), logo_style='editorial')))
+        compact = Image.open(BytesIO(render_publication_image(ROOT, raw_photo(), logo_style='compact')))
+        self.assertGreater(ImageStat.Stat(ImageChops.difference(editorial, compact)).sum[0], 1000)
+        for image in (editorial, compact):
+            self.assertLess(max(abs(a-b) for a,b in zip(image.getpixel((540,700)), (210,192,163))), 4)
+        self.assertGreater(ImageStat.Stat(compact.crop((60,1170,390,1310)).convert('L')).stddev[0], 20)
+
+    def test_logo_mode_survives_draft_publish_and_export(self):
+        raw=raw_photo()
+        photo=store_publication_image(self.root,raw,'photo.png',logo_style='compact')
+        post=save_draft(self.db,body_ru='Текст',body_ro='Text',translations_approved=True,
+                        image_url=photo['image_url'],original_image_path=photo['original_image_path'],logo_style='compact')
+        publish_local(self.db,post['id'],post['revision'],media_root=self.root)
+        init_db(self.db)
+        source=get_private_export_source(self.db,post['id'])
+        self.assertEqual(source['logo_style'],'compact')
+        self.assertEqual(managed_original(self.root,source['original_image_path']).read_bytes(),raw)
+        package=build_social_export(self.root,source['image_url'],'Caption',original_image_path=source['original_image_path'],frame_format='square',logo_style=source['logo_style'])
+        with ZipFile(BytesIO(package)) as archive:
+            self.assertEqual(archive.read('scena-publication.jpg'),render_publication_image(self.root,raw,frame_format='square',logo_style='compact'))
+        with self.assertRaises(PublicationValidationError):
+            save_draft(self.db,logo_style='invalid')
+        with self.assertRaises(PublicationValidationError):
+            store_publication_image(self.root,raw,'photo.png',logo_style='invalid')
 
     def test_frame_choices_change_only_surface_and_auto_respects_light_dark(self):
         samples = {}
