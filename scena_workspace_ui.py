@@ -89,11 +89,11 @@ def render_dashboard(db_path, app_dir, settings, locale, on_route):
         ('requests',tr(locale,'ЗАПИСИ','PROGRAMĂRI','BOOKINGS'),tr(locale,'Кто ждёт ответа','Cine așteaptă răspuns','Who is waiting'),tr(locale,f'Новых обращений: {pending}. Подтвердите встречу или обсудите детали.',f'Cereri în așteptare: {pending}. Confirmați întâlnirea sau discutați detaliile.',f'{pending} requests awaiting your reply. Confirm a meeting or discuss the details.'),'work','requests'),
         ('services',tr(locale,'УСЛУГИ','SERVICII','SERVICES'),tr(locale,'Что вы предлагаете','Ce oferiți','What you offer'),tr(locale,'Услуги и курсы, понятные группы, цены и описания.','Servicii și cursuri, categorii clare, prețuri și descrieri.','Services and courses, clear groups, prices and descriptions.'),'work','services'),
         ('schedule',tr(locale,'ВАШЕ ВРЕМЯ','TIMPUL DVS.','YOUR TIME'),tr(locale,'Откройте удобные часы','Alegeți orele potrivite','Set your available hours'),tr(locale,'График, перерывы и выходные. Клиенты видят только свободное время.','Program, pauze și zile libere. Clienții văd doar orele disponibile.','Work hours, breaks and days off. Clients see available times.'),'work','schedule'),
-        ('shop','MARKET',tr(locale,'Рекомендуйте лучшее','Recomandați ce apreciați','Recommend your favourites'),tr(locale,'Ваш магазин: товары, личные рекомендации и заказы.','Magazinul dvs.: produse, recomandări personale și comenzi.','Your shop: products, personal recommendations and orders.'),'pages','shop'),
+        ('shop','shopping',tr(locale,'Рекомендуйте лучшее','Recomandați ce apreciați','Recommend your favourites'),tr(locale,'Ваш магазин: товары, личные рекомендации и заказы.','Magazinul dvs.: produse, recomandări personale și comenzi.','Your shop: products, personal recommendations and orders.'),'pages','shop'),
         ('pages',tr(locale,'ВАША СЦЕНА','SCENA DVS.','YOUR STAGE'),tr(locale,'Покажите себя','Prezentați-vă','Introduce yourself'),tr(locale,'История, профессия и Model. Каждая страница — ваша сторона.','Poveste, profesie și Model. Fiecare pagină vă arată o altă latură.','Your story, profession and Model. Each page shows a different side.'),'pages','scene'),
         ('promotion',tr(locale,'ПРОДВИЖЕНИЕ','PROMOVARE','PROMOTION'),tr(locale,'Дайте повод вернуться','Oferiți un motiv să revină','Give people a reason to return'),tr(locale,'Публикации, фотообразы, промпты и QR-визитки.','Publicații, imagini, prompturi și cărți de vizită QR.','Posts, image ideas, prompts and QR cards.'),'promotion','posts'),
         ('help','SCENA',tr(locale,'Обсудим вашу идею','Discutăm ideea dvs.','Let’s explore your idea'),tr(locale,'Личный ассистент и прямая связь с командой.','Asistent personal și legătură directă cu echipa.','A personal assistant and a direct line to the team.'),'help','assistant'),
-        ('pro','PRO',tr(locale,'Больше ваших возможностей','Mai multe posibilități','More possibilities for you'),tr(locale,'Сценарии Model, профессиональные промпты и личный Market.','Scenarii Model, prompturi profesionale și Market personal.','Model scenarios, professional prompts and your personal Market.'),'pro','subscription'),
+        ('pro','PRO',tr(locale,'Больше ваших возможностей','Mai multe posibilități','More possibilities for you'),tr(locale,'Сценарии Model, профессиональные промпты и личный shopping.','Scenarii Model, prompturi profesionale și shopping personal.','Model scenarios, professional prompts and your personal shopping.'),'pro','subscription'),
     ]
     for offset in range(0,len(cards),2):
         for col,card in zip(st.columns(2),cards[offset:offset+2]):
@@ -103,7 +103,7 @@ def render_dashboard(db_path, app_dir, settings, locale, on_route):
                 if st.button(tr(locale,'Открыть','Deschide','Open')+' →',key='admin_home_open_'+key,width='stretch'):
                     on_route(locale,section,view); st.rerun()
     st.subheader(tr(locale,'Быстрый просмотр','Previzualizare','Quick preview'))
-    for col,(label,page) in zip(st.columns(4),[(tr(locale,'Моя Сцена','Scena mea','My Scene'),'scene'),('Professional','professional'),('Model','model'),('Market','shop')]):
+    for col,(label,page) in zip(st.columns(4),[(tr(locale,'Моя Сцена','Scena mea','My Scene'),'scene'),('Professional','professional'),('Model','model'),('shopping','shop')]):
         col.link_button(label,f'?page={page}&lang={locale}',width='stretch')
 
 

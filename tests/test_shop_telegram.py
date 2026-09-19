@@ -19,6 +19,27 @@ class ShopTelegramTests(unittest.TestCase):
     fields = staticmethod(shop_tests.ShopTests.fields)
     buy = shop_tests.ShopTests.buy
 
+    def test_change_recipient_here_requires_new_private_chat_proof(self):
+        code = self.bind()
+        with patch.object(tg.TelegramBotAdapter, '_call', return_value=self.update(code)):
+            tg.confirm_connection(self.db, now=1002)
+        old = tg._load(self.db)
+        tg.change_recipient(self.db, '@newowner')
+        self.assertFalse(tg.connection_status(self.db)['connected'])
+        with patch.object(tg.TelegramBotAdapter, '_call', return_value={'is_bot':True, 'username':'OwnerTestBot'}):
+            pending = tg.begin_connection(self.db, '', now=1010)['pending']
+        with patch.object(tg.TelegramBotAdapter, '_call', return_value=self.update(pending['code'], date=1011)):
+            with self.assertRaises(tg.ConnectionError):
+                tg.confirm_connection(self.db, now=1012)
+        good = self.update(pending['code'], date=1011, chat={'id':502, 'type':'private', 'username':'newowner'}, **{'from':{'id':502, 'is_bot':False}})
+        with patch.object(tg.TelegramBotAdapter, '_call', return_value=good):
+            self.assertTrue(tg.confirm_connection(self.db, now=1012)['connected'])
+        self.assertEqual(tg._load(self.db)['chat_id'], '502')
+        self.assertNotEqual(tg._load(self.db)['action_secret'], old['action_secret'])
+        with self.assertRaises(tg.ConnectionError):
+            tg.change_recipient(self.db, 'https://evil.example/owner')
+        self.assertTrue(tg.connection_status(self.db)['connected'])
+
     def bind(self):
         with sqlite3.connect(self.db) as con:
             con.execute("UPDATE profile_settings SET value='https://t.me/ownername' WHERE key='telegram_url'")

@@ -860,28 +860,20 @@ def render_header(page: str, locale: str, *, admin: bool = False) -> None:
     ro_url = "?" + urlencode(language_query(st.query_params, "ro", page=page))
     en_url = "?" + urlencode(language_query(st.query_params, "en", page=page))
     mode = tr(locale, "Моя Сцена", "Scena mea")
-    logo, logo_class, logo_label = "SCENA", "scena-logo", "SCENA"
-    if page == "scene":
-        static = Path(__file__).resolve().parent / "scena_web/static"
-        wordmark = data_uri_for_file(static / "scena-live-ink.svg")
-        st.markdown('<style>' + scene_font_css() + '</style>', unsafe_allow_html=True)
-        logo_class += " scene-home-brand"
-        logo_label = "MB Studio. SCENA.live"
-        logo = (
-            '<span class="scene-brand-badge"><span class="scene-brand-initials">MB</span>'
-            '<span class="scene-brand-studio">Studio.</span></span>'
-            f'<img class="scene-brand-logo" src="{clean(wordmark)}" width="104" height="18" alt="SCENA.live">'
-        )
+    from scena_home_style import scene_brand_markup, scene_brand_css
+    st.markdown('<style>' + scene_font_css() + scene_brand_css() + '</style>', unsafe_allow_html=True)
+    logo_class, logo_label = "scena-logo scene-home-brand", "MB Studio. SCENA.live"
+    logo = scene_brand_markup()
     st.markdown(
         f"""
         <div class="scena-top">
           <a class="{logo_class}" href="{page_url('scene', locale)}" target="_self" aria-label="{logo_label}">{logo}</a>
           <span class="scena-muted">{clean(mode)}</span>
-          <div class="scena-locale">
+          <details class="scena-locale-menu"><summary>{locale.upper()}</summary><div class="scena-locale">
             <a class="{'active' if locale == 'ru' else ''}" href="{ru_url}" target="_self">RU</a>
             <a class="{'active' if locale == 'ro' else ''}" href="{ro_url}" target="_self">RO</a>
             <a class="{'active' if locale == 'en' else ''}" href="{en_url}" target="_self">EN</a>
-          </div>
+          </div></details>
         </div>
         """,
         unsafe_allow_html=True,
@@ -896,7 +888,7 @@ def render_header(page: str, locale: str, *, admin: bool = False) -> None:
     settings = get_settings(DB_PATH)
     items = [(key, label) for key, label in items if key != "model" or (settings.get("model_in_scene", "1") == "1" and settings.get("model_published", "1") == "1")]
     if settings.get("shop_enabled", "0") == "1":
-        items.insert(2, ("shop", "shop"))
+        items.insert(2, ("shop", "shopping"))
     links = "".join(
         f'<a class="{"active" if key == page else ""}{" scene-shop-link" if key == "shop" else ""}"'
         + (' aria-current="page"' if key == page else '')
@@ -1546,7 +1538,7 @@ def render_focused_request(row, locale) -> None:
                     if dispatch(DB_PATH, request_id=row['id']) == 'sent':
                         rerun_admin_with_success('Уведомление отправлено в Telegram.')
                     else:
-                        st.warning(ui('Уведомление пока не отправлено. Проверьте подключение Telegram в Market → Витрина и повторите позже.'))
+                        st.warning(ui('Уведомление пока не отправлено. Проверьте подключение Telegram в shopping → Витрина и повторите позже.'))
 
 
 def render_crm() -> None:
@@ -1599,7 +1591,7 @@ def render_crm() -> None:
                     if result == 'sent':
                         rerun_admin_with_success('Уведомление отправлено в Telegram.')
                     else:
-                        st.warning(ui('Уведомление пока не отправлено. Проверьте подключение Telegram в Market → Витрина и повторите позже.'))
+                        st.warning(ui('Уведомление пока не отправлено. Проверьте подключение Telegram в shopping → Витрина и повторите позже.'))
             detail_columns = st.columns(2)
             details = [
                 ("Телефон", row["phone"]), ("Email", row["email"]), ('Telegram',row.get('contact_telegram','')),
@@ -2890,17 +2882,21 @@ def render_individual_schedule(settings):
 
 def render_schedule_admin(settings: dict[str, str]) -> None:
     locale = st.session_state.get('scena_ui_locale','ru')
-    regular_tab, individual_tab, exceptions_tab = st.tabs([
-        tr(locale,'Общий график','Program general','Regular hours'),
+    calendar_tab, regular_tab, individual_tab, exceptions_tab = st.tabs([
+        tr(locale,'Календарь','Calendar','Calendar'),
+        tr(locale,'Повторение','Repetare','Repeat'),
         tr(locale,'Отдельный день','O anumită zi','Individual day'),
         tr(locale,'Исключения','Excepții','Exceptions')])
+    with calendar_tab:
+        from scena_schedule_ui import render_calendar
+        render_calendar(DB_PATH, settings, locale)
     with regular_tab:
         weekday_labels = {0: "Понедельник", 1: "Вторник", 2: "Среда", 3: "Четверг", 4: "Пятница", 5: "Суббота", 6: "Воскресенье"}
         selected_days = [int(value) for value in settings["schedule_weekdays"].split(",") if value.strip().isdigit()]
         with st.form("schedule_form"):
             st.subheader(ui("Регулярный график"))
             st.caption(tr(st.session_state.get("scena_ui_locale", "ru"), "Часы отдельного дня имеют приоритет над общим графиком.", "Orele unei zile au prioritate față de programul general.", "Individual day hours take precedence over the regular schedule."))
-            weekdays = st.multiselect(ui('Рабочие дни'), list(weekday_labels), default=selected_days, format_func=lambda value: ui(weekday_labels[value]))
+            weekdays = st.pills(ui('Рабочие дни'), list(weekday_labels), default=selected_days, selection_mode='multi', format_func=lambda value: ui(weekday_labels[value]))
             cols = st.columns(4)
             with cols[0]:
                 start = st.time_input(ui("Начало"), value=time.fromisoformat(settings["schedule_start"]))
@@ -2910,15 +2906,6 @@ def render_schedule_admin(settings: dict[str, str]) -> None:
                 break_start = st.time_input(ui("Перерыв с"), value=time.fromisoformat(settings["schedule_break_start"]))
             with cols[3]:
                 break_end = st.time_input(ui("Перерыв до"), value=time.fromisoformat(settings["schedule_break_end"]))
-            params = st.columns(4)
-            with params[0]:
-                interval = st.number_input(ui("Шаг слотов, мин."), min_value=5, max_value=60, value=int(settings["slot_interval_minutes"]), step=5)
-            with params[1]:
-                lead = st.number_input(ui("Минимум до записи, ч."), min_value=0, max_value=168, value=int(settings["minimum_lead_hours"]))
-            with params[2]:
-                horizon = st.number_input(ui("Глубина, дней"), min_value=1, max_value=365, value=int(settings["booking_horizon_days"]))
-            with params[3]:
-                hold = st.number_input(ui("Удержание, ч."), min_value=1, max_value=168, value=int(settings["pending_hold_hours"]))
             schedule_submit = st.form_submit_button(ui("Сохранить график"), type="primary")
         if schedule_submit:
             if not weekdays or start >= end or break_start >= break_end or break_start <= start or break_end >= end:
@@ -2928,8 +2915,6 @@ def render_schedule_admin(settings: dict[str, str]) -> None:
                     "schedule_weekdays": ",".join(str(day) for day in sorted(weekdays)),
                     "schedule_start": start.strftime("%H:%M"), "schedule_end": end.strftime("%H:%M"),
                     "schedule_break_start": break_start.strftime("%H:%M"), "schedule_break_end": break_end.strftime("%H:%M"),
-                    "slot_interval_minutes": interval, "minimum_lead_hours": lead,
-                    "booking_horizon_days": horizon, "pending_hold_hours": hold,
                 })
                 rerun_admin_with_success(
                     "График сохранён; кнопки времени пересчитаны автоматически."
@@ -2967,6 +2952,17 @@ def render_schedule_admin(settings: dict[str, str]) -> None:
             if st.button(ui("Удалить выбранное исключение")):
                 delete_schedule_exception(DB_PATH, delete_id)
                 rerun_admin_with_success("Исключение графика удалено.")
+
+    with st.expander(tr(locale,'Параметры записи','Setările programării','Booking settings')):
+        with st.form('booking_parameters'):
+            interval = st.number_input(tr(locale,'Интервал начала записи, минут','Intervalul orelor de început, minute','Start-time interval, minutes'), min_value=5, max_value=60, value=int(settings['slot_interval_minutes']), step=5)
+            lead = st.number_input(tr(locale,'За сколько часов можно записаться','Cu câte ore înainte se poate rezerva','Minimum notice, hours'), min_value=0, max_value=168, value=int(settings['minimum_lead_hours']))
+            horizon = st.number_input(tr(locale,'На сколько дней вперёд открыта запись','Câte zile în avans se poate rezerva','Days available in advance'), min_value=1, max_value=365, value=int(settings['booking_horizon_days']))
+            hold = st.number_input(tr(locale,'Ожидание подтверждения, часов','Așteptarea confirmării, ore','Confirmation hold, hours'), min_value=1, max_value=168, value=int(settings['pending_hold_hours']))
+            submitted = st.form_submit_button(ui('Сохранить'))
+        if submitted:
+            save_settings(DB_PATH, {'slot_interval_minutes':interval,'minimum_lead_hours':lead,'booking_horizon_days':horizon,'pending_hold_hours':hold})
+            rerun_admin_with_success(tr(locale,'Параметры записи сохранены.','Setările au fost salvate.','Booking settings saved.'))
 
 
 def render_posts_admin() -> None:
@@ -3121,7 +3117,7 @@ ADMIN_VIEWS = {
         "scene": "Моя Сцена",
         "professional": "Professional",
         "model": "Model",
-        "shop": "Market",
+        "shop": "shopping",
     },
     "work": {
         "overview": "Обзор",
@@ -3147,7 +3143,7 @@ ADMIN_VIEW_COPY = {
     ("photos", "library"): ("Фото", "Все фотографии и места их использования."),
     ("work", "overview"): ("Ваша работа сегодня", "Записи, услуги и заказы — начните с важного."),
     ("pro", "subscription"): ("SCENA PRO", "Ваш образ, ваш магазин, ваши возможности."),
-    ("pages", "shop"): ("Ваш Market", "Товары, которые вы рекомендуете. Заказы от ваших клиентов."),
+    ("pages", "shop"): ("Ваш shopping", "Товары, которые вы рекомендуете. Заказы от ваших клиентов."),
     ("promotion", "prompts"): ("Промпты для вашего образа", "Выберите сцену, добавьте свои детали и сохраните задание для ИИ."),
     ("settings", "connections"): ("Подключения", "Настройка ассистента и связи с командой."),
     ("home", ""): (

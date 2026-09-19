@@ -89,8 +89,9 @@ async def main():
 
             document = await home()
             nav = re.search(r'<nav class="scena-nav">(.*?)</nav>', document, re.S)[1]
-            labels = re.findall(r'>([^<]+)</a>', nav)
-            assert labels == ['Моя Сцена', 'Услуги и курсы', 'shop', 'Портфолио', 'Model', 'Стать моделью'], labels
+            labels = [html.unescape(re.sub(r'<[^>]+>', '', value)) for value in re.findall(r'<a\b[^>]*>(.*?)</a>', nav, re.S)]
+            assert labels == ['Моя Сцена', 'Услуги и курсы', 'shopping', 'Портфолио', 'Model', 'Стать моделью'], labels
+            assert '<span class="shopping-word">shopping</span>' in nav
             assert 'aria-current="page"' in nav
             assert 'href="/ru/zapis/"' in document
             assert '>Изучить мои услуги</a>' in document

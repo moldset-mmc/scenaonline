@@ -159,7 +159,11 @@ def _binding_candidate(pending, message, now):
 def owner_username(db):
     with connect(db) as con:
         row = con.execute("SELECT value FROM profile_settings WHERE key='telegram_url'").fetchone()
-    value = (row[0] if row else '').strip()
+    return _username(row[0] if row else '')
+
+
+def _username(value):
+    value = str(value or '').strip()
     if value.startswith(('https://', 'http://', 't.me/')):
         parsed = urlsplit(value if '://' in value else 'https://'+value)
         value = parsed.path.strip('/') if parsed.hostname in ('t.me', 'telegram.me') and not parsed.query and not parsed.fragment else ''
@@ -169,11 +173,24 @@ def owner_username(db):
     return value.lower()
 
 
+def change_recipient(db, value):
+    """Stop old-account delivery immediately; a fresh private-chat code is required."""
+    username = _username(value)
+    from scena_core import save_settings
+    save_settings(db, {'telegram_url': 'https://t.me/'+username})
+    return username
+
+
 def _adapter(config):
     return TelegramBotAdapter(bot_token=config['token'], admin_chat_id=config.get('chat_id') or '1', timeout=4)
 
 
 def begin_connection(db, token, *, now=None):
+    if not str(token or '').strip():
+        try:
+            token = _load(db).get('token', '')
+        except ConnectionError:
+            token = ''
     token = str(token or os.environ.get('SCENA_TELEGRAM_BOT_TOKEN', '')).strip()
     if not _TOKEN_PATTERN.fullmatch(token):
         raise ConnectionError('Вставьте полный токен вашего бота из @BotFather.')
@@ -466,8 +483,9 @@ def connection_error_text(error, locale):
 
 def render_settings(db, locale):
     from scena_ui import st
-    from scena_i18n import translate_literaltext
+    from scena_i18n import translate_literaltext, tr
     ui = lambda text: translate_literaltext(locale, text)
+    text = lambda ru, ro, en: tr(locale, ru, ro, en)
     st.subheader('Telegram · '+{'ru':'заявки и заказы','ro':'cereri și comenzi','en':'bookings and orders'}[locale])
     try:
         try:
@@ -485,7 +503,25 @@ def render_settings(db, locale):
                 st.rerun()
         else:
             st.info(ui('Подключите личный Telegram, указанный в «Моя сцена», чтобы получать заказы из маркета.'))
+        try:
+            username = owner_username(db)
+        except ConnectionError:
+            username = ''
+        with st.expander(text('Сменить аккаунт Telegram','Schimbă contul Telegram','Change Telegram account'), expanded=not status['connected']):
+            st.caption(text('Укажите новый @username. Он также изменится в профиле. После сохранения подтвердите новый аккаунт кодом; до этого уведомления приостановятся.',
+                'Introduceți noul @username. Se va schimba și în profil. Confirmați apoi noul cont prin cod; până atunci notificările sunt suspendate.',
+                'Enter the new @username; your profile will change too. Confirm the new account with a code. Notifications pause until confirmation.'))
+            with st.form('telegram_recipient'):
+                recipient = st.text_input(text('Telegram получателя','Telegram destinatar','Recipient Telegram'), value='@'+username if username else '', key='telegram_recipient_name')
+                change = st.form_submit_button(text('Сохранить аккаунт','Salvează contul','Save account'))
+            if change:
+                change_recipient(db, recipient)
+                st.rerun()
         st.caption(ui('Если бот уже создан, используйте его токен из @BotFather. Новый бот нужен только при отсутствии собственного бота. Токен вставьте только сюда.'))
+        if status.get('username'):
+            st.caption(text('Для прежнего бота оставьте токен пустым. Чтобы заменить самого бота, вставьте новый токен.',
+                'Pentru același bot, lăsați tokenul gol. Pentru alt bot, introduceți noul token.',
+                'Leave the token blank to reuse the current bot. Enter a new token to change the bot.'))
         with st.form('shop_telegram_connect'):
             token = st.text_input(ui('Токен бота из @BotFather'), type='password', max_chars=230)
             if st.form_submit_button(ui('Получить код подключения')):

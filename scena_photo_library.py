@@ -101,10 +101,10 @@ def _targets(settings, products, locale='ru'):
     for product in products:
         if product['status'] == 'archived':
             continue
-        name = product.get('name_' + locale) or product.get('name_ru') or 'Market'
+        name = product.get('name_' + locale) or product.get('name_ru') or 'shopping'
         for index, field in enumerate(('image', 'image_2', 'image_3'), 1):
             add('product:' + product['id'] + ':' + field,
-                tr(locale, f'Market · {name} · фото {index}', f'Market · {name} · foto {index}', f'Market · {name} · photo {index}'),
+                tr(locale, f'shopping · {name} · фото {index}', f'shopping · {name} · foto {index}', f'shopping · {name} · photo {index}'),
                 product.get(field, ''), 'shop', {'revision': product['revision']}, {'id': product['id'], 'field': field, 'revision': product['revision']})
     return items
 
@@ -164,12 +164,12 @@ def catalog(db, app_dir, locale='ru', *, include_trashed=False, connection=None)
         for item in _targets(settings, products, locale):
             mark(item['path'], item['label'], item['group'], item['id'])
         for product in products:
-            name = product.get('name_' + locale) or product.get('name_ru') or 'Market'
+            name = product.get('name_' + locale) or product.get('name_ru') or 'shopping'
             for value in json.loads(product.get('photo_history') or '[]'):
-                mark(value, 'Market · ' + name, 'shop', historical=True)
+                mark(value, 'shopping · ' + name, 'shop', historical=True)
             if product['status'] == 'archived':
                 for key in ('image', 'image_2', 'image_3'):
-                    mark(product.get(key), 'Market · ' + name, 'shop', historical=True)
+                    mark(product.get(key), 'shopping · ' + name, 'shop', historical=True)
         for row in _rows(con, 'SELECT post_id,status,draft_json,published_json FROM publication_records'):
             for field, state in (('draft_json', tr(locale, 'черновик', 'ciornă', 'draft')), ('published_json', tr(locale, 'публикация', 'publicat', 'published'))):
                 if not row[field]:

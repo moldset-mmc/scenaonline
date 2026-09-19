@@ -459,7 +459,7 @@ _TEXT = {
     'close_photo': ('Закрыть просмотр', 'Închide vizualizarea', 'Close viewer'),
     'previous_photo': ('Предыдущее фото', 'Fotografia precedentă', 'Previous photo'),
     'next_photo': ('Следующее фото', 'Fotografia următoare', 'Next photo'),
-    'title': ('Личный Market', 'Market personal', 'Personal Market'),
+    'title': ('Личный shopping', 'shopping personal', 'Personal shopping'),
     'owner_edit': ('Вещи, которым я доверяю', 'Lucruri în care am încredere', 'Things I believe in'),
     'owner_note': ('Личный выбор специалиста', 'Selecția personală a specialistului', 'Personally chosen by your expert'),
     'empty': ('Моя подборка начинается с личного выбора. Возвращайтесь за рекомендациями — каждый товар появится здесь с ценой и моим комментарием.', 'Selecția mea începe cu o alegere personală. Reveniți pentru recomandări: fiecare produs va apărea cu prețul și comentariul meu.', 'My collection begins with a personal choice. Come back for recommendations: every product will include a price and my own notes.'),
@@ -537,12 +537,12 @@ _TEXT = {
     'order_status': ('Статус заказа', 'Starea comenzii', 'Order status'),
     'status_save': ('Сохранить статус', 'Salvează starea', 'Save status'),
     'status_saved': ('Статус сохранён.', 'Starea a fost salvată.', 'Status saved.'),
-    'shop_visible': ('Показывать мой Market', 'Afișează Market-ul meu', 'Show my Market'),
+    'shop_visible': ('Показывать мой shopping', 'Afișează shopping', 'Show my shopping'),
     'shop_name': ('Заголовок витрины', 'Titlul vitrinei', 'Storefront title'),
     'shop_description': ('О моей подборке', 'Despre selecția mea', 'About my collection'),
     'shop_save': ('Сохранить витрину', 'Salvează vitrina', 'Save storefront'),
     'shop_saved': ('Витрина сохранена.', 'Vitrina a fost salvată.', 'Storefront saved.'),
-    'preview': ('Открыть мой Market', 'Deschide Market-ul meu', 'Open my Market'),
+    'preview': ('Открыть мой shopping', 'Deschide shopping', 'Open my shopping'),
 }
 
 _ERRORS = {
@@ -773,7 +773,7 @@ def render_shop(db_path, app_dir, settings, locale='ru'):
     with st.container(key='shop_public'):
         title = settings.get(f'shop_title_{locale}') or SHOP_DEFAULT_SETTINGS[f'shop_title_{locale}']
         description = settings.get(f'shop_description_{locale}') or SHOP_DEFAULT_SETTINGS[f'shop_description_{locale}']
-        st.markdown(f'<section class="shop-intro"><div class="shop-kicker">SCENA · MARKET</div><h1>{html.escape(title)}</h1><p>{html.escape(description)}</p><div class="shop-owner">{html.escape(_owner(settings,locale))} · {html.escape(_t("owner_note",locale))}</div></section>', unsafe_allow_html=True)
+        st.markdown(f'<section class="shop-intro"><div class="shop-kicker">SCENA · shopping</div><h1>{html.escape(title)}</h1><p>{html.escape(description)}</p><div class="shop-owner">{html.escape(_owner(settings,locale))} · {html.escape(_t("owner_note",locale))}</div></section>', unsafe_allow_html=True)
         receipt = st.session_state.get('shop_receipt')
         if receipt:
             st.markdown('<span hidden data-scena-conversion="shop_order" data-scena-conversion-key="'+html.escape(str(receipt['reference']),quote=True)+'"></span>', unsafe_allow_html=True)
@@ -874,15 +874,14 @@ def _render_order_details(db_path, order, locale):
                 st.error(_error(exc, locale))
 
 
-    with st.expander({'ru':'Дополнительно','ro':'Detalii suplimentare','en':'More details'}[locale]):
-        st.caption('Telegram: ' + ui({'sent':'отправлено', 'queued':'ожидает отправки', 'retry':'нужна повторная отправка', 'sending':'отправляется', 'skipped':'заказ до подключения уведомлений'}.get(order.get('telegram_status'), 'ожидает отправки')))
-        if order.get('telegram_message_id') and st.button(ui('Обновить карточку в Telegram'), key='shop_tg_refresh_'+order['id']):
-            from scena_shop_telegram import refresh_lead, ConnectionError, connection_error_text
-            try:
-                refresh_lead(db_path, 'order', order['id'])
-                st.success(ui('Карточка в Telegram обновлена.'))
-            except ConnectionError as error:
-                st.warning(connection_error_text(error, locale))
+    st.caption('Telegram: ' + ui({'sent':'отправлено', 'queued':'ожидает отправки', 'retry':'нужна повторная отправка', 'sending':'отправляется', 'skipped':'заказ до подключения уведомлений'}.get(order.get('telegram_status'), 'ожидает отправки')))
+    if order.get('telegram_message_id') and st.button(ui('Обновить карточку в Telegram'), key='shop_tg_refresh_'+order['id']):
+        from scena_shop_telegram import refresh_lead, ConnectionError, connection_error_text
+        try:
+            refresh_lead(db_path, 'order', order['id'])
+            st.success(ui('Карточка в Telegram обновлена.'))
+        except ConnectionError as error:
+            st.warning(connection_error_text(error, locale))
 
 def render_shop_orders(db_path, locale, selected_order=''):
     from scena_ui import st
@@ -905,7 +904,8 @@ def render_shop_orders(db_path, locale, selected_order=''):
             for order in orders:
                 phone = dial_number(order['phone'])
                 call = '<a href="tel:'+html.escape(phone,quote=True)+'">'+html.escape(order['phone'])+'</a>' if phone else html.escape(order['phone'])
-                st.markdown('<article class="scena-inbox-card"><a class="scena-inbox-open" data-cabinet-nav href="'+html.escape(order_path(order['id'],locale),quote=True)+'"><strong>'+html.escape(order['customer_name'])+'</strong><span>'+html.escape(order['reference'])+' · '+money(order['total_cents'])+'</span></a><div class="scena-inbox-footer">'+call+'<span class="scena-status">'+html.escape(_t(order['status'],locale))+'</span></div></article>',unsafe_allow_html=True)
+                products = ' · '.join(f"{item['name_'+locale]} × {item['quantity']}" for item in order['items'])
+                st.markdown('<article class="scena-inbox-card scena-order-row"><a class="scena-inbox-open" data-cabinet-nav href="'+html.escape(order_path(order['id'],locale),quote=True)+'"><strong>'+html.escape(order['customer_name'])+'</strong><span class="scena-order-products">'+html.escape(products)+'</span><span class="scena-order-meta">'+html.escape(order['reference'])+' · '+money(order['total_cents'])+'</span></a><div class="scena-inbox-footer">'+call+'<span class="scena-status">'+html.escape(_t(order['status'],locale))+'</span></div></article>',unsafe_allow_html=True)
         return
     for order in orders:
         if native:

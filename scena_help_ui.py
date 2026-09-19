@@ -43,9 +43,9 @@ def local_guide_answer(question: str, context: dict, locale: str = "ru") -> str:
             f"You have {posts} active posts. In “Promotion → Posts”, choose a photo, write a short story and add a specific offer with its price. Check the design and link before publishing. Your next post could show one piece of work and explain who it suits.")
     elif any(word in text for word in ("shop", "market", "шоп", "магаз", "маркет", "товар", "magazin", "produs")):
         answer = _t(locale,
-            "Откройте «Страницы → Market». Добавьте товар, фотографию, цену и своё объяснение: почему рекомендуете его и кому он подходит. Проверьте условия получения товара и опубликуйте карточку. Заявки на товар проверяйте во вкладке «Заказы» магазина.",
-            "Deschideți «Pagini → Market». Adăugați produsul, fotografia, prețul și recomandarea dvs.: de ce îl recomandați și cui i se potrivește. Verificați condițiile de primire și publicați fișa. Consultați solicitările în fila «Comenzi».",
-            "Open “Pages → Market”. Add a product, photo, price and your recommendation: why you chose it and who it suits. Check collection or delivery terms and publish the card. Review product requests in the store’s “Orders” tab.")
+            "Откройте «Страницы → shopping». Добавьте товар, фотографию, цену и своё объяснение: почему рекомендуете его и кому он подходит. Проверьте условия получения товара и опубликуйте карточку. Заявки на товар проверяйте во вкладке «Заказы» магазина.",
+            "Deschideți «Pagini → shopping». Adăugați produsul, fotografia, prețul și recomandarea dvs.: de ce îl recomandați și cui i se potrivește. Verificați condițiile de primire și publicați fișa. Consultați solicitările în fila «Comenzi».",
+            "Open “Pages → shopping”. Add a product, photo, price and your recommendation: why you chose it and who it suits. Check collection or delivery terms and publish the card. Review product requests in the store’s “Orders” tab.")
     elif any(word in text for word in ("pro", "продл", "подпис", "abon", "subscription")):
         status = context.get("membership", {})
         answer = _t(locale,
@@ -57,9 +57,9 @@ def local_guide_answer(question: str, context: dict, locale: str = "ru") -> str:
             answer = _t(locale, "Начните с «Страницы → Моя Сцена»: добавьте несколько строк о себе и главное фото. Затем откройте предпросмотр и проверьте первое впечатление с телефона.", "Începeți cu «Pagini → Scena mea»: adăugați câteva rânduri despre dvs. și fotografia principală. Apoi previzualizați pagina pe telefon.", "Start with “Pages → My Scene”: add a few lines about yourself and your main photo. Then preview the first impression on a phone.")
         else:
             answer = _t(locale,
-                f"Личная история заполнена. Сейчас у вас профессиональных услуг: {services}, активных публикаций: {posts}. Могу подсказать шаги для услуг, графика, Model, Shop, публикаций или QR-кодов. Напишите, с чем хотите разобраться.",
-                f"Povestea personală este completată. Aveți {services} servicii profesionale și {posts} publicații active. Vă pot ghida prin servicii, program, Model, Shop, publicații sau coduri QR. Scrieți ce doriți să clarificați.",
-                f"Your personal story is filled in. You have {services} professional services and {posts} active posts. I can guide you through services, scheduling, Model, Shop, posts or QR codes. Tell me what you want to work on.")
+                f"Личная история заполнена. Сейчас у вас профессиональных услуг: {services}, активных публикаций: {posts}. Могу подсказать шаги для услуг, графика, Model, shopping, публикаций или QR-кодов. Напишите, с чем хотите разобраться.",
+                f"Povestea personală este completată. Aveți {services} servicii profesionale și {posts} publicații active. Vă pot ghida prin servicii, program, Model, shopping, publicații sau coduri QR. Scrieți ce doriți să clarificați.",
+                f"Your personal story is filled in. You have {services} professional services and {posts} active posts. I can guide you through services, scheduling, Model, shopping, posts or QR codes. Tell me what you want to work on.")
     return f"{intro}\n\n{answer}"
 
 

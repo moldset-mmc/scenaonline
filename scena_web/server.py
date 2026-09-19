@@ -65,7 +65,8 @@ def render_page(ctx, previous=None, values=None, files=None):
         favicon=resources.get('scena_web/static/favicon.png','')
         measure=(ROOT/'scena_web/measure.js').read_text()
         styles='\n'.join(ctx.styles)
-        body=ctx.root.render()
+        from scena_home_style import shopping_labels
+        body=shopping_labels(ctx.root.render())
         page = 'admin' if ctx.query.get('admin') == '1' else ctx.query.get('page','scene')
         from scena_seo import build_metadata, render_head, NOINDEX, public_base
         settings = ctx.seo_settings or {}

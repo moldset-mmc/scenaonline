@@ -54,7 +54,7 @@ def render_photo_library(db, app_dir, locale):
     text = lambda ru, ro, en: tr(locale, ru, ro, en)
     st.markdown('<style>' + (Path(__file__).parent / 'scena_web/static/photos.css').read_text() + '</style>', unsafe_allow_html=True)
     group_labels = {'all': text('Все фото', 'Toate fotografiile', 'All photos'), 'scene': text('Моя Сцена', 'Scena mea', 'My Scene'),
-                    'professional': 'Professional', 'model': 'Model', 'shop': 'Market', 'posts': text('Публикации', 'Publicații', 'Posts'),
+                    'professional': 'Professional', 'model': 'Model', 'shop': 'shopping', 'posts': text('Публикации', 'Publicații', 'Posts'),
                     'saved': text('Сохранённые', 'Salvate', 'Saved'), 'trash': text('Корзина', 'Coș', 'Trash')}
     if message := st.session_state.pop('photo_notice', None):
         st.success(message)

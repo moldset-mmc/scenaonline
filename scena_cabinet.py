@@ -624,6 +624,7 @@ def dispatch_support_notifications(
     telegram: Any,
     *,
     now: datetime | None = None,
+    message_id: int | None = None,
 ) -> dict[str, int]:
     """Send queued support messages through the injected Telegram adapter."""
 
@@ -642,9 +643,10 @@ def dispatch_support_notifications(
             LEFT JOIN support_reply_preferences p ON p.support_message_id = m.id
             WHERE t.owner_key = ? AND o.channel = 'telegram'
               AND o.status IN ('queued', 'failed')
+              AND (? IS NULL OR o.support_message_id = ?)
             ORDER BY o.id
             """,
-            (OWNER_KEY,),
+            (OWNER_KEY, message_id, message_id),
         ).fetchall()
     if not bool(getattr(telegram, "configured", False)):
         return {
@@ -975,7 +977,7 @@ def _assistant_context(db_path: str | Path, now: datetime, locale: str = "ru") -
             {"route": "Помощь → SCENA Ассистент", "purpose": "подсказки по кабинету без изменения данных"},
             {"route": "Помощь → Команда SCENA", "purpose": "сохранённый запрос администратору"},
             {"route": "PRO", "purpose": "возможности, срок доступа и продление"},
-            {"route": "Страницы → Market", "purpose": "личный магазин и заказы"},
+            {"route": "Страницы → shopping", "purpose": "личный магазин и заказы"},
             {"route": "Продвижение → Промпты", "purpose": "задания своему AI и история версий"},
             {"route": "Настройки → SMS", "purpose": "локальная очередь уведомлений"},
             {"route": "Настройки → Резервная копия", "purpose": "скачивание копии SQLite"},

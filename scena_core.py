@@ -1518,16 +1518,24 @@ def save_weekday_hours(db_path, weekday, *, start_time="", end_time="", break_st
 
 
 def save_date_hours(db_path, target_date, *, start_time="", end_time="", break_start="", break_end="", closed=False, reset=False):
-    _parse_date(target_date)
+    return save_dates_hours(db_path, [target_date], start_time=start_time, end_time=end_time,
+                            break_start=break_start, break_end=break_end, closed=closed, reset=reset)
+
+
+def save_dates_hours(db_path, target_dates, *, start_time="", end_time="", break_start="", break_end="", closed=False, reset=False):
+    """Apply selected calendar dates in one transaction; booked requests stay intact."""
+    dates = sorted({_parse_date(value).isoformat() for value in target_dates})
+    if not dates or len(dates) > 366:
+        raise RequestValidationError('Выберите от одной до 366 дат.')
     periods = [] if closed or reset else _hours_periods(start_time, end_time, break_start, break_end)
     with _connect(db_path) as connection:
         connection.execute("BEGIN IMMEDIATE")
-        connection.execute("DELETE FROM schedule_exceptions WHERE exception_date=?", (target_date,))
-        if not reset:
-            # Existing closed + extra semantics replace the regular day atomically.
-            connection.execute("INSERT INTO schedule_exceptions(exception_date,kind,start_time,end_time,note) VALUES (?,'closed','','','Индивидуальные часы')", (target_date,))
-            connection.executemany("INSERT INTO schedule_exceptions(exception_date,kind,start_time,end_time,note) VALUES (?,'extra',?,?,'Индивидуальные часы')",
-                [(target_date, a.strftime("%H:%M"), b.strftime("%H:%M")) for a, b in periods])
+        for target_date in dates:
+            connection.execute("DELETE FROM schedule_exceptions WHERE exception_date=?", (target_date,))
+            if not reset:
+                connection.execute("INSERT INTO schedule_exceptions(exception_date,kind,start_time,end_time,note) VALUES (?,'closed','','','Индивидуальные часы')", (target_date,))
+                connection.executemany("INSERT INTO schedule_exceptions(exception_date,kind,start_time,end_time,note) VALUES (?,'extra',?,?,'Индивидуальные часы')",
+                    [(target_date, a.strftime("%H:%M"), b.strftime("%H:%M")) for a, b in periods])
 
 
 def schedule_periods(db_path, target_date):

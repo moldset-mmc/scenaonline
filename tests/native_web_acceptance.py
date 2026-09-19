@@ -104,10 +104,10 @@ async def main():
             schedule_path='/?page=admin&lang=ru&section=work&view=schedule'
             fresh,_=await request(schedule_path,owner=True)
             old_token,_=form(fresh)
-            invalid,_=await request(schedule_path,owner=True,data=payload(fresh,'Сохранить график',{'Шаг слотов, мин.':1}))
+            invalid,_=await request(schedule_path,owner=True,data=payload(fresh,'Сохранить',{'Интервал начала записи, минут':1}))
             assert invalid.code==409,invalid.body
             load_form(old_token,sid)
-            corrected,_=await request(schedule_path,owner=True,data=payload(fresh,'Сохранить график'))
+            corrected,_=await request(schedule_path,owner=True,data=payload(fresh,'Сохранить'))
             assert corrected.code==200,corrected.body
             assert 'data-cabinet-nav' in corrected.body.decode()
             scene_view,_=await request('/?page=admin&lang=ru&section=pages&view=scene',owner=True)
@@ -197,10 +197,65 @@ async def main():
             logo_draft=next(p for p in list_publications(os.environ['SCENA_DB_PATH']) if p['title_ru']=='Logo choice test')
             assert logo_draft['logo_style']=='compact'
             response,_=await request(path,owner=True,instance=1)
-            response,_=await request(path,data=payload(response,'Logo choice test · Черновик'),owner=True,instance=1)
+            response,_=await request(path,data=payload(response,f"№ {logo_draft['id']} · Logo choice test"),owner=True,instance=1)
             _,saved=form(response)
             assert next(w for w in saved['widgets'].values() if str(w.get('key','')).startswith('post_logo_style_'))['value']=='compact'
             print('PASS native publication placement selector persists Compact across replicas',flush=True)
+
+            # Visibility and Trash operate on the live post without leaking draft text.
+            from scena_publications import save_draft, publish_local, get_publication, get_draft
+            pub=save_draft(os.environ['SCENA_DB_PATH'], title_ru='Visibility fixture', body_ru='Published text', body_ro='Text public', translations_approved=True)
+            publish_local(os.environ['SCENA_DB_PATH'],pub['id'],pub['revision'])
+            save_draft(os.environ['SCENA_DB_PATH'],pub['id'],body_ru='PRIVATE DRAFT')
+            response,_=await request(path,owner=True)
+            response,_=await request(path,owner=True,data=payload(response,f"№ {pub['id']} · Visibility fixture"))
+            capture('owner-publication-editor',response)
+            response,_=await request(path,owner=True,instance=1,data=payload(response,'Сохранить показ',{'Моя Сцена':False,'Услуги и курсы':False,'model SCENA':False}))
+            assert response.code==200
+            assert get_publication(os.environ['SCENA_DB_PATH'],pub['public_id']) is None
+            assert get_draft(os.environ['SCENA_DB_PATH'],pub['id'])['body_ru']=='PRIVATE DRAFT'
+            response,_=await request(path,owner=True,data=payload(response,'Сохранить показ',{'model SCENA':True}))
+            assert get_publication(os.environ['SCENA_DB_PATH'],pub['public_id'])['body_ru']=='Published text'
+            response,_=await request(path,owner=True,data=payload(response,None,{'Удалить эту публикацию в корзину':True},changed='Удалить эту публикацию в корзину'))
+            response,_=await request(path,owner=True,instance=1,data=payload(response,'Удалить публикацию'))
+            assert pub['id'] not in [p['id'] for p in list_publications(os.environ['SCENA_DB_PATH'])]
+            response,_=await request(path,owner=True,data=payload(response,'Восстановить'))
+            assert get_draft(os.environ['SCENA_DB_PATH'],pub['id'])['status']=='hidden'
+            capture('owner-publication-list',response)
+            print('PASS native visibility save, private draft retained, Trash and hidden restore across instances',flush=True)
+
+            # The month calendar submits selected dates as one bounded edit.
+            response,_=await request(schedule_path,owner=True)
+            _,saved=form(response)
+            targets=[w for w in saved['widgets'].values() if str(w.get('key','')).startswith('schedule_date_') and not w.get('disabled')][:2]
+            changes={w['label']:True for w in targets}
+            changes.update({'Выходной':False,'Начало работы':'10:00','Конец работы':'18:00','Добавить перерыв':True,'Перерыв с':'13:00','Перерыв до':'14:00'})
+            response,_=await request(schedule_path,owner=True,instance=1,data=payload(response,'Применить к выбранным датам',changes))
+            assert response.code==200
+            for target in targets:
+                assert len(schedule_periods(os.environ['SCENA_DB_PATH'],target['key'].removeprefix('schedule_date_')))==2
+            capture('owner-calendar',response)
+            print('PASS native calendar applies multiple dates and break together',flush=True)
+
+            # A real signed fixture code goes through the same HTTP form as Production.
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+            from cryptography.hazmat.primitives import serialization
+            from scena_licensing import sign_code, owner_id
+            issuer=Ed25519PrivateKey.generate()
+            (fixture/'config').mkdir(exist_ok=True)
+            (fixture/'config/pro-issuer-public.pem').write_bytes(issuer.public_key().public_bytes(serialization.Encoding.PEM,serialization.PublicFormat.SubjectPublicKeyInfo))
+            pro_path='/?page=admin&lang=ru&section=pro&view=subscription'
+            response,_=await request(pro_path,owner=True)
+            renewal=sign_code(issuer,owner_id(os.environ['SCENA_DB_PATH']),1)
+            response,_=await request(pro_path,owner=True,instance=1,data=payload(response,'Активировать код',{'Код продления':renewal}))
+            assert response.code==200 and 'Готово. PRO продлён до' in response.body.decode()
+            response,_=await request(pro_path,owner=True,data=payload(response,'Активировать код',{'Код продления':renewal}))
+            assert 'Код уже применён.' in response.body.decode()
+            response,_=await request(pro_path,owner=True,data=payload(response,'Обсудить продление с SCENA'))
+            assert 'Канал команды SCENA ещё не подключён.' in response.body.decode()
+            assert 'view=subscription' in response.headers.get('X-Scena-URL','')
+            capture('owner-pro-contact-unconfigured',response)
+            print('PASS signed PRO code accepted once through HTTP; contact stays on PRO and reports missing platform channel',flush=True)
 
             path='/?page=admin&lang=ru&section=pages&view=scene'
             response,_=await request(path,owner=True)
@@ -331,8 +386,11 @@ async def main():
                 assert list_orders(os.environ['SCENA_DB_PATH'])[0]['telegram_status']=='sent'
                 cabinet_orders,_=await request(market,owner=True)
                 assert 'href="tel:+37360000111"' in cabinet_orders.body.decode()
+                assert 'scena-order-products' in cabinet_orders.body.decode()
                 assert 'Телефон: +37360000111' in sender.call_args.args[1]['text']
                 order=list_orders(os.environ['SCENA_DB_PATH'])[0]
+                assert order['items'][0]['name_ru'] in cabinet_orders.body.decode()
+                capture('owner-order-list',cabinet_orders)
                 buttons=sender.call_args.args[1]['reply_markup']['inline_keyboard']
                 assert [row[0]['text'] for row in buttons]==['Открыть заказ','Сменить статус']
                 direct=tg.order_path(order['id'])
@@ -348,6 +406,7 @@ async def main():
                 assert 'st-key-scena_request_card' in focused.body.decode()
                 assert 'shop_product_editor_' not in focused.body.decode()
                 assert 'Все заказы' in focused.body.decode()
+                capture('owner-order-card',focused)
                 with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as refresh:
                     refreshed,_=await request(direct,owner=True,data=payload(focused,'Обновить карточку в Telegram'),instance=1)
                 assert refreshed.code==200 and 'Карточка в Telegram обновлена.' in refreshed.body.decode()

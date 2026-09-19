@@ -21,7 +21,7 @@ def translation_gaps(settings, db_path):
         ('scene', 'bio', 'Моя Сцена', 'Scena mea', 'My Scene'),
         ('professional', 'beauty_desc', 'Professional', 'Professional', 'Professional'),
         ('model', 'model_intro_text', 'Знакомство', 'Prezentare', 'Introduction'),
-        ('shop', 'shop_description', 'Market', 'Market', 'Market'),
+        ('shop', 'shop_description', 'shopping', 'shopping', 'shopping'),
     ]
     result = []
     for view, key, ru, ro, en in groups:

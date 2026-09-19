@@ -2197,3 +2197,7 @@ _load_rows(r'''
 ''')
 
 register_copy("Создано: ", "Creată: ", "Created: ")
+
+# The section name is a single unlocalized brand word.
+register_copy('Ваш shopping', 'shopping personal', 'Your shopping')
+register_copy('Уведомление пока не отправлено. Проверьте подключение Telegram в shopping → Витрина и повторите позже.', 'Notificarea nu a fost trimisă. Verificați conexiunea Telegram în shopping → Vitrină și reîncercați.', 'Notification not sent. Check Telegram in shopping → Storefront and try again.')

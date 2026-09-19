@@ -21,7 +21,7 @@ DESTINATIONS = (
     ('professional', 'Мастер · Professional', 'Specialist · Professional', 'Specialist · Professional'),
     ('booking', 'Запись на услуги', 'Programare la servicii', 'Book a service'),
     ('scene', 'Моя Сцена', 'Scena mea', 'My Scene'),
-    ('shop', 'Market', 'Market', 'Market'),
+    ('shop', 'shopping', 'shopping', 'shopping'),
     ('course', 'Курс', 'Curs', 'Course'),
     ('portfolio-model', 'Портфолио Model', 'Portofoliu Model', 'Model portfolio'),
     ('portfolio-professional', 'Портфолио мастера', 'Portofoliul specialistului', 'Professional portfolio'),

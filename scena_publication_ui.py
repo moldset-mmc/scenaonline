@@ -14,6 +14,7 @@ from scena_publications import (
     PublicationValidationError, archive_publication, get_draft, get_publication,
     list_publications, list_versions, publish_local, restore_version, save_draft,
     store_publication_image, restyle_publication_image, render_publication_image, managed_original,
+    set_publication_visibility, trash_publication, restore_trashed_publication,
 )
 
 
@@ -226,23 +227,54 @@ def render_publication_workspace(db_path, app_dir, settings, locale):
         st.rerun()
     drafts = list_publications(db_path)
     selected = st.session_state.get('publication_edit_id')
-    labels = {'draft': tr(locale,'Черновик','Ciornă','Draft'), 'published': tr(locale,'На Сцене','Pe Scenă','On my Scene'), 'archived': tr(locale,'В архиве','În arhivă','Archived')}
+    places = {'scene': tr(locale,'Моя Сцена','Scena mea','My Scene'),
+              'professional': tr(locale,'Услуги и курсы','Servicii și cursuri','Services and courses'), 'model': 'model SCENA'}
+    labels = {'draft': tr(locale,'Черновик','Ciornă','Draft'), 'published': tr(locale,'Опубликовано','Publicat','Published'),
+              'hidden': tr(locale,'Скрыто','Ascuns','Hidden'), 'archived': tr(locale,'В архиве','În arhivă','Archived')}
     with st.expander(tr(locale, f'Мои публикации · {len(drafts)}', f'Publicațiile mele · {len(drafts)}', f'My publications · {len(drafts)}'), expanded=selected is None):
         if not drafts:
             st.caption(tr(locale, 'Нажмите «Новая публикация», чтобы начать.', 'Apasă «Publicație nouă» pentru a începe.'))
         for item in drafts:
-            label = f"{item.get('title_' + locale) or item.get('body_' + locale,'')[:35] or tr(locale,'Без названия','Fără titlu','Untitled')} · {labels[item['status']]}"
-            if item['status'] == 'published' and item['has_unpublished_changes']:
-                label += tr(locale,' · есть черновик изменений',' · modificări în ciornă',' · draft changes')
-            if st.button(label, key=f"publication_open_{item['id']}", width='stretch'):
+            title = item.get('title_' + locale) or item.get('body_' + locale,'')[:55] or tr(locale,'Без названия','Fără titlu','Untitled')
+            live_places = ', '.join(places[p] for p in item['published_destinations'])
+            state = labels[item['status']] + (' · ' + live_places if live_places else '')
+            if item['status'] in {'published', 'hidden'} and item['has_unpublished_changes']:
+                state += tr(locale,' · есть черновик изменений',' · modificări în ciornă',' · draft changes')
+            with st.container(key=f"publication_item_{item['id']}"):
+                src = safe_image(app_dir, item.get('image_url'))
+                if src:
+                    st.markdown('<img class="publication-thumb" src="'+html.escape(src, quote=True)+'" alt="" loading="lazy">', unsafe_allow_html=True)
+                opened = st.button(f"№ {item['id']} · {title}", key=f"publication_open_{item['id']}", width='stretch')
+                st.caption(state)
+            if opened:
                 _reset_editor(item['id'])
                 st.session_state['publication_edit_id'] = item['id']
                 st.session_state.pop('publication_preview_revision', None)
                 st.rerun()
+    from datetime import datetime, timedelta, timezone
+    trash = [item for item in list_publications(db_path, include_trashed=True) if item['status'] == 'trashed']
+    if trash:
+        with st.expander(tr(locale, f'Корзина · {len(trash)}', f'Coș · {len(trash)}', f'Trash · {len(trash)}')):
+            st.caption(tr(locale,'Восстановление доступно 30 дней. Материал вернётся скрытым.',
+                          'Restabilire în 30 de zile. Materialul va rămâne ascuns.', 'Restore within 30 days. Restored posts stay hidden.'))
+            for item in trash:
+                expired = datetime.now(timezone.utc) > datetime.fromisoformat(item['updated_at']) + timedelta(days=30)
+                title = item.get('title_'+locale) or tr(locale,'Без названия','Fără titlu','Untitled')
+                st.write(f"№ {item['id']} · {title}")
+                if st.button(tr(locale,'Восстановить','Restabilește','Restore'), key=f"publication_untrash_{item['id']}", disabled=expired):
+                    try:
+                        restore_trashed_publication(db_path, item['id'])
+                    except PublicationValidationError as error:
+                        st.error(str(error))
+                    else:
+                        _reset_editor(item['id'])
+                        _notice(tr(locale,'Публикация восстановлена и пока скрыта.','Publicația a fost restabilită și rămâne ascunsă.','Post restored and hidden.'))
     if selected is None:
         return
     current = get_draft(db_path, selected) if selected != 'new' else {}
     suffix = str(selected)
+    if current and current['status'] == 'trashed':
+        return
     revision_key = 'post_loaded_revision_' + suffix
     if current:
         if revision_key not in st.session_state:
@@ -252,6 +284,23 @@ def render_publication_workspace(db_path, app_dir, settings, locale):
             if st.button(tr(locale, 'Загрузить свежую версию', 'Încarcă versiunea nouă'), key='post_reload_' + suffix):
                 _reset_editor(selected)
                 st.rerun()
+    if current and current['status'] in {'published', 'hidden'}:
+        with st.form('post_visibility_' + suffix):
+            st.subheader(tr(locale,'Где показывать публикацию','Unde se afișează publicația','Where this post appears'))
+            chosen = [place for place, label in places.items() if st.checkbox(label,
+                      value=place in current['published_destinations'], key='post_visible_'+place+'_'+suffix)]
+            st.caption(tr(locale,'Снимите все галочки, чтобы скрыть публикацию. Текст черновика не публикуется.',
+                          'Debifați toate paginile pentru a ascunde publicația. Textul ciornei nu se publică.',
+                          'Uncheck all pages to hide the post. Draft text is not published.'))
+            apply_visibility = st.form_submit_button(tr(locale,'Сохранить показ','Salvează afișarea','Save visibility'), type='primary')
+        if apply_visibility:
+            try:
+                set_publication_visibility(db_path, selected, st.session_state[revision_key], chosen)
+            except PublicationValidationError as error:
+                st.error(str(error))
+            else:
+                _reset_editor(selected)
+                _notice(tr(locale,'Показ обновлён.','Afișarea a fost actualizată.','Visibility updated.'))
     st.subheader(tr(locale, '1. Материал', '1. Conținut'))
     styles = {'auto': tr(locale, 'По фотографии', 'După fotografie', 'Match photo'),
               'ivory': tr(locale, 'Белый', 'Alb', 'Ivory'), 'sand': tr(locale, 'Песочный', 'Nisipiu', 'Sand'),
@@ -293,9 +342,10 @@ def render_publication_workspace(db_path, app_dir, settings, locale):
         values['price_text'] = st.text_input(tr(locale, 'Цена — обязательна для предложения', 'Preț — obligatoriu pentru ofertă'), value=current.get('price_text', ''), placeholder='450 MDL', key='post_price_' + suffix)
         with st.expander(tr(locale, 'Кнопка и места показа', 'Buton și pagini de afișare')):
             values['cta_url'] = st.text_input(tr(locale, 'Адрес для кнопки «Подробнее»', 'Adresa butonului «Detalii»'), value=current.get('cta_url') or current.get('link_url', ''), key='post_cta_' + suffix)
-            for destination, label in [('scene', tr(locale,'Моя Сцена','Scena mea','My Scene')), ('professional', tr(locale,'Профессиональная','Profesional','Professional')), ('model', 'Model')]:
-                field = 'show_' + destination
-                values[field] = st.checkbox(label, value=bool(current.get(field, destination == 'scene')), key='post_' + field + '_' + suffix)
+            if not current or current['status'] not in {'published', 'hidden'}:
+                for destination, label in places.items():
+                    field = 'show_' + destination
+                    values[field] = st.checkbox(label, value=bool(current.get(field, destination == 'scene')), key='post_' + field + '_' + suffix)
         values['translations_approved'] = st.checkbox(tr(locale, 'Я проверила все заполненные языковые версии', 'Am verificat toate versiunile completate', 'I reviewed every completed language version'), value=bool(current.get('translations_approved', False)), key='post_approved_' + suffix)
         save = st.form_submit_button(tr(locale, 'Сохранить черновик', 'Salvează ciorna'), key='post_save_' + suffix, type='primary')
     if save:
@@ -351,6 +401,20 @@ def render_publication_workspace(db_path, app_dir, settings, locale):
                 _notice(tr(locale, 'Публикация появилась на Сцене.', 'Publicația a apărut pe Scena ta.'))
     if current['status'] == 'published':
         st.link_button(tr(locale, 'Посмотреть опубликованную версию', 'Vezi versiunea publicată'), post_url(current['public_id'], locale))
+    st.subheader(tr(locale,'Удаление публикации','Ștergerea publicației','Delete post'))
+    st.caption(tr(locale,'Публикация исчезнет из ленты и списка. Восстановить её можно в корзине в течение 30 дней.',
+                  'Publicația dispare din flux și listă. O puteți restabili din coș timp de 30 de zile.',
+                  'The post leaves the feed and list. You can restore it from Trash within 30 days.'))
+    confirmed = st.checkbox(tr(locale,'Удалить эту публикацию в корзину','Mută această publicație în coș','Move this post to Trash'), key='post_delete_confirm_'+suffix)
+    if st.button(tr(locale,'Удалить публикацию','Șterge publicația','Delete post'), key='post_delete_'+suffix, disabled=not confirmed):
+        try:
+            trash_publication(db_path, selected, st.session_state[revision_key])
+        except PublicationValidationError as error:
+            st.error(str(error))
+        else:
+            _reset_editor(selected)
+            st.session_state.pop('publication_edit_id', None)
+            _notice(tr(locale,'Публикация перемещена в корзину.','Publicația a fost mutată în coș.','Post moved to Trash.'))
     with st.expander(tr(locale, 'История и архив', 'Istoric și arhivă')):
         versions = list_versions(db_path, selected)
         version = st.selectbox(tr(locale, 'Сохранённая версия', 'Versiune salvată'), versions, format_func=lambda v: f"{v['created_at'][:16].replace('T', ' ')} UTC · v{v['revision']}", key='post_version_' + suffix)

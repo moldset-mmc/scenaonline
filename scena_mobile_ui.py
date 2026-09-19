@@ -4,6 +4,7 @@ from urllib.parse import urlencode
 
 from scena_i18n import tr, translate_literaltext, language_query
 from scena_ui import st
+from scena_home_style import scene_brand_markup, scene_font_css, scene_brand_css
 
 
 def cabinet_url(locale, section, view, **extra):
@@ -24,11 +25,12 @@ def navigation(locale, section, view, sections, views, owner):
     def link(title, destination, active=False):
         return '<a data-cabinet-nav href="'+escape(destination, quote=True)+'"'+(' aria-current="page"' if active else '')+'>'+title+'</a>'
 
+    st.markdown('<style>'+scene_font_css()+scene_brand_css()+'</style>', unsafe_allow_html=True)
     choices = ''.join(link(label(title), cabinet_url(locale, key, next(iter(views.get(key, {})), '')), key == section)
                       for key, title in sections.items() if key != 'home')
     languages = language_links(locale, {**dict(st.query_params), 'page':'admin', 'section':section, 'view':view})
     with st.container(key='scena_cabinet_chrome'):
-        st.markdown('<header class="scena-cabinet-header">'+link('SCENA', '/?'+urlencode(dict(page='scene',lang=locale)))+
+        st.markdown('<header class="scena-cabinet-header">'+'<a class="scene-home-brand" aria-label="MB Studio. SCENA.live" data-cabinet-nav href="/?'+urlencode(dict(page='scene',lang=locale))+'">'+scene_brand_markup()+'</a>'+
             '<span class="scena-cabinet-current">'+label(sections[section])+'</span>'+
             '<details class="scena-cabinet-menu"><summary>'+escape(tr(locale,'Меню','Meniu','Menu'))+'</summary>'+
             '<div class="scena-cabinet-panel"><p>'+escape(owner)+'</p><nav aria-label="'+escape(tr(locale,'Разделы кабинета','Secțiuni','Workspace sections'))+'">'+choices+'</nav>'+
@@ -86,4 +88,4 @@ def dashboard(db_path, locale):
         for row in waiting:
             st.markdown('<a class="scena-work-waiting" data-cabinet-nav href="'+escape(request_path(row['id'],locale),quote=True)+'"><strong>'+escape(row['name'])+'</strong><span>'+escape(row['service'])+'</span><span>→</span></a>',unsafe_allow_html=True)
     with st.expander(tr(locale,'Мои страницы','Paginile mele','My pages')):
-        st.markdown('<nav class="scena-cabinet-tabs">'+''.join('<a href="/?'+urlencode(dict(page=page,lang=locale))+'">'+escape(title)+'</a>' for title,page in [(tr(locale,'Моя Сцена','Scena mea','My Scene'),'scene'),('Professional','professional'),('Model','model'),('Market','shop')])+'</nav>',unsafe_allow_html=True)
+        st.markdown('<nav class="scena-cabinet-tabs">'+''.join('<a href="/?'+urlencode(dict(page=page,lang=locale))+'">'+escape(title)+'</a>' for title,page in [(tr(locale,'Моя Сцена','Scena mea','My Scene'),'scene'),('Professional','professional'),('Model','model'),('shopping','shop')])+'</nav>',unsafe_allow_html=True)

@@ -11,7 +11,7 @@ from scena_database import connect as database_connect
 import uuid
 import warnings
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -113,11 +113,14 @@ def _record(connection, post_id):
 
 def _editable(record):
     snapshot = json.loads(record["draft_json"])
+    published = json.loads(record["published_json"] or '{}')
     return {**_defaults(), **snapshot, "id": record["post_id"], "post_id": record["post_id"],
             "needs_frame_refresh": bool(snapshot.get("original_image_path")) and ("frame_style" not in snapshot or "logo_style" not in snapshot),
             "public_id": record["public_id"], "revision": record["revision"],
             "public_revision": record["public_revision"], "status": record["status"],
-            "updated_at": record["updated_at"], "has_unpublished_changes": record["revision"] != record["public_revision"]}
+            "updated_at": record["updated_at"], "has_unpublished_changes": snapshot != published,
+            "published_destinations": [place for place, flag in DESTINATIONS.items()
+                                       if record['status'] == 'published' and published.get(flag)]}
 
 
 def save_draft(db_path, post_id=None, **fields):
@@ -128,6 +131,8 @@ def save_draft(db_path, post_id=None, **fields):
     with _db(db_path) as connection, connection:
         connection.execute("BEGIN IMMEDIATE")
         record = _record(connection, post_id) if post_id is not None else None
+        if record and record['status'] == 'trashed':
+            raise PublicationValidationError('Сначала восстановите публикацию из корзины.')
         if record and fields.get("expected_revision") is not None and int(fields["expected_revision"]) != record["revision"]:
             raise PublicationValidationError("Черновик изменён. Откройте свежую версию.")
         snapshot = {**_defaults(), **json.loads(record["draft_json"])} if record else _defaults()
@@ -176,18 +181,22 @@ def get_private_export_source(db_path, post_id):
         return {**_defaults(), **json.loads(snapshot), "public_id": record["public_id"], "status": record["status"]}
 
 
-def list_publications(db_path, destination=None, include_archived=True):
+def list_publications(db_path, destination=None, include_archived=True, *, include_trashed=False):
     if destination is not None and destination not in DESTINATIONS:
         raise PublicationValidationError("Неизвестное место публикации.")
     with _db(db_path) as connection:
         records = [_editable(row) for row in connection.execute("SELECT * FROM publication_records ORDER BY updated_at DESC,post_id DESC")]
-    return [row for row in records if (include_archived or row["status"] != "archived") and (destination is None or row[DESTINATIONS[destination]])]
+    return [row for row in records if (include_trashed or row['status'] != 'trashed')
+            and (include_archived or row["status"] not in {'archived', 'trashed'})
+            and (destination is None or row[DESTINATIONS[destination]])]
 
 
 def publish_local(db_path, post_id, expected_revision, *, media_root=None):
     with _db(db_path) as connection, connection:
         connection.execute("BEGIN IMMEDIATE")
         record = _record(connection, post_id)
+        if record['status'] == 'trashed':
+            raise PublicationValidationError('Сначала восстановите публикацию из корзины.')
         if record["revision"] != int(expected_revision):
             raise PublicationValidationError("Предпросмотр устарел. Проверьте свежую версию.")
         snapshot = json.loads(record["draft_json"])
@@ -214,11 +223,13 @@ def get_publication(db_path, public_id, include_private=False):
             return None
         if include_private:
             return _editable(record)
-        if record["status"] == "draft" or record["public_revision"] == 0:
+        if record["status"] in {"draft", "hidden"} or record["public_revision"] == 0:
             return None
         author = connection.execute("SELECT value FROM profile_settings WHERE key='master_name'").fetchone()
         created = connection.execute("SELECT created_at FROM posts WHERE id=?", (record["post_id"],)).fetchone()
         result = {"id": record["post_id"], "post_id": record["post_id"], "public_id": record["public_id"], "status": record["status"], "author_name": author[0] if author else "", "public_revision": record["public_revision"], "created_at": created[0], "updated_at": record["updated_at"]}
+        if record['status'] == 'trashed':
+            result['status'] = 'archived'
         if record["status"] == "published":
             snapshot = json.loads(record["published_json"])
             snapshot.pop("original_image_path", None)
@@ -232,6 +243,78 @@ def archive_publication(db_path, post_id):
         _record(connection, post_id)
         connection.execute("UPDATE publication_records SET status='archived',updated_at=? WHERE post_id=?", (_now(), post_id))
         connection.execute("UPDATE posts SET active=0 WHERE id=?", (post_id,))
+        return _editable(_record(connection, post_id))
+
+
+def set_publication_visibility(db_path, post_id, expected_revision, destinations):
+    """Change only the published placement; never publish unsaved/draft content."""
+    destinations = set(destinations)
+    if destinations - set(DESTINATIONS):
+        raise PublicationValidationError('Неизвестное место публикации.')
+    with _db(db_path) as connection, connection:
+        connection.execute('BEGIN IMMEDIATE')
+        record = _record(connection, post_id)
+        if record['revision'] != expected_revision:
+            raise PublicationValidationError('Черновик изменён. Откройте свежую версию.')
+        if record['status'] not in {'published', 'hidden'} or not record['published_json']:
+            raise PublicationValidationError('Сначала проверьте и опубликуйте материал.')
+        draft, published = json.loads(record['draft_json']), json.loads(record['published_json'])
+        for place, flag in DESTINATIONS.items():
+            draft[flag] = published[flag] = place in destinations
+        stamp, revision = _now(), record['revision'] + 1
+        status = 'published' if destinations else 'hidden'
+        connection.execute('UPDATE publication_records SET revision=?,draft_json=?,published_json=?,status=?,updated_at=? WHERE post_id=?',
+                           (revision, _json(draft), _json(published), status, stamp, post_id))
+        connection.execute('UPDATE posts SET show_scene=?,show_professional=?,show_model=?,active=? WHERE id=?',
+                           [published[k] for k in DESTINATIONS.values()] + [bool(destinations), post_id])
+        connection.execute('INSERT INTO publication_versions(post_id,revision,snapshot_json,created_at) VALUES (?,?,?,?)',
+                           (post_id, revision, _json(draft), stamp))
+        return _editable(_record(connection, post_id))
+
+
+def trash_publication(db_path, post_id, expected_revision):
+    """Remove a post from the list/feed while preserving 30-day recovery."""
+    with _db(db_path) as connection, connection:
+        connection.execute('BEGIN IMMEDIATE')
+        record = _record(connection, post_id)
+        if record['revision'] != expected_revision:
+            raise PublicationValidationError('Черновик изменён. Откройте свежую версию.')
+        if record['status'] != 'trashed':
+            draft = json.loads(record['draft_json'])
+            published = json.loads(record['published_json']) if record['published_json'] else None
+            for flag in DESTINATIONS.values():
+                draft[flag] = False
+                if published is not None:
+                    published[flag] = False
+            stamp, revision = _now(), record['revision'] + 1
+            connection.execute("UPDATE publication_records SET status='trashed',revision=?,draft_json=?,published_json=?,updated_at=? WHERE post_id=?",
+                               (revision, _json(draft), _json(published) if published is not None else None, stamp, post_id))
+            connection.execute('UPDATE posts SET active=0,show_scene=0,show_professional=0,show_model=0 WHERE id=?', (post_id,))
+            connection.execute('INSERT INTO publication_versions(post_id,revision,snapshot_json,created_at) VALUES (?,?,?,?)',
+                               (post_id, revision, _json(draft), stamp))
+        return _editable(_record(connection, post_id))
+
+
+def restore_trashed_publication(db_path, post_id):
+    """Recovery restores editing only; the owner chooses when to show it again."""
+    with _db(db_path) as connection, connection:
+        connection.execute('BEGIN IMMEDIATE')
+        record = _record(connection, post_id)
+        if record['status'] != 'trashed' or datetime.now(timezone.utc) > datetime.fromisoformat(record['updated_at']) + timedelta(days=30):
+            raise PublicationValidationError('Срок восстановления публикации истёк или она уже восстановлена.')
+        status = 'hidden' if record['public_revision'] else 'draft'
+        draft = json.loads(record['draft_json'])
+        published = json.loads(record['published_json']) if record['published_json'] else None
+        for flag in DESTINATIONS.values():
+            draft[flag] = False
+            if published is not None:
+                published[flag] = False
+        stamp, revision = _now(), record['revision'] + 1
+        connection.execute('UPDATE publication_records SET status=?,revision=?,draft_json=?,published_json=?,updated_at=? WHERE post_id=?',
+                           (status, revision, _json(draft), _json(published) if published is not None else None, stamp, post_id))
+        connection.execute('UPDATE posts SET active=0,show_scene=0,show_professional=0,show_model=0 WHERE id=?', (post_id,))
+        connection.execute('INSERT INTO publication_versions(post_id,revision,snapshot_json,created_at) VALUES (?,?,?,?)',
+                           (post_id, revision, _json(draft), stamp))
         return _editable(_record(connection, post_id))
 
 
