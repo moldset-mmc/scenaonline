@@ -1,7 +1,7 @@
 'use strict';
-const CACHE = 'mbstudio-card-v1';
+const CACHE = 'mbstudio-card-v2';
 const ROOT = new URL('./', self.location.href);
-const FILES = ['./', './index.html', './style.css', './app.js', './assets/portrait.webp', './assets/qr.svg', './assets/icon-192.png', './assets/icon-512.png', './manifest.webmanifest', './mbstudio.vcf'].map(path => new URL(path, ROOT).href);
+const FILES = ['./', './index.html', './style.css', './app.js', './assets/scena-live.svg', './assets/manrope-regular.woff2', './assets/portrait.webp', './assets/qr.svg', './assets/icon-192.png', './assets/icon-512.png', './manifest.webmanifest', './mbstudio.vcf'].map(path => new URL(path, ROOT).href);
 self.addEventListener('install', event => { event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', event => { event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('mbstudio-card-') && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', event => {
