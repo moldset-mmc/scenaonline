@@ -250,7 +250,10 @@ def render_booking(db_path: str | Path, app_dir: str | Path, settings: dict[str,
         st.title(_tr(locale, "Запись на встречу", "Programare"))
         st.info(_tr(locale, "Запись сейчас недоступна. Загляните немного позже.", "Programarea nu este disponibilă acum. Reveniți puțin mai târziu."))
         return
-    if not st.session_state.get("booking_confirmation") and not st.session_state.get("booking_receipt"):
+    native = os.environ.get("SCENA_NATIVE_WEB") == "1"
+    if native:
+        pass  # The native heading lives inside the fragment so every step updates it.
+    elif not st.session_state.get("booking_confirmation") and not st.session_state.get("booking_receipt"):
         render_stage_intro(app_dir, settings, locale,
             kicker=_tr(locale, "ВАШ ОБРАЗ · ВАШ МОМЕНТ", "IMAGINEA TA · MOMENTUL TĂU"),
             title=content_text(settings, "booking_title", locale, _tr(locale, "Время для себя", "Timp pentru tine", "Time for you")),
@@ -289,6 +292,10 @@ def render_booking_flow(db_path, app_dir, settings, locale):
     if settings.get("professional_published", "1") != "1":
         st.info(_tr(locale, "Запись сейчас недоступна. Загляните немного позже.", "Programarea nu este disponibilă acum. Reveniți puțin mai târziu."))
         return
+    native = os.environ.get("SCENA_NATIVE_WEB") == "1"
+    if native:
+        from scena_booking_design import introduction
+        introduction(app_dir, settings, locale, confirmation=bool(st.session_state.get('booking_confirmation')), receipt=bool(st.session_state.get('booking_receipt')))
     if st.session_state.get("booking_receipt"):
         receipt = st.session_state["booking_receipt"]
         st.markdown(f'<span hidden data-scena-conversion="booking_request" data-scena-conversion-key="{int(receipt["id"])}"></span>', unsafe_allow_html=True)
@@ -319,15 +326,31 @@ def render_booking_flow(db_path, app_dir, settings, locale):
         item["id"]: (f"{item.get('group_name_'+locale) or item.get('group_name_ru') or ''} · " if len(group_ids) > 1 else "") + _name(item, locale)
         for item in services
     }
-    selected_service = st.pills(_tr(locale, "1. Выберите услугу", "1. Alegeți serviciul"), valid_ids, key="booking_service", format_func=lambda value: labels.get(value, ""), on_change=_service_changed)
+    if native:
+        from scena_booking_design import services_picker
+        selected_service = services_picker(services, settings, locale, labels, _price, _service_changed)
+    else:
+        selected_service = st.pills(_tr(locale, "1. Выберите услугу", "1. Alegeți serviciul"), valid_ids, key="booking_service", format_func=lambda value: labels.get(value, ""), on_change=_service_changed)
     if not selected_service:
         st.caption(_tr(locale, "Выберите услугу, чтобы увидеть её стоимость и свободные даты.", "Alegeți serviciul pentru a vedea prețul și datele disponibile."))
         return
     item = next(item for item in services if item["id"] == selected_service)
-    st.markdown(f"**{_price(item, settings, locale)}** · {item['duration']} {_tr(locale, 'мин.', 'min.')}")
-    description = content_text(item, "description", locale)
-    if description:
-        st.caption(description)
+    if native:
+        from scena_booking_design import selection_summary
+        selection_summary(item, settings, locale, _price)
+        with st.container(key='booking_schedule'):
+            with st.expander(_tr(locale,'Выбрать дату и время','Alegeți data și ora','Choose a date and time')):
+                _render_schedule(db_path, selected_service, item, settings, locale)
+        st.markdown('<p class="booking-confirmation-note">'+html.escape(_tr(locale,'Запись подтвердит мастер.','Programarea va fi confirmată de specialist.','Your artist will confirm the appointment.'))+'</p>',unsafe_allow_html=True)
+    else:
+        st.markdown(f"**{_price(item, settings, locale)}** · {item['duration']} {_tr(locale, 'мин.', 'min.')}")
+        description = content_text(item, "description", locale)
+        if description:
+            st.caption(description)
+        _render_schedule(db_path, selected_service, item, settings, locale)
+
+
+def _render_schedule(db_path, selected_service, item, settings, locale):
     now = datetime.now(CHISINAU)
     last_day = now.date() + timedelta(days=int(settings.get("booking_horizon_days", "90")))
     availability = generate_availability_range(db_path, selected_service, now.date().isoformat(), last_day.isoformat(), now=now)

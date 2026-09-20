@@ -1,7 +1,7 @@
 /* Shared native layout, loaded after legacy presentation styles. */
 :root { --scena-tap: 44px; --scena-radius: 12px; --scena-space: 16px; }
 .stVerticalBlock, .stMarkdown, .scena-tabs, .scena-tabpanel, .scena-container { min-inline-size: 0; }
-.scena-field input, .scena-field textarea, .scena-field select { font-size: 16px; min-height: var(--scena-tap); }
+.scena-field input, .scena-field input[type=file], .scena-field textarea, .scena-field select { font-size: 16px; min-height: var(--scena-tap); }
 .scena-field label, .scena-choices legend { font-size: 15px; }
 .scena-check label { min-height: var(--scena-tap); align-items: center; }
 .scena-check input { width: 20px; height: 20px; }

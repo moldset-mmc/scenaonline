@@ -115,6 +115,10 @@ def render_page(ctx, previous=None, values=None, files=None):
 <form id="scena-page" method="post" action="{html.escape(ctx.url,quote=True)}" enctype="multipart/form-data" novalidate>
 <input type="hidden" name="_token" value="{form_token}">{body}</form></div></main></div>
 <div id="scena-operation" role="status" aria-live="polite" hidden></div></body></html>'''
+        if page == 'booking':
+            booking_css = resources.get('scena_web/static/booking.css', '')
+            if booking_css:
+                document = document.replace('</head>', f'<link rel="stylesheet" href="{booking_css}"></head>', 1)
         from scena_urls import enabled, rewrite_links
         if enabled(settings):
             document = rewrite_links(document, public_base(settings))

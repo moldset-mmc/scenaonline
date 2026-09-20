@@ -864,20 +864,6 @@ def render_header(page: str, locale: str, *, admin: bool = False) -> None:
     st.markdown('<style>' + scene_font_css() + scene_brand_css() + '</style>', unsafe_allow_html=True)
     logo_class, logo_label = "scena-logo scene-home-brand", "MB Studio. SCENA.live"
     logo = scene_brand_markup()
-    st.markdown(
-        f"""
-        <div class="scena-top">
-          <a class="{logo_class}" href="{page_url('scene', locale)}" target="_self" aria-label="{logo_label}">{logo}</a>
-          <span class="scena-muted">{clean(mode)}</span>
-          <details class="scena-locale-menu"><summary>{locale.upper()}</summary><div class="scena-locale">
-            <a class="{'active' if locale == 'ru' else ''}" href="{ru_url}" target="_self">RU</a>
-            <a class="{'active' if locale == 'ro' else ''}" href="{ro_url}" target="_self">RO</a>
-            <a class="{'active' if locale == 'en' else ''}" href="{en_url}" target="_self">EN</a>
-          </div></details>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
     items = [
         ("scene", tr(locale, "Моя Сцена", "Scena mea")),
         ("professional", tr(locale, "Услуги и курсы", "Servicii și cursuri")),
@@ -895,7 +881,24 @@ def render_header(page: str, locale: str, *, admin: bool = False) -> None:
         + f' href="{page_url(key, locale)}" target="_self">{clean(label)}</a>'
         for key, label in items
     )
-    st.markdown(f'<nav class="scena-nav">{links}</nav>', unsafe_allow_html=True)
+    booking_menu = ('<details class="scena-booking-menu"><summary aria-label="'+clean(tr(locale,"Меню","Meniu","Menu"))+'">☰</summary><nav>'+links+'</nav></details>') if page == "booking" else ""
+    st.markdown(
+        f"""
+        <div class="scena-top">
+          <a class="{logo_class}" href="{page_url('scene', locale)}" target="_self" aria-label="{logo_label}">{logo}</a>
+          <span class="scena-muted">{clean(mode)}</span>
+          <details class="scena-locale-menu"><summary>{locale.upper()}</summary><div class="scena-locale">
+            <a class="{'active' if locale == 'ru' else ''}" href="{ru_url}" target="_self">RU</a>
+            <a class="{'active' if locale == 'ro' else ''}" href="{ro_url}" target="_self">RO</a>
+            <a class="{'active' if locale == 'en' else ''}" href="{en_url}" target="_self">EN</a>
+          </div></details>
+          {booking_menu}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if page != "booking":
+        st.markdown(f'<nav class="scena-nav">{links}</nav>', unsafe_allow_html=True)
 
 
 def render_footer(locale: str) -> None:
