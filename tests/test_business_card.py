@@ -43,6 +43,7 @@ class BusinessCardTests(AsyncHTTPTestCase):
         self.assertIn('javascript', worker.headers['Content-Type'])
         self.assertEqual(worker.headers['Service-Worker-Allowed'], '/card/')
         self.assertIn('text/vcard', self.fetch('/card/mbstudio.vcf').headers['Content-Type'])
+        self.assertEqual(self.fetch('/card/assets/portrait.webp').headers['Content-Type'], 'image/webp')
 
     def test_head_and_conditional_request(self):
         response = self.fetch('/card/', method='HEAD')

@@ -33,6 +33,9 @@ class BusinessCardAssets(StaticFileHandler):
             self.set_header('Content-Type', 'application/manifest+json; charset=utf-8')
         elif suffix == '.vcf':
             self.set_header('Content-Type', 'text/vcard; charset=utf-8')
+        elif suffix == '.webp':
+            # Minimal production containers may lack the system MIME database.
+            self.set_header('Content-Type', 'image/webp')
         if Path(path).name == 'sw.js':
             self.set_header('Service-Worker-Allowed', '/card/')
 
