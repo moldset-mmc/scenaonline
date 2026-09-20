@@ -803,6 +803,8 @@ def init_db(db_path: str | Path, *, now: datetime | None = None) -> None:
             "INSERT OR IGNORE INTO profile_settings (key, value) VALUES (?, ?)",
             DEFAULT_SETTINGS.items(),
         )
+        from scena_business_card import initialize_card
+        initialize_card(connection)
         _apply_legacy_demo_settings_once(connection)
 
         if (

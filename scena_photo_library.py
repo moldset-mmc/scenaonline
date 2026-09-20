@@ -160,6 +160,9 @@ def catalog(db, app_dir, locale='ru', *, include_trashed=False, connection=None)
         return set(_references(snapshot))
     with (nullcontext(connection) if connection is not None else connect(db)) as con:
         settings = dict(con.execute('SELECT key,value FROM profile_settings').fetchall())
+        card_photo = con.execute("SELECT value FROM business_card_settings WHERE key='photo'").fetchone()
+        if card_photo and card_photo[0]:
+            mark(card_photo[0], tr(locale, 'Визитка · фото', 'Carte de vizită · foto', 'Business card · photo'), 'card')
         products = _rows(con, 'SELECT * FROM shop_products ORDER BY updated_at DESC,id')
         for item in _targets(settings, products, locale):
             mark(item['path'], item['label'], item['group'], item['id'])

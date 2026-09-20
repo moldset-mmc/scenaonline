@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const CARD_URL = 'https://mbstudio.scena.life/card/';
-  const published = location.protocol === 'https:' && location.origin === 'https://mbstudio.scena.life' && /^\/card\/(?:index\.html)?$/.test(location.pathname);
+  const published = document.body.dataset.preview !== '1' && location.protocol === 'https:' && location.origin === 'https://mbstudio.scena.life' && /^\/card\/(?:index\.html)?$/.test(location.pathname);
   const byId = id => document.getElementById(id);
   const toast = byId('toast');
   let toastTimer;
@@ -16,14 +16,14 @@
     byId('share-preview').hidden = false;
     byId('nfc-preview').hidden = false;
     byId('copy-button').disabled = true;
-    byId('share-help').textContent = 'Предпросмотр QR-кода для будущей публикации.';
+    byId('share-help').textContent = 'QR-код открывает сохранённую визитку.';
     byId('install-note').textContent = 'Установка станет доступна после публикации по HTTPS. Ниже показаны шаги для опубликованной визитки.';
   }
   byId('qr-button').addEventListener('click', () => show('share-dialog'));
   byId('share-button').addEventListener('click', async () => {
     if (!published) { show('share-dialog'); return; }
     if (typeof navigator.share === 'function') {
-      try { await navigator.share({title:'MBStudio · Маша Бараночникова', text:'Моя визитка · Model & Makeup Artist', url:CARD_URL}); }
+      try { await navigator.share({title:document.title, text:'Моя визитка · ' + document.querySelector('.profession').textContent, url:CARD_URL}); }
       catch (error) { if (error.name !== 'AbortError') show('share-dialog'); }
     } else show('share-dialog');
   });
@@ -51,5 +51,10 @@
     finally { installPrompt = null; byId('native-install').hidden = true; }
   });
   addEventListener('appinstalled', () => { installPrompt = null; byId('native-install').hidden = true; say('Визитка добавлена'); });
-  if (published && 'serviceWorker' in navigator) addEventListener('load', () => { navigator.serviceWorker.register('./sw.js', {scope:'./'}).catch(() => {}); });
+  const offline = () => { byId('offline-note').hidden = navigator.onLine; };
+  offline();
+  addEventListener('offline', offline);
+  addEventListener('online', () => { offline(); if (published) location.reload(); });
+  addEventListener('pageshow', event => { if (published && event.persisted && navigator.onLine) location.reload(); });
+  if (published && 'serviceWorker' in navigator) addEventListener('load', () => { navigator.serviceWorker.register('/card/sw.js', {scope:'/card/'}).catch(() => {}); });
 })();

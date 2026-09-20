@@ -3115,6 +3115,7 @@ ADMIN_VIEWS = {
     },
     "pages": {
         "scene": "Моя Сцена",
+        "card": "Визитка",
         "professional": "Professional",
         "model": "Model",
         "shop": "shopping",
@@ -3139,6 +3140,7 @@ ADMIN_VIEWS = {
 }
 
 ADMIN_VIEW_COPY = {
+    ("pages", "card"): ("Визитка", "Отдельные данные для визитки, QR-кода и NFC."),
     ("promotion", "search"): ("Поиск и индексация", ""),
     ("photos", "library"): ("Фото", "Все фотографии и места их использования."),
     ("work", "overview"): ("Ваша работа сегодня", "Записи, услуги и заказы — начните с важного."),
@@ -3351,6 +3353,9 @@ def render_admin(settings: dict[str, str], locale: str) -> None:
     elif section == "settings" and view == "connections":
         from scena_connect_setup import render_connections
         render_connections(DB_PATH, APP_DIR, locale)
+    elif section == "pages" and view == "card":
+        from scena_business_card_ui import render_card_editor
+        render_card_editor(DB_PATH, APP_DIR, locale)
     elif section == "pages" and view == "scene":
         render_scene_admin(settings)
     elif section == "pages" and view == "professional":

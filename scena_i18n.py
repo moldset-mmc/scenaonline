@@ -1534,6 +1534,8 @@ _load_rows(r'''
 Главная|Acasă|Home
 Помощь|Ajutor|Help
 Страницы|Pagini|Pages
+Визитка|Carte de vizită|Business card
+Отдельные данные для визитки, QR-кода и NFC.|Date separate pentru cartea de vizită, QR și NFC.|Separate data for the business card, QR code and NFC.
 Работа|Activitate|Work
 Продвижение|Promovare|Promotion
 Настройки|Setări|Settings
