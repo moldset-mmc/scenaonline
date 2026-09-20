@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#141414">
+  <meta name="description" content="Маша Бараночникова · Model & Makeup Artist · Кишинёв. Запись, Instagram и электронная визитка MBStudio.">
+  <meta name="robots" content="noindex, follow">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="MBStudio">
+  <meta property="og:type" content="profile">
+  <meta property="og:title" content="MBStudio · Маша Бараночникова">
+  <meta property="og:description" content="Model & Makeup Artist · Кишинёв. Сохраните визитку и выберите услугу.">
+  <meta property="og:url" content="https://mbstudio.scena.life/card/">
+  <meta property="og:image" content="https://skh2gutggbn0dcmn.public.blob.vercel-storage.com/published/b34cd6d970ec63fdd341265bc5e97aee952e3e4813084d719b92cb8acba62f19.webp">
+  <link rel="canonical" href="https://mbstudio.scena.life/card/">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23141414'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-family='Georgia' font-size='34' fill='white'%3EMB%3C/text%3E%3C/svg%3E">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+  <title>MBStudio · Визитка Маши Бараночниковой</title>
+</head>
+<body>
+  <main class="page">
+    <p class="preview-note" id="preview-note" hidden>Предпросмотр · визитка ещё не опубликована</p>
+    <article class="card" aria-label="Электронная визитка MBStudio">
+      <header class="brand-row">
+        <a class="brand" href="https://mbstudio.scena.life/ru/" aria-label="MBStudio — открыть сайт"><span class="monogram">MB</span><span class="studio">Studio.</span></a>
+        <span class="city">Кишинёв</span>
+      </header>
+      <section class="portrait">
+        <img src="assets/portrait.webp" width="704" height="880" alt="Маша Бараночникова" fetchpriority="high">
+        <div class="identity"><p class="profession">MODEL & MAKEUP ARTIST</p><h1>Маша<br>Бараночникова</h1></div>
+      </section>
+      <div class="card-body">
+        <p class="intro">Красота. Характер. Движение.</p>
+        <a class="button primary" href="https://mbstudio.scena.life/ru/zapis/">Запись и услуги <span aria-hidden="true">↗</span></a>
+        <div class="share-row">
+          <button class="button secondary" id="share-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M5 13v7h14v-7"/></svg>Поделиться</button>
+          <button class="button secondary" id="qr-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h6v6H3zM15 3h6v6h-6zM3 15h6v6H3zM15 15h2v2h-2zM19 15h2v6h-6v-2"/></svg>QR-код</button>
+        </div>
+        <nav class="social-row" aria-label="Страницы Маши">
+          <a href="https://www.instagram.com/masha_cravcenco/" rel="noopener">Instagram <span aria-hidden="true">↗</span></a>
+          <span aria-hidden="true" class="separator"></span>
+          <a href="https://mbstudio.scena.life/ru/">Моя Сцена <span aria-hidden="true">↗</span></a>
+        </nav>
+        <a class="save-contact" id="contact-link" href="mbstudio.vcf" download="MBStudio.vcf"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M5 17v4h14v-4"/></svg>Сохранить контакт</a>
+      </div>
+    </article>
+    <footer class="tools"><button id="install-button" type="button">На главный экран</button><span aria-hidden="true">·</span><button id="nfc-button" type="button">Передача по NFC</button></footer>
+    <p class="platform">на платформе <a href="https://mbstudio.scena.life/ru/" aria-label="Моя Сцена">SCENA</a></p>
+    <noscript><p class="noscript">Для QR-кода и передачи ссылки включите JavaScript. Ссылки на запись и Instagram доступны без него.</p></noscript>
+  </main>
+  <dialog id="share-dialog" aria-labelledby="share-title">
+    <div class="dialog-head"><h2 id="share-title">Визитка MBStudio</h2><button class="close" type="button" data-close aria-label="Закрыть">×</button></div>
+    <p id="share-help">Покажите QR-код или отправьте ссылку.</p>
+    <img class="qr" src="assets/qr.svg" width="232" height="232" alt="QR-код визитки MBStudio">
+    <label for="card-url">Ссылка на визитку</label><input id="card-url" type="url" value="https://mbstudio.scena.life/card/" readonly spellcheck="false">
+    <button class="button primary" id="copy-button" type="button">Скопировать ссылку</button>
+    <p class="note" id="share-preview" hidden>Это будущий адрес. Отправлять ссылку и сканировать QR-код можно после публикации.</p>
+  </dialog>
+  <dialog id="install-dialog" aria-labelledby="install-title">
+    <div class="dialog-head"><h2 id="install-title">Всегда под рукой</h2><button class="close" type="button" data-close aria-label="Закрыть">×</button></div>
+    <p>Добавьте визитку на главный экран, чтобы быстро показывать и отправлять её.</p>
+    <div id="install-live">
+      <button class="button primary" id="native-install" type="button" hidden>Установить визитку</button>
+      <details id="android-guide"><summary>Samsung и другие Android</summary><ol><li>Откройте ссылку на визитку в Chrome.</li><li>Нажмите меню ⋮ → «Добавить на главный экран» или «Установить приложение».</li><li>Подтвердите добавление. Откройте значок MBStudio.</li></ol></details>
+      <details id="apple-guide"><summary>iPhone</summary><ol><li>Откройте ссылку на визитку в Safari.</li><li>Нажмите «Поделиться» → «На экран Домой». В некоторых версиях сначала откройте меню страницы.</li><li>Если доступно, включите «Открывать как веб-приложение» и нажмите «Добавить».</li></ol></details>
+    </div>
+    <p class="note" id="install-note">Добавление на экран даёт быстрый доступ. Для передачи ссылки используйте «Поделиться» или QR-код.</p>
+  </dialog>
+  <dialog id="nfc-dialog" aria-labelledby="nfc-title">
+    <div class="dialog-head"><h2 id="nfc-title">Передача касанием</h2><button class="close" type="button" data-close aria-label="Закрыть">×</button></div>
+    <p>Для Android и iPhone подойдёт отдельная NFC-карта или наклейка со ссылкой на эту визитку.</p>
+    <ol><li>Возьмите перезаписываемую NFC-метку.</li><li>В NFC Tools выберите запись ссылки URL/URI и укажите адрес визитки.</li><li>Запишите метку и проверьте её другим телефоном.</li></ol>
+    <p class="note">После касания получатель открывает предложенную ссылку. Его телефон должен поддерживать чтение NFC-меток; для загрузки визитки нужен интернет.</p>
+    <p class="note">Веб-визитка сама не превращает телефон в NFC-метку. На телефонах без NFC используйте QR-код.</p>
+    <p class="note" id="nfc-preview" hidden>Сначала опубликуйте визитку. Будущий адрес нельзя записывать на метку до проверки ссылки.</p>
+    <div class="app-links"><a href="https://www.wakdev.com/en/apps/nfc-tools-android.html">NFC Tools · Android ↗</a><a href="https://www.wakdev.com/en/apps/nfc-tools-ios.html">NFC Tools · iPhone ↗</a></div>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script src="app.js" defer></script>
+</body>
+</html>
