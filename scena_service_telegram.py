@@ -64,7 +64,7 @@ def reply_link(row):
         value = row.get('contact_telegram','').lstrip('@')
         return 'https://t.me/'+value if re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{4,31}', value) else ''
     if channel == 'email':
-        return 'mailto:'+quote(row['email'], safe='@.+-_') if row.get('email') else ''
+        return ''
     if channel in ('sms','phone') and phone:
         return ('sms:' if channel == 'sms' else 'tel:') + phone
     return ''
