@@ -20,7 +20,7 @@ def initialize():
     with _lock:
         if _ready:return
         started=time.monotonic()
-        from scena_database import connect,cloud_database
+        from scena_database import connect
         from scena_core import init_db
         from scena_media import initialize as media_initialize
         from .storage import initialize as web_initialize
@@ -47,8 +47,6 @@ def initialize():
                 db.execute("INSERT OR IGNORE INTO app_meta(key,value) VALUES ('cloud_session_key',?)",(secrets.token_hex(32),))
                 metadata['cloud_session_key']=db.execute("SELECT value FROM app_meta WHERE key='cloud_session_key'").fetchone()[0]
             os.environ['SCENA_SESSION_SIGNING_KEY']=metadata['cloud_session_key']
-        from scena_cloud_runtime import _ready as initialized_databases
-        initialized_databases.add(str(database))
         from scena_cloud_auth import password_tag
         deployment=os.environ.get('VERCEL_DEPLOYMENT_ID') or os.environ.get('VERCEL_URL') or 'local-native'
         marker='cloud_auth_deployment:'+deployment

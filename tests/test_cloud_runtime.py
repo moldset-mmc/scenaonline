@@ -11,7 +11,7 @@ try:
     import libsql
     import vercel
 except ImportError:
-    raise unittest.SkipTest('Install requirements-cloud.txt for cloud acceptance tests.')
+    raise unittest.SkipTest('Install requirements-web.txt for cloud/runtime acceptance tests.')
 
 from PIL import Image
 from scena_database import connect, snapshot_to_file
@@ -76,39 +76,37 @@ class RuntimeBoundaryTests(unittest.TestCase):
 
     def test_native_renderer_does_not_repeat_bootstrap_initialization(self):
         import scena_app
-        import scena_cloud_runtime
         with patch.dict(os.environ, {'SCENA_NATIVE_WEB':'1', 'SCENA_CLOUD':'1'}, clear=False), \
-             patch.object(scena_app, 'init_db') as local_init, \
-             patch.object(scena_cloud_runtime, 'initialize_application') as cloud_init:
+             patch.object(scena_app, 'init_db') as local_init:
             scena_app.initialize_runtime()
         local_init.assert_not_called()
-        cloud_init.assert_not_called()
 
-    def test_legacy_cloud_mode_still_initializes_once_through_shared_runtime(self):
+    def test_local_streamlit_initializes_local_database(self):
         import scena_app
-        import scena_cloud_runtime
-        with patch.dict(os.environ, {'SCENA_CLOUD':'1'}, clear=False):
-            os.environ.pop('SCENA_NATIVE_WEB', None)
-            with patch.object(scena_cloud_runtime, 'initialize_application') as cloud_init:
+        with patch.dict(os.environ, {'SCENA_NATIVE_WEB':'0', 'SCENA_CLOUD':'0'}, clear=False), \
+             patch.object(scena_app, 'init_db') as local_init:
+            scena_app.initialize_runtime()
+        local_init.assert_called_once_with(scena_app.DB_PATH)
+
+    def test_removed_streamlit_cloud_mode_fails_closed(self):
+        import scena_app
+        with patch.dict(os.environ, {'SCENA_NATIVE_WEB':'0', 'SCENA_CLOUD':'1'}, clear=False):
+            with self.assertRaisesRegex(RuntimeError, 'start_web.py'):
                 scena_app.initialize_runtime()
-        cloud_init.assert_called_once_with(scena_app.DB_PATH)
 
 
 
-class CloudInitializationTests(unittest.TestCase):
+class LibsqlInitializationTests(unittest.TestCase):
     def test_publication_reads_keep_legacy_conversion_without_schema_writes(self):
-        from scena_cloud_runtime import initialize_application, _ready
-        from scena_core import add_post
+        from scena_core import add_post, init_db
         from scena_publications import list_publications
         import scena_database
         with tempfile.TemporaryDirectory() as folder:
             database = str(Path(folder) / 'cloud.db')
-            environment = {'SCENA_CLOUD': '1', 'SCENA_DB_PATH': database,
-                           'SCENA_TURSO_TURSO_DATABASE_URL': database,
-                           'SCENA_TURSO_TURSO_AUTH_TOKEN': 'fixture'}
-            with patch.dict(os.environ, environment):
-                initialize_application(database)
-                # Legacy writes still acquire their publication metadata on read.
+            with patch.dict(os.environ, {'SCENA_DB_DRIVER':'libsql'}, clear=False):
+                init_db(database)
+                # Legacy records may still acquire publication metadata on read,
+                # but a read must not run schema DDL.
                 post = add_post(database, title_ru='Тест', title_ro='Test',
                                 body_ru='Текст', body_ro='Text')
                 statements = []
@@ -121,7 +119,6 @@ class CloudInitializationTests(unittest.TestCase):
                     records = list_publications(database)
                 self.assertEqual([item['post_id'] for item in records], [post])
                 self.assertFalse(any(sql.startswith(('CREATE ', 'ALTER ')) for sql in statements))
-                _ready.discard(database)
 
 
 class DurableMediaTests(unittest.TestCase):

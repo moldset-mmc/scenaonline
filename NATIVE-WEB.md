@@ -70,7 +70,9 @@ the release checkpoint after deployment. HTTP 200 alone is not the acceptance.
 
 ## Rollback
 
-Vercel can promote the measurement-only baseline deployment above. Its original
-Streamlit code remains in Git, and the new SQL tables do not modify existing
-owner tables. Do not delete Turso or Blob data during a rollback. Returning to
-the old frontend also returns its measured delay and instance-bound sessions.
+Vercel can promote the measurement-only baseline deployment above. The legacy
+cloud Streamlit launchers are retained in Git history rather than the current
+tree; the supported local desktop Streamlit launcher remains. The native SQL
+tables do not modify existing owner tables. Do not delete Turso or Blob data
+during a rollback. Returning to an old deployment also returns its older runtime
+characteristics and session model.

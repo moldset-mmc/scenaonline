@@ -3391,14 +3391,12 @@ def render_admin(settings: dict[str, str], locale: str) -> None:
 
 
 def initialize_runtime() -> None:
-    """Initialize only launch modes that are not already bootstrapped by native HTTP."""
+    """Initialize the local Streamlit runtime; native cloud is bootstrapped by scena_web."""
     if os.environ.get('SCENA_NATIVE_WEB') == '1':
         return
     if os.environ.get('SCENA_CLOUD') == '1':
-        from scena_cloud_runtime import initialize_application
-        initialize_application(DB_PATH)
-    else:
-        init_db(DB_PATH)
+        raise RuntimeError('Legacy Streamlit cloud runtime was removed; use deploy/start_web.py.')
+    init_db(DB_PATH)
 
 def run() -> None:
     global DB_PATH

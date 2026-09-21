@@ -20,16 +20,16 @@
 
 1. `Dockerfile.vercel`: образ `python:3.12-slim`, установка `requirements-web.txt`.
 2. `deploy/build_web_assets.py`: создание хешированных публичных файлов и манифеста из разрешённых исходников.
-3. `python deploy/start_web.py`: проверка обязательной конфигурации через `deploy.start_cloud.configure`, установка `SCENA_NATIVE_WEB=1`.
+3. `python deploy/start_web.py`: проверка обязательной конфигурации через `scena_web.runtime_config.configure`, установка `SCENA_NATIVE_WEB=1`.
 4. `scena_web/domain_redirect.py`: создание приложения и ограниченных редиректов старых публичных хостов.
 5. `scena_web/bootstrap.py`: инициализация схемы, ключа сессий, версии пароля, проверок хранилищ и одноразовых миграций.
 6. Tornado слушает `PORT` (по умолчанию 80), отдаёт готовый HTML; формы и временное состояние доступны между экземплярами через общее хранилище.
 
-`deploy/start_cloud.py` содержит также прежний Streamlit launcher, но его `main()` не является текущей командой Docker. `requirements-cloud.txt` относится к прежнему облачному пути; текущему нужны `requirements-web.txt`. Локальный Streamlit запускается отдельно через `start_scena.py` и `requirements.txt`.
+Прежний облачный Streamlit launcher, WebSocket-прокси и временный Streamlit preview удалены из текущего дерева после перехода на native HTML; их история остаётся в Git. Production использует только `requirements-web.txt`. Локальный Streamlit запускается отдельно через `start_scena.py` и `requirements.txt`.
 
 ## Обязательные переменные сервера
 
-Имена подтверждены функцией `configure` в [`deploy/start_cloud.py`](deploy/start_cloud.py). Значения вводятся в защищённые настройки окружения, а не в Git, командные примеры или Dockerfile.
+Имена подтверждены функцией `configure` в [`scena_web/runtime_config.py`](scena_web/runtime_config.py). Значения вводятся в защищённые настройки окружения, а не в Git, командные примеры или Dockerfile.
 
 | Имя | Назначение |
 | --- | --- |
