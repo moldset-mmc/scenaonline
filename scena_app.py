@@ -3389,6 +3389,17 @@ def render_admin(settings: dict[str, str], locale: str) -> None:
         render_pro_status_banner(locale)
 
 
+
+def initialize_runtime() -> None:
+    """Initialize only launch modes that are not already bootstrapped by native HTTP."""
+    if os.environ.get('SCENA_NATIVE_WEB') == '1':
+        return
+    if os.environ.get('SCENA_CLOUD') == '1':
+        from scena_cloud_runtime import initialize_application
+        initialize_application(DB_PATH)
+    else:
+        init_db(DB_PATH)
+
 def run() -> None:
     global DB_PATH
     DB_PATH = Path(os.environ.get("SCENA_DB_PATH", APP_DIR / "scena_master.db"))
@@ -3398,11 +3409,7 @@ def run() -> None:
     )
     if os.environ.get("SCENA_PREVIEW_ONLY") == "1":
         st.caption("SCENA · Предпросмотр / Previzualizare / Preview · Данные временные; используйте тестовые контакты.")
-    if os.environ.get('SCENA_CLOUD') == '1' or os.environ.get('SCENA_NATIVE_WEB') == '1':
-        from scena_cloud_runtime import initialize_application
-        initialize_application(DB_PATH)
-    else:
-        init_db(DB_PATH)
+    initialize_runtime()
     from scena_media import hydrate
     if os.environ.get("SCENA_NATIVE_WEB") != "1":
         hydrate(APP_DIR)

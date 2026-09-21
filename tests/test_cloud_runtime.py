@@ -55,6 +55,46 @@ class CookieTests(unittest.TestCase):
             self.assertTrue(safe_next('//untrusted.example').startswith('/?page=admin'))
 
 
+class RuntimeBoundaryTests(unittest.TestCase):
+    def test_shared_cloud_configuration_is_current_and_normalized(self):
+        from scena_web.runtime_config import configure
+        environment = {
+            'SCENA_TURSO_TURSO_DATABASE_URL': 'libsql://fixture',
+            'SCENA_TURSO_TURSO_AUTH_TOKEN': 'token',
+            'SCENA_PUBLIC_BLOB_READ_WRITE_TOKEN': 'public',
+            'SCENA_PRIVATE_BLOB_READ_WRITE_TOKEN': 'private',
+            'SCENA_ADMIN_PASSWORD': '  fixture-secret  ',
+            'SCENA_PREVIEW_ONLY': '1',
+            'SCENA_INITIALIZED_DB': 'stale',
+        }
+        configured = configure(environment)
+        self.assertEqual(configured['SCENA_ADMIN_PASSWORD'], 'fixture-secret')
+        self.assertEqual(configured['SCENA_CLOUD'], '1')
+        self.assertEqual(configured['SCENA_DB_PATH'], '/tmp/scena-cloud/scena_master.db')
+        self.assertNotIn('SCENA_PREVIEW_ONLY', configured)
+        self.assertNotIn('SCENA_INITIALIZED_DB', configured)
+
+    def test_native_renderer_does_not_repeat_bootstrap_initialization(self):
+        import scena_app
+        import scena_cloud_runtime
+        with patch.dict(os.environ, {'SCENA_NATIVE_WEB':'1', 'SCENA_CLOUD':'1'}, clear=False), \
+             patch.object(scena_app, 'init_db') as local_init, \
+             patch.object(scena_cloud_runtime, 'initialize_application') as cloud_init:
+            scena_app.initialize_runtime()
+        local_init.assert_not_called()
+        cloud_init.assert_not_called()
+
+    def test_legacy_cloud_mode_still_initializes_once_through_shared_runtime(self):
+        import scena_app
+        import scena_cloud_runtime
+        with patch.dict(os.environ, {'SCENA_CLOUD':'1'}, clear=False):
+            os.environ.pop('SCENA_NATIVE_WEB', None)
+            with patch.object(scena_cloud_runtime, 'initialize_application') as cloud_init:
+                scena_app.initialize_runtime()
+        cloud_init.assert_called_once_with(scena_app.DB_PATH)
+
+
+
 class CloudInitializationTests(unittest.TestCase):
     def test_publication_reads_keep_legacy_conversion_without_schema_writes(self):
         from scena_cloud_runtime import initialize_application, _ready
