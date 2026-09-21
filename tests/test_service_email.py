@@ -11,6 +11,7 @@ from scena_core import (
     generate_available_slots,
     list_services,
     save_settings,
+    update_request_status,
 )
 
 
@@ -80,7 +81,7 @@ class ServiceEmailTests(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertEqual(service_email.sender_from_public_base(value), "")
 
-    def test_email_choice_sends_one_localized_resend_payload(self):
+    def test_email_choice_sends_one_localized_received_payload(self):
         identity, service, day, slot = self.book("email")
         adapter = FakeAdapter()
         self.assertEqual(
@@ -92,9 +93,41 @@ class ServiceEmailTests(unittest.TestCase):
         self.assertEqual(payload["from"], "mbstudio@scena.life")
         self.assertEqual(payload["to"], ["client@example.com"])
         self.assertIn(f"№{identity}", payload["subject"])
+        self.assertIn("принята", payload["subject"])
         self.assertIn(service["name"], payload["text"])
         self.assertIn(slot, payload["text"])
         self.assertIn("Мастер свяжется", payload["text"])
+
+    def test_confirmation_requires_committed_confirmed_status_and_uses_resend(self):
+        identity, service, _, slot = self.book("email")
+        adapter = FakeAdapter()
+        self.assertEqual(
+            service_email.dispatch(
+                self.db, request_id=identity, event="confirmed", adapter=adapter
+            ),
+            "invalid_status",
+        )
+        self.assertEqual(adapter.calls, [])
+
+        row = self.row(identity)
+        update_request_status(
+            self.db,
+            identity,
+            "Подтверждена",
+            expected_revision=row["revision"],
+        )
+        self.assertEqual(
+            service_email.dispatch(
+                self.db, request_id=identity, event="confirmed", adapter=adapter
+            ),
+            "sent",
+        )
+        self.assertEqual(len(adapter.calls), 1)
+        payload = adapter.calls[0]
+        self.assertIn("подтверждена", payload["subject"].lower())
+        self.assertIn("Ваша запись подтверждена", payload["text"])
+        self.assertIn(service["name"], payload["text"])
+        self.assertIn(slot, payload["text"])
 
     def test_other_reply_channel_never_sends_email(self):
         identity, _, _, _ = self.book("phone")
@@ -108,14 +141,22 @@ class ServiceEmailTests(unittest.TestCase):
     def test_resend_failure_never_rolls_back_committed_booking_or_exposes_secret(self):
         identity, _, _, _ = self.book("email")
         before = self.row(identity)
+        update_request_status(
+            self.db,
+            identity,
+            "Подтверждена",
+            expected_revision=before["revision"],
+        )
         adapter = FakeAdapter(TimeoutError("secret-api-key-must-not-surface"))
         self.assertEqual(
-            service_email.dispatch(self.db, request_id=identity, adapter=adapter),
+            service_email.dispatch(
+                self.db, request_id=identity, event="confirmed", adapter=adapter
+            ),
             "failed",
         )
         after = self.row(identity)
         self.assertEqual(after["id"], before["id"])
-        self.assertEqual(after["status"], "Ожидает подтверждения")
+        self.assertEqual(after["status"], "Подтверждена")
         self.assertEqual(after["email"], "client@example.com")
 
 
