@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
 from scena_ui import st
+from scena_home_style import scene_font_css
 from scena_i18n import localized_name, tr as translate
 
 from model_landing import image_uri, resolve_media_path
@@ -13,6 +14,7 @@ from scena_publications import (
     PublicationValidationError, archive_publication, get_draft, get_publication,
     list_publications, list_versions, publish_local, restore_version, save_draft,
     store_publication_image, restyle_publication_image, render_publication_image, managed_original,
+    set_publication_visibility, trash_publication, restore_trashed_publication,
 )
 
 
@@ -121,7 +123,8 @@ def render_feed(db_path, app_dir, settings, locale, destination='scene', *, all_
         body = post_text(post, 'body', locale)
         price = f'<strong>{esc(post["price_text"])}</strong>' if post.get('price_text') else ''
         cards.append(f'<article tabindex="0">{photo}<div class="copy"><h3>{esc(title)}</h3><p>{esc(body[:180])}</p>{price}<a href="{esc(post_url(post["public_id"], locale), quote=True)}" target="_blank" rel="noopener noreferrer">{tr(locale,"Открыть публикацию","Deschide publicația")} ↗</a></div></article>')
-    st.iframe('''<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+    feed_class = 'scene-feed' if destination == 'scene' else ''
+    st.iframe('''<!doctype html><html lang="''' + locale + '''"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>''' + (scene_font_css() if destination == 'scene' else '') + '''
     *{box-sizing:border-box}body{margin:0;color:#293b33;font:15px Arial,sans-serif;background:transparent}
     .controls{display:flex;justify-content:space-between;align-items:center;margin:0 0 12px}.buttons{display:flex;gap:8px}
     button{background:#f5f2e9;border:1px solid #c8c5b9;border-radius:50%;width:42px;height:42px;color:#293b33;font-size:23px;cursor:pointer}
@@ -131,13 +134,34 @@ def render_feed(db_path, app_dir, settings, locale, destination='scene', *, all_
     img,.empty{display:block;width:100%;height:310px;flex-shrink:0;object-fit:contain;background:#f5f1e8}.empty{display:grid;place-items:center;letter-spacing:6px;font:30px Georgia;color:#9b835b}
     .copy{padding:16px;display:flex;flex-direction:column;flex:1;min-height:0}h3{margin:0 0 10px;font:23px/1.15 Georgia;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}p{line-height:1.5;margin:0 0 10px;height:45px;overflow:hidden}strong{display:block;margin-bottom:4px}a{color:#365745;text-underline-offset:4px;display:inline-block;padding:5px 0;margin-top:auto}
     @media(max-width:650px){article{flex-basis:88%;min-width:0}.track{gap:12px}h3{font-size:22px}}
+    .scene-feed{color:#201b17;font-family:SceneText,system-ui,sans-serif}
+    .scene-feed .controls{gap:12px;margin-bottom:12px;color:#71695f;line-height:1.45}
+    .scene-feed .controls>span{min-width:0;font-size:14px}
+    .scene-feed .buttons{gap:2px;flex-shrink:0}
+    .scene-feed .buttons[hidden]{display:none}
+    .scene-feed button{width:44px;height:44px;background:transparent;border:0;border-radius:0;color:#705d43;font-size:26px}
+    .scene-feed .track{gap:16px;padding:4px 0 12px;align-items:stretch}
+    .scene-feed article{flex-basis:calc((100% - 32px)/3);min-width:0;height:auto;border:0;border-radius:0;background:transparent}
+    .scene-feed img,.scene-feed .empty{height:auto;aspect-ratio:4/5;object-fit:contain;background:transparent;border-radius:4px}
+    .scene-feed .copy{padding:12px 0 0;gap:8px}
+    .scene-feed h3{margin:0;font:500 26px/1.2 SceneEditorial,Georgia,serif}
+    .scene-feed p{height:auto;margin:0;color:#71695f;font-size:16px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+    .scene-feed a{min-height:44px;margin-top:4px;padding:6px 0;display:inline-flex;align-items:center;align-self:flex-start;color:#705d43;font-size:15px}
+    @media(max-width:650px){.scene-feed article{flex-basis:100%}}
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
-    </style></head><body><div class="controls"><span>''' + tr(locale, 'Истории и предложения', 'Povești și oferte') + '''</span><div class="buttons"><button id="prev" aria-label="''' + tr(locale, 'Предыдущая публикация', 'Publicația precedentă') + '''">‹</button><button id="next" aria-label="''' + tr(locale, 'Следующая публикация', 'Publicația următoare') + '''">›</button></div></div><section class="track" aria-label="''' + tr(locale, 'Карусель публикаций', 'Carusel de publicații') + '''">''' + ''.join(cards) + '''</section><script>
+    </style></head><body class="''' + feed_class + '''"><div class="controls"><span>''' + tr(locale, 'Истории и предложения', 'Povești și oferte') + '''</span><div class="buttons"><button id="prev" aria-label="''' + tr(locale, 'Предыдущая публикация', 'Publicația precedentă') + '''">‹</button><button id="next" aria-label="''' + tr(locale, 'Следующая публикация', 'Publicația următoare') + '''">›</button></div></div><section class="track" aria-label="''' + tr(locale, 'Карусель публикаций', 'Carusel de publicații') + '''">''' + ''.join(cards) + '''</section><script>
     const track=document.querySelector('.track'),prev=document.querySelector('#prev'),next=document.querySelector('#next');
     function state(){prev.disabled=track.scrollLeft<4;next.disabled=track.scrollLeft+track.clientWidth>=track.scrollWidth-4}
-    function move(dir){track.scrollBy({left:dir*(track.querySelector('article').offsetWidth+18),behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'})}
+    function move(dir){const gap=parseFloat(getComputedStyle(track).columnGap)||0;track.scrollBy({left:dir*(track.querySelector('article').offsetWidth+gap),behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'})}
     prev.onclick=()=>move(-1);next.onclick=()=>move(1);track.addEventListener('scroll',state);window.addEventListener('resize',state);
     track.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();move(e.key==='ArrowRight'?1:-1)}});state();
+    if(document.body.classList.contains('scene-feed')){
+      document.querySelector('.buttons').hidden=track.children.length<2;
+      // Same-origin native embeds grow with their content instead of clipping
+      // photos/captions or reserving a fixed-height empty card.
+      const fit=()=>{try{const frame=window.frameElement;if(frame){const height=Math.ceil(document.body.getBoundingClientRect().height)+2;if(Math.abs(frame.getBoundingClientRect().height-height)>1)frame.style.height=height+'px'}}catch(_){}};
+      new ResizeObserver(fit).observe(document.body);fit();
+    }
     </script></body></html>''', height=585)
     st.link_button(tr(locale, 'Все публикации', 'Toate publicațiile'), '?' + urlencode({'page': 'posts', 'lang': locale, 'destination': destination}))
 
@@ -203,23 +227,54 @@ def render_publication_workspace(db_path, app_dir, settings, locale):
         st.rerun()
     drafts = list_publications(db_path)
     selected = st.session_state.get('publication_edit_id')
-    labels = {'draft': tr(locale,'Черновик','Ciornă','Draft'), 'published': tr(locale,'На Сцене','Pe Scenă','On my Scene'), 'archived': tr(locale,'В архиве','În arhivă','Archived')}
+    places = {'scene': tr(locale,'Моя Сцена','Scena mea','My Scene'),
+              'professional': tr(locale,'Услуги и курсы','Servicii și cursuri','Services and courses'), 'model': 'model SCENA'}
+    labels = {'draft': tr(locale,'Черновик','Ciornă','Draft'), 'published': tr(locale,'Опубликовано','Publicat','Published'),
+              'hidden': tr(locale,'Скрыто','Ascuns','Hidden'), 'archived': tr(locale,'В архиве','În arhivă','Archived')}
     with st.expander(tr(locale, f'Мои публикации · {len(drafts)}', f'Publicațiile mele · {len(drafts)}', f'My publications · {len(drafts)}'), expanded=selected is None):
         if not drafts:
             st.caption(tr(locale, 'Нажмите «Новая публикация», чтобы начать.', 'Apasă «Publicație nouă» pentru a începe.'))
         for item in drafts:
-            label = f"{item.get('title_' + locale) or item.get('body_' + locale,'')[:35] or tr(locale,'Без названия','Fără titlu','Untitled')} · {labels[item['status']]}"
-            if item['status'] == 'published' and item['has_unpublished_changes']:
-                label += tr(locale,' · есть черновик изменений',' · modificări în ciornă',' · draft changes')
-            if st.button(label, key=f"publication_open_{item['id']}", width='stretch'):
+            title = item.get('title_' + locale) or item.get('body_' + locale,'')[:55] or tr(locale,'Без названия','Fără titlu','Untitled')
+            live_places = ', '.join(places[p] for p in item['published_destinations'])
+            state = labels[item['status']] + (' · ' + live_places if live_places else '')
+            if item['status'] in {'published', 'hidden'} and item['has_unpublished_changes']:
+                state += tr(locale,' · есть черновик изменений',' · modificări în ciornă',' · draft changes')
+            with st.container(key=f"publication_item_{item['id']}"):
+                src = safe_image(app_dir, item.get('image_url'))
+                if src:
+                    st.markdown('<img class="publication-thumb" src="'+html.escape(src, quote=True)+'" alt="" loading="lazy">', unsafe_allow_html=True)
+                opened = st.button(f"№ {item['id']} · {title}", key=f"publication_open_{item['id']}", width='stretch')
+                st.caption(state)
+            if opened:
                 _reset_editor(item['id'])
                 st.session_state['publication_edit_id'] = item['id']
                 st.session_state.pop('publication_preview_revision', None)
                 st.rerun()
+    from datetime import datetime, timedelta, timezone
+    trash = [item for item in list_publications(db_path, include_trashed=True) if item['status'] == 'trashed']
+    if trash:
+        with st.expander(tr(locale, f'Корзина · {len(trash)}', f'Coș · {len(trash)}', f'Trash · {len(trash)}')):
+            st.caption(tr(locale,'Восстановление доступно 30 дней. Материал вернётся скрытым.',
+                          'Restabilire în 30 de zile. Materialul va rămâne ascuns.', 'Restore within 30 days. Restored posts stay hidden.'))
+            for item in trash:
+                expired = datetime.now(timezone.utc) > datetime.fromisoformat(item['updated_at']) + timedelta(days=30)
+                title = item.get('title_'+locale) or tr(locale,'Без названия','Fără titlu','Untitled')
+                st.write(f"№ {item['id']} · {title}")
+                if st.button(tr(locale,'Восстановить','Restabilește','Restore'), key=f"publication_untrash_{item['id']}", disabled=expired):
+                    try:
+                        restore_trashed_publication(db_path, item['id'])
+                    except PublicationValidationError as error:
+                        st.error(str(error))
+                    else:
+                        _reset_editor(item['id'])
+                        _notice(tr(locale,'Публикация восстановлена и пока скрыта.','Publicația a fost restabilită și rămâne ascunsă.','Post restored and hidden.'))
     if selected is None:
         return
     current = get_draft(db_path, selected) if selected != 'new' else {}
     suffix = str(selected)
+    if current and current['status'] == 'trashed':
+        return
     revision_key = 'post_loaded_revision_' + suffix
     if current:
         if revision_key not in st.session_state:
@@ -229,6 +284,23 @@ def render_publication_workspace(db_path, app_dir, settings, locale):
             if st.button(tr(locale, 'Загрузить свежую версию', 'Încarcă versiunea nouă'), key='post_reload_' + suffix):
                 _reset_editor(selected)
                 st.rerun()
+    if current and current['status'] in {'published', 'hidden'}:
+        with st.form('post_visibility_' + suffix):
+            st.subheader(tr(locale,'Где показывать публикацию','Unde se afișează publicația','Where this post appears'))
+            chosen = [place for place, label in places.items() if st.checkbox(label,
+                      value=place in current['published_destinations'], key='post_visible_'+place+'_'+suffix)]
+            st.caption(tr(locale,'Снимите все галочки, чтобы скрыть публикацию. Текст черновика не публикуется.',
+                          'Debifați toate paginile pentru a ascunde publicația. Textul ciornei nu se publică.',
+                          'Uncheck all pages to hide the post. Draft text is not published.'))
+            apply_visibility = st.form_submit_button(tr(locale,'Сохранить показ','Salvează afișarea','Save visibility'), type='primary')
+        if apply_visibility:
+            try:
+                set_publication_visibility(db_path, selected, st.session_state[revision_key], chosen)
+            except PublicationValidationError as error:
+                st.error(str(error))
+            else:
+                _reset_editor(selected)
+                _notice(tr(locale,'Показ обновлён.','Afișarea a fost actualizată.','Visibility updated.'))
     st.subheader(tr(locale, '1. Материал', '1. Conținut'))
     styles = {'auto': tr(locale, 'По фотографии', 'După fotografie', 'Match photo'),
               'ivory': tr(locale, 'Белый', 'Alb', 'Ivory'), 'sand': tr(locale, 'Песочный', 'Nisipiu', 'Sand'),
@@ -243,14 +315,19 @@ def render_publication_workspace(db_path, app_dir, settings, locale):
     frame_format = st.pills(tr(locale, 'Формат публикации', 'Formatul publicației', 'Post format'), list(formats),
                            default=current_format if current_format in formats else 'portrait', format_func=formats.get,
                            selection_mode='single', key='post_frame_format_'+suffix) or 'portrait'
+    logo_styles = {'editorial': tr(locale, 'Журнально', 'Editorial', 'Editorial'),
+                   'compact': tr(locale, 'Компактно', 'Compact', 'Compact')}
+    logo_style = st.pills(tr(locale, 'Логотип на фотографии', 'Logoul pe fotografie', 'Logo on photo'), list(logo_styles),
+                          default=current.get('logo_style', 'editorial'), format_func=logo_styles.get,
+                          selection_mode='single', key='post_logo_style_'+suffix) or 'editorial'
     if current.get('original_image_path'):
         try:
             raw = managed_original(app_dir, current['original_image_path']).read_bytes()
-            st.image(render_publication_image(app_dir, raw, frame_style=frame_style, frame_format=frame_format), width=330)
+            st.image(render_publication_image(app_dir, raw, frame_style=frame_style, frame_format=frame_format, logo_style=logo_style), width=330)
         except (OSError, PublicationValidationError):
             pass
     with st.form('publication_editor_' + suffix):
-        values = {'frame_style': frame_style, 'frame_format': frame_format}
+        values = {'frame_style': frame_style, 'frame_format': frame_format, 'logo_style': logo_style}
         for tab, language in zip(st.tabs(['RU', 'RO', 'EN']), ('ru', 'ro', 'en')):
             with tab:
                 title_label = {'ru':'Заголовок RU','ro':'Titlu RO','en':'Title EN'}[language]
@@ -265,22 +342,23 @@ def render_publication_workspace(db_path, app_dir, settings, locale):
         values['price_text'] = st.text_input(tr(locale, 'Цена — обязательна для предложения', 'Preț — obligatoriu pentru ofertă'), value=current.get('price_text', ''), placeholder='450 MDL', key='post_price_' + suffix)
         with st.expander(tr(locale, 'Кнопка и места показа', 'Buton și pagini de afișare')):
             values['cta_url'] = st.text_input(tr(locale, 'Адрес для кнопки «Подробнее»', 'Adresa butonului «Detalii»'), value=current.get('cta_url') or current.get('link_url', ''), key='post_cta_' + suffix)
-            for destination, label in [('scene', tr(locale,'Моя Сцена','Scena mea','My Scene')), ('professional', tr(locale,'Профессиональная','Profesional','Professional')), ('model', 'Model')]:
-                field = 'show_' + destination
-                values[field] = st.checkbox(label, value=bool(current.get(field, destination == 'scene')), key='post_' + field + '_' + suffix)
+            if not current or current['status'] not in {'published', 'hidden'}:
+                for destination, label in places.items():
+                    field = 'show_' + destination
+                    values[field] = st.checkbox(label, value=bool(current.get(field, destination == 'scene')), key='post_' + field + '_' + suffix)
         values['translations_approved'] = st.checkbox(tr(locale, 'Я проверила все заполненные языковые версии', 'Am verificat toate versiunile completate', 'I reviewed every completed language version'), value=bool(current.get('translations_approved', False)), key='post_approved_' + suffix)
         save = st.form_submit_button(tr(locale, 'Сохранить черновик', 'Salvează ciorna'), key='post_save_' + suffix, type='primary')
     if save:
         try:
             photo_warning = ''
             if uploaded:
-                photo = store_publication_image(app_dir, uploaded.getvalue(), uploaded.name, frame_style=frame_style, frame_format=frame_format)
+                photo = store_publication_image(app_dir, uploaded.getvalue(), uploaded.name, frame_style=frame_style, frame_format=frame_format, logo_style=logo_style)
                 if not photo['publication_allowed']:
                     photo_warning = ' '.join(photo['warnings'])
                 values['image_url'] = photo['image_url'] if photo['publication_allowed'] else ''
                 values['original_image_path'] = photo['original_image_path']
-            elif current.get('original_image_path') and (current.get('needs_frame_refresh') or frame_style != current.get('frame_style') or frame_format != current.get('frame_format')):
-                values.update(restyle_publication_image(app_dir, current['original_image_path'], frame_style=frame_style, frame_format=frame_format))
+            elif current.get('original_image_path') and (current.get('needs_frame_refresh') or frame_style != current.get('frame_style') or frame_format != current.get('frame_format') or logo_style != current.get('logo_style')):
+                values.update(restyle_publication_image(app_dir, current['original_image_path'], frame_style=frame_style, frame_format=frame_format, logo_style=logo_style))
             saved = save_draft(db_path, None if selected == 'new' else selected, expected_revision=st.session_state.get(revision_key), **values)
         except (PublicationValidationError, OSError) as error:
             st.error(str(error))
@@ -323,6 +401,20 @@ def render_publication_workspace(db_path, app_dir, settings, locale):
                 _notice(tr(locale, 'Публикация появилась на Сцене.', 'Publicația a apărut pe Scena ta.'))
     if current['status'] == 'published':
         st.link_button(tr(locale, 'Посмотреть опубликованную версию', 'Vezi versiunea publicată'), post_url(current['public_id'], locale))
+    st.subheader(tr(locale,'Удаление публикации','Ștergerea publicației','Delete post'))
+    st.caption(tr(locale,'Публикация исчезнет из ленты и списка. Восстановить её можно в корзине в течение 30 дней.',
+                  'Publicația dispare din flux și listă. O puteți restabili din coș timp de 30 de zile.',
+                  'The post leaves the feed and list. You can restore it from Trash within 30 days.'))
+    confirmed = st.checkbox(tr(locale,'Удалить эту публикацию в корзину','Mută această publicație în coș','Move this post to Trash'), key='post_delete_confirm_'+suffix)
+    if st.button(tr(locale,'Удалить публикацию','Șterge publicația','Delete post'), key='post_delete_'+suffix, disabled=not confirmed):
+        try:
+            trash_publication(db_path, selected, st.session_state[revision_key])
+        except PublicationValidationError as error:
+            st.error(str(error))
+        else:
+            _reset_editor(selected)
+            st.session_state.pop('publication_edit_id', None)
+            _notice(tr(locale,'Публикация перемещена в корзину.','Publicația a fost mutată în coș.','Post moved to Trash.'))
     with st.expander(tr(locale, 'История и архив', 'Istoric și arhivă')):
         versions = list_versions(db_path, selected)
         version = st.selectbox(tr(locale, 'Сохранённая версия', 'Versiune salvată'), versions, format_func=lambda v: f"{v['created_at'][:16].replace('T', ' ')} UTC · v{v['revision']}", key='post_version_' + suffix)

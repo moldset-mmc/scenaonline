@@ -11,10 +11,11 @@ def apply_workspace_styles(app_dir, settings):
     portrait = image_uri(app_dir, settings.get('professional_hero_image', 'media/scena-v13/professional-portrait.webp'))
     stage = image_uri(app_dir, public_model_image(app_dir, settings, 1))
     st.markdown('''<style>
-    .scena-nav{gap:8px!important;padding:14px 0!important;align-items:center}
-    .scena-nav a{display:inline-flex;align-items:center;min-height:44px;padding:8px 15px!important;border:1px solid transparent;border-radius:24px;font-size:16px!important;font-weight:550!important;transition:background .18s,border-color .18s}
-    .scena-nav a:hover{background:#e9dfcd;border-color:#c3aa7b}
-    .scena-nav a.active{background:#eadcc2;color:#65481b!important;border-color:#b29259;box-shadow:0 4px 12px #8d6b3020}
+    .scena-nav{gap:22px!important;padding:4px 0 8px!important;align-items:center;margin-inline:0}
+    .scena-nav a{display:inline-flex;align-items:center;flex-shrink:0;min-height:44px;padding:8px 0!important;border:0;border-bottom:2px solid transparent;border-radius:0;font-size:15px!important;font-weight:400!important;background:transparent;box-shadow:none;transition:color .18s,border-color .18s}
+    .scena-nav a:hover{color:var(--ink)!important;border-bottom-color:var(--line)}
+    .scena-nav a.active{color:var(--ink)!important;border-bottom-color:var(--accent);font-weight:500!important}
+    .scena-nav a:focus-visible{outline:2px solid var(--accent-dark);outline-offset:2px}
     .scena-locale a{min-width:42px;min-height:42px;display:grid;place-items:center}
     .scena-workspace-title{text-align:center;font-size:clamp(18px,2.2vw,23px);font-weight:600;line-height:1.25;padding-bottom:2px;color:#332e26}
     .scena-owner-name{text-align:center;font-family:Georgia,serif;font-size:20px;padding:6px 0 18px;line-height:1.3}
@@ -66,7 +67,7 @@ def apply_workspace_styles(app_dir, settings):
       .st-key-scena_admin_subnav{padding:4px 0 10px!important}
 
       .block-container{padding-top:.6rem!important;padding-inline:16px!important}
-      .scena-top>.scena-muted{display:none}.scena-nav a{padding:8px 13px!important;font-size:15px!important}
+      .scena-top>.scena-muted{display:none}.scena-nav a{font-size:14px!important}
       .scena-owner-name{font-size:19px;padding:4px 0 8px}.scena-workspace-title{font-size:18px}
       .scena-model-opportunities{grid-template-columns:1fr;gap:12px}.scena-model-opportunities article{padding:18px 20px}.scena-model-opportunities h3{margin:0 0 8px!important}
       .scena-dashboard-card-content{min-height:120px}.scena-dashboard-card-content h3{font-size:24px!important}
@@ -88,11 +89,11 @@ def render_dashboard(db_path, app_dir, settings, locale, on_route):
         ('requests',tr(locale,'ЗАПИСИ','PROGRAMĂRI','BOOKINGS'),tr(locale,'Кто ждёт ответа','Cine așteaptă răspuns','Who is waiting'),tr(locale,f'Новых обращений: {pending}. Подтвердите встречу или обсудите детали.',f'Cereri în așteptare: {pending}. Confirmați întâlnirea sau discutați detaliile.',f'{pending} requests awaiting your reply. Confirm a meeting or discuss the details.'),'work','requests'),
         ('services',tr(locale,'УСЛУГИ','SERVICII','SERVICES'),tr(locale,'Что вы предлагаете','Ce oferiți','What you offer'),tr(locale,'Услуги и курсы, понятные группы, цены и описания.','Servicii și cursuri, categorii clare, prețuri și descrieri.','Services and courses, clear groups, prices and descriptions.'),'work','services'),
         ('schedule',tr(locale,'ВАШЕ ВРЕМЯ','TIMPUL DVS.','YOUR TIME'),tr(locale,'Откройте удобные часы','Alegeți orele potrivite','Set your available hours'),tr(locale,'График, перерывы и выходные. Клиенты видят только свободное время.','Program, pauze și zile libere. Clienții văd doar orele disponibile.','Work hours, breaks and days off. Clients see available times.'),'work','schedule'),
-        ('shop','MARKET',tr(locale,'Рекомендуйте лучшее','Recomandați ce apreciați','Recommend your favourites'),tr(locale,'Ваш магазин: товары, личные рекомендации и заказы.','Magazinul dvs.: produse, recomandări personale și comenzi.','Your shop: products, personal recommendations and orders.'),'pages','shop'),
+        ('shop','shopping',tr(locale,'Рекомендуйте лучшее','Recomandați ce apreciați','Recommend your favourites'),tr(locale,'Ваш магазин: товары, личные рекомендации и заказы.','Magazinul dvs.: produse, recomandări personale și comenzi.','Your shop: products, personal recommendations and orders.'),'pages','shop'),
         ('pages',tr(locale,'ВАША СЦЕНА','SCENA DVS.','YOUR STAGE'),tr(locale,'Покажите себя','Prezentați-vă','Introduce yourself'),tr(locale,'История, профессия и Model. Каждая страница — ваша сторона.','Poveste, profesie și Model. Fiecare pagină vă arată o altă latură.','Your story, profession and Model. Each page shows a different side.'),'pages','scene'),
         ('promotion',tr(locale,'ПРОДВИЖЕНИЕ','PROMOVARE','PROMOTION'),tr(locale,'Дайте повод вернуться','Oferiți un motiv să revină','Give people a reason to return'),tr(locale,'Публикации, фотообразы, промпты и QR-визитки.','Publicații, imagini, prompturi și cărți de vizită QR.','Posts, image ideas, prompts and QR cards.'),'promotion','posts'),
         ('help','SCENA',tr(locale,'Обсудим вашу идею','Discutăm ideea dvs.','Let’s explore your idea'),tr(locale,'Личный ассистент и прямая связь с командой.','Asistent personal și legătură directă cu echipa.','A personal assistant and a direct line to the team.'),'help','assistant'),
-        ('pro','PRO',tr(locale,'Больше ваших возможностей','Mai multe posibilități','More possibilities for you'),tr(locale,'Сценарии Model, профессиональные промпты и личный Market.','Scenarii Model, prompturi profesionale și Market personal.','Model scenarios, professional prompts and your personal Market.'),'pro','subscription'),
+        ('pro','PRO',tr(locale,'Больше ваших возможностей','Mai multe posibilități','More possibilities for you'),tr(locale,'Сценарии Model, профессиональные промпты и личный shopping.','Scenarii Model, prompturi profesionale și shopping personal.','Model scenarios, professional prompts and your personal shopping.'),'pro','subscription'),
     ]
     for offset in range(0,len(cards),2):
         for col,card in zip(st.columns(2),cards[offset:offset+2]):
@@ -102,7 +103,7 @@ def render_dashboard(db_path, app_dir, settings, locale, on_route):
                 if st.button(tr(locale,'Открыть','Deschide','Open')+' →',key='admin_home_open_'+key,width='stretch'):
                     on_route(locale,section,view); st.rerun()
     st.subheader(tr(locale,'Быстрый просмотр','Previzualizare','Quick preview'))
-    for col,(label,page) in zip(st.columns(4),[(tr(locale,'Моя Сцена','Scena mea','My Scene'),'scene'),('Professional','professional'),('Model','model'),('Market','shop')]):
+    for col,(label,page) in zip(st.columns(4),[(tr(locale,'Моя Сцена','Scena mea','My Scene'),'scene'),('Professional','professional'),('Model','model'),('shopping','shop')]):
         col.link_button(label,f'?page={page}&lang={locale}',width='stretch')
 
 

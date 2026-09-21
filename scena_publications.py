@@ -11,10 +11,11 @@ from scena_database import connect as database_connect
 import uuid
 import warnings
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlsplit
+from scena_brand import LOGO_STYLES
 
 
 class PublicationValidationError(ValueError):
@@ -23,7 +24,7 @@ class PublicationValidationError(ValueError):
 
 TEXT_FIELDS = ("title_ru", "title_ro", "title_en", "body_ru", "body_ro", "body_en", "image_url", "link_url",
                "original_image_path", "price_text", "cta_label_ru", "cta_label_ro", "cta_label_en", "cta_url",
-               "frame_style", "frame_format")
+               "frame_style", "frame_format", "logo_style")
 BOOL_FIELDS = ("translations_approved", "show_scene", "show_professional", "show_model")
 POST_FIELDS = ("title_ru", "title_ro", "body_ru", "body_ro", "image_url", "link_url", *BOOL_FIELDS)
 DESTINATIONS = {"scene": "show_scene", "professional": "show_professional", "model": "show_model"}
@@ -41,7 +42,7 @@ def _json(value):
 
 def _defaults():
     return {**dict.fromkeys(TEXT_FIELDS, ""), **dict.fromkeys(BOOL_FIELDS, False), "show_scene": True,
-            "kind": "story", "frame_style": "auto", "frame_format": "portrait"}
+            "kind": "story", "frame_style": "auto", "frame_format": "portrait", "logo_style": "editorial"}
 
 
 def initialize_publications(connection, *, ensure_schema=True):
@@ -112,11 +113,14 @@ def _record(connection, post_id):
 
 def _editable(record):
     snapshot = json.loads(record["draft_json"])
+    published = json.loads(record["published_json"] or '{}')
     return {**_defaults(), **snapshot, "id": record["post_id"], "post_id": record["post_id"],
-            "needs_frame_refresh": bool(snapshot.get("original_image_path")) and "frame_style" not in snapshot,
+            "needs_frame_refresh": bool(snapshot.get("original_image_path")) and ("frame_style" not in snapshot or "logo_style" not in snapshot),
             "public_id": record["public_id"], "revision": record["revision"],
             "public_revision": record["public_revision"], "status": record["status"],
-            "updated_at": record["updated_at"], "has_unpublished_changes": record["revision"] != record["public_revision"]}
+            "updated_at": record["updated_at"], "has_unpublished_changes": snapshot != published,
+            "published_destinations": [place for place, flag in DESTINATIONS.items()
+                                       if record['status'] == 'published' and published.get(flag)]}
 
 
 def save_draft(db_path, post_id=None, **fields):
@@ -127,6 +131,8 @@ def save_draft(db_path, post_id=None, **fields):
     with _db(db_path) as connection, connection:
         connection.execute("BEGIN IMMEDIATE")
         record = _record(connection, post_id) if post_id is not None else None
+        if record and record['status'] == 'trashed':
+            raise PublicationValidationError('Сначала восстановите публикацию из корзины.')
         if record and fields.get("expected_revision") is not None and int(fields["expected_revision"]) != record["revision"]:
             raise PublicationValidationError("Черновик изменён. Откройте свежую версию.")
         snapshot = {**_defaults(), **json.loads(record["draft_json"])} if record else _defaults()
@@ -142,6 +148,8 @@ def save_draft(db_path, post_id=None, **fields):
             raise PublicationValidationError("Выберите историю или предложение.")
         if snapshot["frame_style"] not in FRAME_STYLES or snapshot["frame_format"] not in FRAME_FORMATS:
             raise PublicationValidationError("Выберите оформление и формат публикации.")
+        if snapshot["logo_style"] not in LOGO_STYLES:
+            raise PublicationValidationError("Выберите журнальное или компактное размещение логотипа.")
         if record and any(key in fields and snapshot[key] != json.loads(record["draft_json"]).get(key) for key in ("body_ru", "body_ro", "body_en", "title_ru", "title_ro", "title_en", "cta_label_ru", "cta_label_ro", "cta_label_en")) and "translations_approved" not in fields:
             snapshot["translations_approved"] = False
         stamp = _now()
@@ -173,18 +181,22 @@ def get_private_export_source(db_path, post_id):
         return {**_defaults(), **json.loads(snapshot), "public_id": record["public_id"], "status": record["status"]}
 
 
-def list_publications(db_path, destination=None, include_archived=True):
+def list_publications(db_path, destination=None, include_archived=True, *, include_trashed=False):
     if destination is not None and destination not in DESTINATIONS:
         raise PublicationValidationError("Неизвестное место публикации.")
     with _db(db_path) as connection:
         records = [_editable(row) for row in connection.execute("SELECT * FROM publication_records ORDER BY updated_at DESC,post_id DESC")]
-    return [row for row in records if (include_archived or row["status"] != "archived") and (destination is None or row[DESTINATIONS[destination]])]
+    return [row for row in records if (include_trashed or row['status'] != 'trashed')
+            and (include_archived or row["status"] not in {'archived', 'trashed'})
+            and (destination is None or row[DESTINATIONS[destination]])]
 
 
 def publish_local(db_path, post_id, expected_revision, *, media_root=None):
     with _db(db_path) as connection, connection:
         connection.execute("BEGIN IMMEDIATE")
         record = _record(connection, post_id)
+        if record['status'] == 'trashed':
+            raise PublicationValidationError('Сначала восстановите публикацию из корзины.')
         if record["revision"] != int(expected_revision):
             raise PublicationValidationError("Предпросмотр устарел. Проверьте свежую версию.")
         snapshot = json.loads(record["draft_json"])
@@ -211,11 +223,13 @@ def get_publication(db_path, public_id, include_private=False):
             return None
         if include_private:
             return _editable(record)
-        if record["status"] == "draft" or record["public_revision"] == 0:
+        if record["status"] in {"draft", "hidden"} or record["public_revision"] == 0:
             return None
         author = connection.execute("SELECT value FROM profile_settings WHERE key='master_name'").fetchone()
         created = connection.execute("SELECT created_at FROM posts WHERE id=?", (record["post_id"],)).fetchone()
         result = {"id": record["post_id"], "post_id": record["post_id"], "public_id": record["public_id"], "status": record["status"], "author_name": author[0] if author else "", "public_revision": record["public_revision"], "created_at": created[0], "updated_at": record["updated_at"]}
+        if record['status'] == 'trashed':
+            result['status'] = 'archived'
         if record["status"] == "published":
             snapshot = json.loads(record["published_json"])
             snapshot.pop("original_image_path", None)
@@ -229,6 +243,78 @@ def archive_publication(db_path, post_id):
         _record(connection, post_id)
         connection.execute("UPDATE publication_records SET status='archived',updated_at=? WHERE post_id=?", (_now(), post_id))
         connection.execute("UPDATE posts SET active=0 WHERE id=?", (post_id,))
+        return _editable(_record(connection, post_id))
+
+
+def set_publication_visibility(db_path, post_id, expected_revision, destinations):
+    """Change only the published placement; never publish unsaved/draft content."""
+    destinations = set(destinations)
+    if destinations - set(DESTINATIONS):
+        raise PublicationValidationError('Неизвестное место публикации.')
+    with _db(db_path) as connection, connection:
+        connection.execute('BEGIN IMMEDIATE')
+        record = _record(connection, post_id)
+        if record['revision'] != expected_revision:
+            raise PublicationValidationError('Черновик изменён. Откройте свежую версию.')
+        if record['status'] not in {'published', 'hidden'} or not record['published_json']:
+            raise PublicationValidationError('Сначала проверьте и опубликуйте материал.')
+        draft, published = json.loads(record['draft_json']), json.loads(record['published_json'])
+        for place, flag in DESTINATIONS.items():
+            draft[flag] = published[flag] = place in destinations
+        stamp, revision = _now(), record['revision'] + 1
+        status = 'published' if destinations else 'hidden'
+        connection.execute('UPDATE publication_records SET revision=?,draft_json=?,published_json=?,status=?,updated_at=? WHERE post_id=?',
+                           (revision, _json(draft), _json(published), status, stamp, post_id))
+        connection.execute('UPDATE posts SET show_scene=?,show_professional=?,show_model=?,active=? WHERE id=?',
+                           [published[k] for k in DESTINATIONS.values()] + [bool(destinations), post_id])
+        connection.execute('INSERT INTO publication_versions(post_id,revision,snapshot_json,created_at) VALUES (?,?,?,?)',
+                           (post_id, revision, _json(draft), stamp))
+        return _editable(_record(connection, post_id))
+
+
+def trash_publication(db_path, post_id, expected_revision):
+    """Remove a post from the list/feed while preserving 30-day recovery."""
+    with _db(db_path) as connection, connection:
+        connection.execute('BEGIN IMMEDIATE')
+        record = _record(connection, post_id)
+        if record['revision'] != expected_revision:
+            raise PublicationValidationError('Черновик изменён. Откройте свежую версию.')
+        if record['status'] != 'trashed':
+            draft = json.loads(record['draft_json'])
+            published = json.loads(record['published_json']) if record['published_json'] else None
+            for flag in DESTINATIONS.values():
+                draft[flag] = False
+                if published is not None:
+                    published[flag] = False
+            stamp, revision = _now(), record['revision'] + 1
+            connection.execute("UPDATE publication_records SET status='trashed',revision=?,draft_json=?,published_json=?,updated_at=? WHERE post_id=?",
+                               (revision, _json(draft), _json(published) if published is not None else None, stamp, post_id))
+            connection.execute('UPDATE posts SET active=0,show_scene=0,show_professional=0,show_model=0 WHERE id=?', (post_id,))
+            connection.execute('INSERT INTO publication_versions(post_id,revision,snapshot_json,created_at) VALUES (?,?,?,?)',
+                               (post_id, revision, _json(draft), stamp))
+        return _editable(_record(connection, post_id))
+
+
+def restore_trashed_publication(db_path, post_id):
+    """Recovery restores editing only; the owner chooses when to show it again."""
+    with _db(db_path) as connection, connection:
+        connection.execute('BEGIN IMMEDIATE')
+        record = _record(connection, post_id)
+        if record['status'] != 'trashed' or datetime.now(timezone.utc) > datetime.fromisoformat(record['updated_at']) + timedelta(days=30):
+            raise PublicationValidationError('Срок восстановления публикации истёк или она уже восстановлена.')
+        status = 'hidden' if record['public_revision'] else 'draft'
+        draft = json.loads(record['draft_json'])
+        published = json.loads(record['published_json']) if record['published_json'] else None
+        for flag in DESTINATIONS.values():
+            draft[flag] = False
+            if published is not None:
+                published[flag] = False
+        stamp, revision = _now(), record['revision'] + 1
+        connection.execute('UPDATE publication_records SET status=?,revision=?,draft_json=?,published_json=?,updated_at=? WHERE post_id=?',
+                           (status, revision, _json(draft), _json(published) if published is not None else None, stamp, post_id))
+        connection.execute('UPDATE posts SET active=0,show_scene=0,show_professional=0,show_model=0 WHERE id=?', (post_id,))
+        connection.execute('INSERT INTO publication_versions(post_id,revision,snapshot_json,created_at) VALUES (?,?,?,?)',
+                           (post_id, revision, _json(draft), stamp))
         return _editable(_record(connection, post_id))
 
 
@@ -288,15 +374,18 @@ def _frame_background(image, style):
     return tuple(round(.86*base[c] + .14*median[c]) for c in range(3))
 
 
-def render_publication_image(app_dir, data, *, frame_style="auto", frame_format="portrait"):
+def render_publication_image(app_dir, data, *, frame_style="auto", frame_format="portrait", logo_style="editorial"):
     """Deterministic layout, no retouching/cropping: only a SCENA label on photo.
 
     Feed 4:5, native Instagram 3:4, square, and Story 9:16 are separate exports.
     The caption contains the person's name, text, price and post URL.
     """
-    from PIL import Image, ImageDraw, ImageFont, ImageOps
+    from PIL import Image, ImageOps
+    from scena_brand import apply_publication_mark
     if frame_style not in FRAME_STYLES or frame_format not in FRAME_FORMATS:
         raise PublicationValidationError("Выберите оформление и формат публикации.")
+    if logo_style not in LOGO_STYLES:
+        raise PublicationValidationError("Выберите журнальное или компактное размещение логотипа.")
     normalized, _ = _open_original(data)
     width, height = FRAME_FORMATS[frame_format]
     surface = _frame_background(normalized, frame_style)
@@ -308,24 +397,7 @@ def render_publication_image(app_dir, data, *, frame_style="auto", frame_format=
     fitted = ImageOps.contain(normalized, (width-2*margin, height-2*vertical_margin), Image.Resampling.LANCZOS)
     photo_x, photo_y = (width-fitted.width)//2, (height-fitted.height)//2
     canvas.paste(fitted, (photo_x, photo_y), fitted)
-    # Visible editorial signature near the photo's top edge, never a funeral-like footer.
-    overlay = Image.new("RGBA", canvas.size)
-    draw = ImageDraw.Draw(overlay)
-    font_path = Path(app_dir) / "media/model-slider/P052-Roman.otf"
-    try:
-        font = ImageFont.truetype(str(font_path), 34)
-    except OSError:
-        font = ImageFont.load_default(size=34)
-    label_x, label_y = photo_x+24, photo_y+24
-    # Contrasting opaque-enough capsule makes SCENA readable on light/dark photos.
-    dark = sum(surface) < 220
-    bg = (23, 23, 22, 228) if dark else (253, 251, 246, 236)
-    fg = (249, 246, 236, 255) if dark else (38, 35, 30, 255)
-    text_width = draw.textlength("S C E N A", font=font)
-    box_width = int(text_width)+38
-    draw.rounded_rectangle((label_x, label_y, label_x+box_width, label_y+62), radius=9, fill=bg)
-    draw.text((label_x+19, label_y+31), "S C E N A", font=font, anchor="lm", fill=fg)
-    canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
+    canvas = apply_publication_mark(canvas, (photo_x, photo_y, fitted.width, fitted.height), logo_style)
     output = BytesIO()
     canvas.save(output, format="JPEG", quality=94, optimize=True, subsampling=0)
     return output.getvalue()
@@ -345,10 +417,10 @@ def _publication_folder(app_dir):
     return base, folder
 
 
-def store_publication_image(app_dir, data, filename, *, frame_style="auto", frame_format="portrait"):
+def store_publication_image(app_dir, data, filename, *, frame_style="auto", frame_format="portrait", logo_style="editorial"):
     """Keep exact original bytes plus a unique photo-first labelled derivative."""
     normalized, image_format = _open_original(data)
-    rendered = render_publication_image(app_dir, data, frame_style=frame_style, frame_format=frame_format)
+    rendered = render_publication_image(app_dir, data, frame_style=frame_style, frame_format=frame_format, logo_style=logo_style)
     width, height = normalized.size
     problems = ["Малая сторона меньше 600 px: замените фотографию перед публикацией."] if min(width, height) < 600 else []
     base, folder = _publication_folder(app_dir)
@@ -368,7 +440,7 @@ def store_publication_image(app_dir, data, filename, *, frame_style="auto", fram
             "original_image_path": original.relative_to(base).as_posix(),
             "width": width, "height": height, "bytes": len(data),
             "sha256": hashlib.sha256(data).hexdigest(), "warnings": problems,
-            "frame_style": frame_style, "frame_format": frame_format,
+            "frame_style": frame_style, "frame_format": frame_format, "logo_style": logo_style,
             "publication_allowed": not problems}
 
 
@@ -387,10 +459,10 @@ def managed_original(app_dir, relative):
     return original
 
 
-def restyle_publication_image(app_dir, original_image_path, *, frame_style="auto", frame_format="portrait"):
+def restyle_publication_image(app_dir, original_image_path, *, frame_style="auto", frame_format="portrait", logo_style="editorial"):
     """New immutable derivative; old post, history and original are untouched."""
     original = managed_original(app_dir, original_image_path)
-    rendered = render_publication_image(app_dir, original.read_bytes(), frame_style=frame_style, frame_format=frame_format)
+    rendered = render_publication_image(app_dir, original.read_bytes(), frame_style=frame_style, frame_format=frame_format, logo_style=logo_style)
     base, folder = _publication_folder(app_dir)
     derivative = folder/"scena-publication.jpg"
     with derivative.open("xb") as output:
@@ -398,7 +470,7 @@ def restyle_publication_image(app_dir, original_image_path, *, frame_style="auto
     from scena_media import persist
     persist(derivative, base)
     return {"image_url": derivative.relative_to(base).as_posix(), "original_image_path": original.relative_to(base).as_posix(),
-            "frame_style": frame_style, "frame_format": frame_format}
+            "frame_style": frame_style, "frame_format": frame_format, "logo_style": logo_style}
 
 
 def _validate_publication_image(snapshot, media_root):

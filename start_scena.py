@@ -56,7 +56,7 @@ def main() -> int:
         print(f"Порт 8501 занят. SCENA автоматически использует порт {port}.")
     print(f"Моя Сцена:       {base_url}/?page=scene")
     print(f"Страница Model:  {base_url}/?page=model")
-    print(f"Магазин Market:  {base_url}/?page=shop")
+    print(f"Магазин shopping:  {base_url}/?page=shop")
     print(f"Кабинет мастера: {base_url}/?page=admin&admin=1")
     print("Оставьте это окно открытым, пока работаете с SCENA.")
     command = [

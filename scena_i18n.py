@@ -20,6 +20,8 @@ DEFAULT_I18N_SETTINGS = {
     "master_name_ru": "", "master_name_ro": "", "master_name_en": "",
     "location_ru": "", "location_ro": "", "location_en": "",
     "bio_en": "", "beauty_title_en": "", "beauty_desc_en": "",
+    "scene_services_text_ru": "", "scene_services_text_ro": "", "scene_services_text_en": "",
+    "scene_services_title_ru": "Мои услуги", "scene_services_title_ro": "Serviciile mele", "scene_services_title_en": "My services",
     "model_title_en": "", "model_desc_en": "",
     "booking_cta_ru": "Записаться на макияж",
     "booking_cta_ro": "Programare la machiaj",
@@ -1532,6 +1534,8 @@ _load_rows(r'''
 Главная|Acasă|Home
 Помощь|Ajutor|Help
 Страницы|Pagini|Pages
+Визитка|Carte de vizită|Business card
+Отдельные данные для визитки, QR-кода и NFC.|Date separate pentru cartea de vizită, QR și NFC.|Separate data for the business card, QR code and NFC.
 Работа|Activitate|Work
 Продвижение|Promovare|Promotion
 Настройки|Setări|Settings
@@ -1895,6 +1899,11 @@ _load_rows(r'''
 Языковые версии проверены|Versiunile lingvistice sunt verificate|Language versions checked
 Кнопка записи|Buton de programare|Booking button
 Текст кнопки · RU|Textul butonului · RU|Button text · RU
+Описание услуг перед кнопкой|Descrierea serviciilor înaintea butonului|Service description above the button
+Заголовок блока услуг|Titlul secțiunii de servicii|Service section heading
+Для заголовка услуг заполните версии RU/RO.|Completați versiunile RU/RO ale titlului serviciilor.|Complete the RU/RO versions of the service heading.
+Опишите, что вы предлагаете. Этот текст появится перед кнопкой выбора услуги и времени. Пустое описание не показывается.|Descrieți ce oferiți. Textul va apărea înaintea butonului pentru alegerea serviciului și orei. Descrierea goală nu este afișată.|Describe what you offer. This text appears above the button for choosing a service and time. An empty description is hidden.
+Для описания услуг заполните версии RU/RO.|Completați versiunile RU/RO ale descrierii serviciilor.|Complete the RU/RO versions of the service description.
 Баннер страницы записи|Coperta paginii de programare|Booking page banner
 Имя и фамилия · RU|Nume și prenume · RU|Full name · RU
 Professional в навигации и на Сцене|Professional în navigare și pe Scena mea|Professional in navigation and on My Scene
@@ -2190,3 +2199,7 @@ _load_rows(r'''
 ''')
 
 register_copy("Создано: ", "Creată: ", "Created: ")
+
+# The section name is a single unlocalized brand word.
+register_copy('Ваш shopping', 'shopping personal', 'Your shopping')
+register_copy('Уведомление пока не отправлено. Проверьте подключение Telegram в shopping → Витрина и повторите позже.', 'Notificarea nu a fost trimisă. Verificați conexiunea Telegram în shopping → Vitrină și reîncercați.', 'Notification not sent. Check Telegram in shopping → Storefront and try again.')

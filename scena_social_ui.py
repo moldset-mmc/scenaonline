@@ -61,13 +61,13 @@ def _branded_path(app_dir, relative):
     return path
 
 
-def build_social_export(app_dir, image_url, caption, *, original_image_path="", frame_style="auto", frame_format=None):
+def build_social_export(app_dir, image_url, caption, *, original_image_path="", frame_style="auto", frame_format=None, logo_style="editorial"):
     """Export only the prepared image and reviewed caption, never originals/DB."""
     image_path = _branded_path(app_dir, image_url)
     image_bytes = image_path.read_bytes()
     if frame_format:
         original = managed_original(app_dir, original_image_path)
-        image_bytes = render_publication_image(app_dir, original.read_bytes(), frame_style=frame_style, frame_format=frame_format)
+        image_bytes = render_publication_image(app_dir, original.read_bytes(), frame_style=frame_style, frame_format=frame_format, logo_style=logo_style)
     package = BytesIO()
     with ZipFile(package, "w", compression=ZIP_DEFLATED) as archive:
         archive.writestr("scena-publication.jpg", image_bytes)
@@ -169,8 +169,8 @@ def render_social_workspace(db_path, app_dir, settings, locale, post_id):
         export_bytes = branded.read_bytes()
         export_options = {}
         if original:
-            export_bytes = render_publication_image(app_dir, original.read_bytes(), frame_style=export_style, frame_format=render_format)
-            export_options = {"original_image_path": source["original_image_path"], "frame_style": export_style, "frame_format": render_format}
+            export_bytes = render_publication_image(app_dir, original.read_bytes(), frame_style=export_style, frame_format=render_format, logo_style=source.get('logo_style', 'editorial'))
+            export_options = {"original_image_path": source["original_image_path"], "frame_style": export_style, "frame_format": render_format, "logo_style": source.get('logo_style', 'editorial')}
         st.image(export_bytes, width=330)
         st.text(download_caption)
         st.download_button(_tr(locale, "Скачать фото и подпись", "Descarcă fotografia și descrierea"), build_social_export(app_dir, source["image_url"], download_caption, **export_options), file_name=f"SCENA-{render_format}-{draft['public_id'][:8]}.zip", mime="application/zip", key=key + "_download")

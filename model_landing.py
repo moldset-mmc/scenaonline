@@ -229,6 +229,7 @@ def build_model_landing_html(
 ) -> str:
     """Build the self-contained responsive landing embedded by Streamlit."""
 
+    from scena_home_style import scene_brand_markup, scene_brand_css, scene_font_css
     from scena_model_builder import parse_model_design
     design = parse_model_design(settings.get("model_design_json"))
     language = locale if locale in {"ru", "ro", "en"} else "ro"
@@ -503,6 +504,16 @@ blockquote{{margin:0;max-width:900px;color:var(--paper);font-family:ScenaSerif,G
   .intro-enter,.portfolio-link{{min-height:44px;font-size:13px}}.intro-name,.identity .identity-name{{overflow-wrap:anywhere}}
 }}
 {qr_css}
+{scene_font_css()}
+{scene_brand_css()}
+.header .wordmark{{display:inline-flex;align-items:baseline}}
+.header{{max-width:1040px;margin-inline:auto;left:0;right:0}}
+.model-language-menu{{position:relative;pointer-events:auto}}
+.model-language-menu summary{{cursor:pointer;list-style:none;min-width:44px;min-height:44px;display:grid;place-items:center}}
+.model-language-menu[open] .languages{{position:absolute;right:0;top:100%;display:flex;background:#252321;padding:4px;border-radius:8px}}
+.model-language-menu .languages a{{display:grid;place-items:center;min-width:44px;min-height:44px}}
+.model-language-menu .languages>span{{display:none}}
+@media(max-width:720px){{.model-language-menu{{grid-column:2;grid-row:1}}}}
 </style>
 </head>
 <body>
@@ -510,8 +521,8 @@ blockquote{{margin:0;max-width:900px;color:var(--paper);font-family:ScenaSerif,G
   <section class="stage" aria-roledescription="carousel" aria-label="SCENA — {html.escape(master_name, quote=True)}">
     <div class="slides" aria-live="off">{image_markup}</div>
     <header class="header">
-      <a class="wordmark" target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(scene_url, quote=True)}" aria-label="SCENA">SCENA</a>
-      <nav aria-label="Navigation">{intro_return_markup}<a target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(scene_url, quote=True)}">{copy["scene"]}</a><span class="separator"></span><div class="languages"><a target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(model_url_ru, quote=True)}" class="{"current" if language == "ru" else ""}">RU</a><span>/</span><a target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(model_url_ro, quote=True)}" class="{"current" if language == "ro" else ""}">RO</a><span>/</span><a target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(model_url_en, quote=True)}" class="{"current" if language == "en" else ""}">EN</a></div></nav>
+      <a class="wordmark scene-home-brand" target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(scene_url, quote=True)}" aria-label="MB Studio. SCENA.live">{scene_brand_markup(light=True)}</a>
+      <nav aria-label="Navigation">{intro_return_markup}<a target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(scene_url, quote=True)}">{copy["scene"]}</a><span class="separator"></span><details class="model-language-menu"><summary>{language.upper()}</summary><div class="languages"><a target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(model_url_ru, quote=True)}" class="{"current" if language == "ru" else ""}">RU</a><span>/</span><a target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(model_url_ro, quote=True)}" class="{"current" if language == "ro" else ""}">RO</a><span>/</span><a target="{navigation_target}" rel="noopener noreferrer" href="{html.escape(model_url_en, quote=True)}" class="{"current" if language == "en" else ""}">EN</a></div></details></nav>
     </header>
     <div class="identity"><p class="role">{html.escape(role)}</p><{identity_tag} class="identity-name"><span class="first">{html.escape(first_name)}</span><span class="last">{html.escape(last_name)}</span></{identity_tag}><span class="location">{html.escape(location_line)}</span><div class="hero-actions" id="show-invite-slot"></div></div>
     {intro_markup}

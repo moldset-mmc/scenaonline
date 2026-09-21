@@ -27,7 +27,7 @@ def initialize():
         database=os.environ['SCENA_DB_PATH']
         Path(database).parent.mkdir(parents=True,exist_ok=True)
         revision=hashlib.sha256(b''.join((ROOT/name).read_bytes() for name in (
-            'scena_core.py','scena_cabinet.py','scena_publications.py','scena_shop.py',
+            'scena_core.py','scena_business_card.py','scena_cabinet.py','scena_publications.py','scena_shop.py',
             'scena_prompts.py','scena_licensing.py','scena_shop_telegram.py','scena_service_telegram.py','scena_web/storage.py','scena_web/page_cache.py'))).hexdigest()
         try:
             with connect(database) as db:

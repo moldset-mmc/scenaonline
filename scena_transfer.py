@@ -39,7 +39,7 @@ BACKUP_TABLES = {
     "publication_records", "publication_versions", "publication_channel_drafts", "publication_deliveries",
     "shop_products", "shop_orders", "shop_order_items", "prompt_projects", "prompt_versions",
     "pro_code_redemptions", "support_reply_preferences", "model_designs",
-    "scena_media_files",
+    "scena_media_files", "business_card_settings",
 }
 
 

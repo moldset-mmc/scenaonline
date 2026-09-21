@@ -21,6 +21,7 @@ class PublicReadMatcher(Matcher):
     def match(self, request):
         if request.method in ("GET", "HEAD") and (
             request.path in PUBLIC_DOCUMENTS or request.path.startswith("/scena-assets/")
+            or request.path == '/card' or request.path.startswith('/card/')
             or re.match(r'^/(ru|ro|en)(/|$)', request.path)
         ):
             return {}

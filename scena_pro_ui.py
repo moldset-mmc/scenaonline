@@ -70,7 +70,7 @@ def render_pro(db_path, app_dir, settings, locale='ru'):
     pro_cards = [
         (_tr(locale, 'Сценарии вашего образа', 'Scenarii pentru imaginea dvs.', 'Scenarios for your image'),
          _tr(locale, 'Глянец, клубная атмосфера, журнальный портрет или ваша идея. Подготовьте точное задание для своего ИИ, сохраняйте варианты и возвращайтесь к удачным решениям.', 'Luciu, atmosferă de club, portret editorial sau propria idee. Pregătiți instrucțiuni precise pentru AI, salvați variantele și reveniți la ideile reușite.', 'Gloss, a club atmosphere, an editorial portrait or your own idea. Prepare clear briefs for your AI, keep variations and return to your best ideas.')),
-        (_tr(locale, 'Личный Shop', 'Shop personal', 'Your personal Shop'),
+        (_tr(locale, 'Личный shopping', 'shopping personal', 'Your personal shopping'),
          _tr(locale, 'Соберите товары, которым доверяете как мастер. Фотографии, цены и ваш комментарий помогут клиенту выбрать и отправить вам заказ.', 'Reuniți produsele în care aveți încredere ca specialistă. Fotografiile, prețurile și recomandările dvs. ajută clientul să aleagă și să vă trimită o comandă.', 'Bring together the products you trust as a professional. Photos, prices and your recommendations help clients choose and send you an order.')),
         (_tr(locale, 'История, которая остаётся', 'Un istoric care rămâne', 'A history you keep'),
          _tr(locale, 'Развивайте несколько идей параллельно. Каждая сохранённая PRO-версия промпта остаётся в истории с датой; её можно прочитать, скачать и вернуть новым черновиком.', 'Dezvoltați mai multe idei în paralel. Fiecare versiune PRO salvată rămâne în istoric cu data; o puteți citi, descărca și restabili ca o ciornă nouă.', 'Develop several ideas in parallel. Each saved PRO prompt version stays in your dated history, ready to read, download or restore as a new draft.')),
@@ -81,7 +81,7 @@ def render_pro(db_path, app_dir, settings, locale='ru'):
         if st.button(_tr(locale, 'Мои промпты', 'Prompturile mele', 'My prompts'), key='pro_open_prompts', type='primary', width='stretch'):
             _go('promotion', 'prompts', locale)
     with buttons[1]:
-        if st.button(_tr(locale, 'Открыть мой Shop', 'Deschide Shop-ul meu', 'Open my Shop'), key='pro_open_shop', width='stretch'):
+        if st.button(_tr(locale, 'Открыть мой shopping', 'Deschide shopping', 'Open my shopping'), key='pro_open_shop', width='stretch'):
             _go('pages', 'shop', locale)
     with buttons[2]:
         if st.button(_tr(locale, 'Моя страница Model', 'Pagina mea Model', 'My Model page'), key='pro_open_model', width='stretch'):
@@ -115,8 +115,8 @@ def render_pro(db_path, app_dir, settings, locale='ru'):
             st.success(_tr(locale, f'Код уже применён. PRO действует до {end}.' if result['already_used'] else f'Готово. PRO продлён до {end}.', f'PRO este valabil până la {end}.', f'PRO is valid until {end}.'))
         except (LicenseError, ImportError) as exc:
             st.error(str(exc) if locale == 'ru' and isinstance(exc, LicenseError) else _tr(locale, 'Не удалось проверить код. Обратитесь в команду SCENA.', 'Codul nu a putut fi verificat. Contactați echipa SCENA.', 'The code could not be verified. Contact the SCENA team.'))
-    if st.button(_tr(locale, 'Обсудить продление с SCENA', 'Discută reînnoirea cu SCENA', 'Discuss renewal with SCENA'), key='pro_contact_support', width='stretch'):
-        _go('help', 'support', locale)
+    from scena_platform_contact import render_pro_contact
+    render_pro_contact(db_path, profile, locale)
     if not active and not pending:
         with st.expander(_tr(locale, 'Подать заявку на PRO', 'Trimite o cerere pentru PRO', 'Apply for PRO')):
             with st.form('pro_application_form', clear_on_submit=True):

@@ -38,6 +38,7 @@
     form.setAttribute('aria-busy','true');
     const focus = document.activeElement?.id;
     const scroll = window.scrollY;
+    const bookingContactBefore = !!form.querySelector('[data-form-key="service_request_form"]');
     const trigger = button || [...form.elements].find(field => field.name === changed);
     const group = trigger?.closest('fieldset[data-form-key]') || null;
     const fields = [...form.elements].filter(field => (field.closest('fieldset[data-form-key]') || null) === group);
@@ -103,10 +104,15 @@
         }
       }
       syncBookingContact();
+      syncBookingProgress();
       const destination = response.headers.get('X-Scena-URL') || form.action;
       history.replaceState(null,'',destination);
       window.scrollTo(0,scroll);
       if (focus) document.getElementById(focus)?.focus({preventScroll:true});
+      if (headers['X-Scena-Fragment'] && bookingContactBefore !== !!document.querySelector('[data-form-key="service_request_form"]')) {
+        const heading=document.querySelector('.booking-heading');
+        if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});heading.scrollIntoView({block:'start'});}
+      }
       for (const field of fields.filter(field => field.type === 'file')) { const input = document.getElementById(field.id); if (input?.type === 'file') input.value = ''; }
       const validation = document.querySelector('.scena-notice.error');
       if (validation) {
@@ -292,13 +298,27 @@
     selectTab(tabs[index]);tabs[index].focus();
   });
   document.addEventListener('click', event => {
-    for (const menu of document.querySelectorAll('.scena-cabinet-menu[open]')) {
+    for (const menu of document.querySelectorAll('.scena-cabinet-menu[open],.scena-locale-menu[open],.scena-booking-menu[open]')) {
       if (!menu.contains(event.target) || event.target.closest('a')) menu.open=false;
     }
   });
   document.addEventListener('keydown', event => {
     if(event.key !== 'Escape') return;
-    const menu=document.querySelector('.scena-cabinet-menu[open]');
+    const menu=document.querySelector('.scena-cabinet-menu[open],.scena-locale-menu[open],.scena-booking-menu[open]');
     if(menu){event.preventDefault();menu.open=false;menu.querySelector('summary')?.focus();}
   });
+  function syncBookingProgress(){
+    const schedule=document.querySelector('.st-key-booking_schedule > details');
+    if(!schedule)return;
+    const step=schedule.open?1:0;
+    document.querySelectorAll('.booking-steps li').forEach((item,index)=>{
+      if(index===step)item.setAttribute('aria-current','step');else item.removeAttribute('aria-current');
+    });
+  }
+  document.addEventListener('toggle',event=>{
+    if(event.target.matches('.st-key-booking_schedule > details')){
+      syncBookingProgress();
+      if(event.target.open)event.target.querySelector('summary')?.scrollIntoView({block:'start'});
+    }
+  },true);
 })();

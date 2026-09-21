@@ -32,6 +32,8 @@ class DomainRedirectTests(AsyncHTTPTestCase):
             '/robots.txt': '/robots.txt', '/sitemap.xml': '/sitemap.xml', '/llms.txt': '/llms.txt',
             '/scena-assets/abc.webp?version=1': '/scena-assets/abc.webp?version=1',
             '/ro/model/': '/ro/model/',
+            '/card': '/card', '/card/?utm_source=nfc': '/card/?utm_source=nfc',
+            '/card/assets/portrait.webp': '/card/assets/portrait.webp',
         }
         for host in ('scenaonline.vercel.app', 'scena.life'):
             for path, target in cases.items():

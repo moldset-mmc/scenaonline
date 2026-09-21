@@ -16,6 +16,7 @@ from PIL import Image, UnidentifiedImageError
 
 from model_landing import (
     build_model_landing_html,
+    data_uri_for_file,
     image_uri,
     model_slides_from_settings,
     model_intro_from_settings,
@@ -24,6 +25,7 @@ from model_landing import (
     qr_png_bytes,
 )
 
+from scena_home_style import scene_font_css
 from scena_core import (
     CHISINAU,
     REQUEST_STATUSES,
@@ -858,36 +860,45 @@ def render_header(page: str, locale: str, *, admin: bool = False) -> None:
     ro_url = "?" + urlencode(language_query(st.query_params, "ro", page=page))
     en_url = "?" + urlencode(language_query(st.query_params, "en", page=page))
     mode = tr(locale, "Моя Сцена", "Scena mea")
-    st.markdown(
-        f"""
-        <div class="scena-top">
-          <a class="scena-logo" href="{page_url('scene', locale)}" target="_self">SCENA</a>
-          <span class="scena-muted">{clean(mode)}</span>
-          <div class="scena-locale">
-            <a class="{'active' if locale == 'ru' else ''}" href="{ru_url}" target="_self">RU</a>
-            <a class="{'active' if locale == 'ro' else ''}" href="{ro_url}" target="_self">RO</a>
-            <a class="{'active' if locale == 'en' else ''}" href="{en_url}" target="_self">EN</a>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    from scena_home_style import scene_brand_markup, scene_brand_css
+    st.markdown('<style>' + scene_font_css() + scene_brand_css() + '</style>', unsafe_allow_html=True)
+    logo_class, logo_label = "scena-logo scene-home-brand", "MB Studio. SCENA.live"
+    logo = scene_brand_markup()
     items = [
         ("scene", tr(locale, "Моя Сцена", "Scena mea")),
-        ("portfolio", tr(locale, "Портфолио", "Portofoliu")),
         ("professional", tr(locale, "Услуги и курсы", "Servicii și cursuri")),
+        ("portfolio", tr(locale, "Портфолио", "Portofoliu")),
         ("model", "Model"),
         ("join-model", tr(locale, "Стать моделью", "Devino model")),
     ]
     settings = get_settings(DB_PATH)
     items = [(key, label) for key, label in items if key != "model" or (settings.get("model_in_scene", "1") == "1" and settings.get("model_published", "1") == "1")]
     if settings.get("shop_enabled", "0") == "1":
-        items.insert(-1, ("shop", "Market"))
+        items.insert(2, ("shop", "shopping"))
     links = "".join(
-        f'<a class="{"active" if key == page else ""}" href="{page_url(key, locale)}" target="_self">{clean(label)}</a>'
+        f'<a class="{"active" if key == page else ""}{" scene-shop-link" if key == "shop" else ""}"'
+        + (' aria-current="page"' if key == page else '')
+        + f' href="{page_url(key, locale)}" target="_self">{clean(label)}</a>'
         for key, label in items
     )
-    st.markdown(f'<nav class="scena-nav">{links}</nav>', unsafe_allow_html=True)
+    booking_menu = ('<details class="scena-booking-menu"><summary aria-label="'+clean(tr(locale,"Меню","Meniu","Menu"))+'">☰</summary><nav>'+links+'</nav></details>') if page == "booking" else ""
+    st.markdown(
+        f"""
+        <div class="scena-top">
+          <a class="{logo_class}" href="{page_url('scene', locale)}" target="_self" aria-label="{logo_label}">{logo}</a>
+          <span class="scena-muted">{clean(mode)}</span>
+          <details class="scena-locale-menu"><summary>{locale.upper()}</summary><div class="scena-locale">
+            <a class="{'active' if locale == 'ru' else ''}" href="{ru_url}" target="_self">RU</a>
+            <a class="{'active' if locale == 'ro' else ''}" href="{ro_url}" target="_self">RO</a>
+            <a class="{'active' if locale == 'en' else ''}" href="{en_url}" target="_self">EN</a>
+          </div></details>
+          {booking_menu}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if page != "booking":
+        st.markdown(f'<nav class="scena-nav">{links}</nav>', unsafe_allow_html=True)
 
 
 def render_footer(locale: str) -> None:
@@ -1021,6 +1032,46 @@ def render_portfolio_grid(settings: dict[str, str], locale: str, kind: str) -> N
     render_portfolio(APP_DIR, settings, locale, kind)
 
 
+def scene_service_intro(settings: dict[str, str], locale: str) -> str:
+    """Show the owner's introduction immediately before the service-selection link."""
+    if any(settings.get(key, "1") != "1" for key in ("professional_published", "professional_in_scene")):
+        return ""
+    text = content_text(settings, "scene_services_text", locale)
+    if not text:
+        return ""
+    return f'<div class="scene-service-intro"><p>{clean(text)}</p></div>'
+
+
+def scene_contact_links(settings: dict[str, str], locale: str) -> str:
+    icons = {
+        "instagram": '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".75" fill="currentColor" stroke="none"/>',
+        "telegram": '<path d="m3 11 18-7-4 17-6-5-4 3 1-6 9-6-6 9"/>',
+    }
+    links = []
+
+    def link(label: str, url: str, icon: str) -> str:
+        return (
+            f'<a class="scene-social-link" href="{clean(url)}" target="_self">'
+            '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" '
+            f'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{icons[icon]}</svg>'
+            f'<span>{clean(label)}</span></a>'
+        )
+
+    if settings.get("model_published", "1") == "1" and settings.get("model_in_scene", "1") == "1":
+        crown = data_uri_for_file(Path(__file__).resolve().parent / "scena_web/static/model-crown.svg")
+        label = tr(locale, "Открыть model SCENA", "Deschide model SCENA", "Open model SCENA")
+        links.append(
+            f'<a class="scene-social-link scene-model-mark" href="{page_url("model", locale)}" target="_self" aria-label="{clean(label)}">'
+            f'<span class="scene-model-word"><img src="{clean(crown)}" width="24" height="12" alt="" aria-hidden="true"><span>model</span></span>'
+            ' <span>SCENA</span></a>'
+        )
+    for label, key, icon in (("Instagram", "instagram_url", "instagram"), ("Telegram", "telegram_url", "telegram")):
+        url = settings.get(key, "").strip()
+        if urlparse(url).scheme in {"http", "https"}:
+            links.append(link(label, url, icon))
+    return '<div class="scene-secondary-links">' + "".join(links) + '</div>' if links else ""
+
+
 def render_scene(settings: dict[str, str], locale: str) -> None:
     if settings.get("profile_published", "1") != "1":
         st.title(tr(locale, "Моя Сцена", "Scena mea"))
@@ -1035,37 +1086,39 @@ def render_scene(settings: dict[str, str], locale: str) -> None:
         f'alt="{clean(localized_name(settings, locale))}">'
         if hero_uri else ""
     )
-    actions: list[str] = []
+    services_html = ""
     if settings.get("professional_published", "1") == "1" and settings.get("professional_in_scene", "1") == "1":
-        actions.append(
+        services_title = content_text(settings, "scene_services_title", locale)
+        heading = f'<h2 id="scene-services-title" class="scene-section-title">{clean(services_title)}</h2>' if services_title else ""
+        label = ' aria-labelledby="scene-services-title"' if services_title else ""
+        services_html = (
+            f'<section class="scene-services-section"{label}>'
+            f'{heading}{scene_service_intro(settings, locale)}'
+            '<div class="scena-cta-row">'
             f'<a class="scena-cta primary" href="{page_url("booking", locale)}" target="_self">'
             f'{clean(content_text(settings, "booking_cta", locale, tr(locale, "Записаться на макияж", "Programare la machiaj", "Book makeup")))}</a>'
-        )
-    if settings.get("model_published", "1") == "1" and settings.get("model_in_scene", "1") == "1":
-        actions.append(
-            f'<a class="scena-cta" href="{page_url("model", locale)}" target="_self">'
-            f'{clean(tr(locale, "Открыть Model", "Deschide Model"))}</a>'
+            '</div></section>'
         )
     bio = content_text(settings, "bio", locale)
+    signature = localized_name(settings, locale).split(maxsplit=1)[0]
     st.markdown(
         f"""
         <section class="scena-editorial-scene">
           {hero_html}
           <div class="scene-identity">
-          <div class="scena-eyebrow">{clean(tr(locale, 'Моя Сцена · знакомство', 'Scena mea · cunoaște-mă'))}</div>
           <h1 class="scena-personal-name">{clean(localized_name(settings, locale))}</h1>
           <p class="scena-personal-role">Model &amp; Makeup Artist</p>
-          <p>{clean(bio)}</p>
-          <small class="scena-muted">{clean(content_text(settings, 'location', locale))}</small>
-          <div class="scena-cta-row">{''.join(actions)}</div>
+          <p class="scene-manifesto">{clean(bio)}</p>
+          <span class="scene-signature">{clean(signature)}</span>
+          {services_html}
+          {scene_contact_links(settings, locale)}
           </div>
         </section>
         """,
         unsafe_allow_html=True,
     )
-    contact_buttons(settings)
-    st.markdown("<div class='scena-section'></div>", unsafe_allow_html=True)
-    render_posts(locale, "scene")
+    with st.container(key="scene_publications"):
+        render_posts(locale, "scene")
 
 
 def render_portfolio_page(settings: dict[str, str], locale: str) -> None:
@@ -1488,7 +1541,7 @@ def render_focused_request(row, locale) -> None:
                     if dispatch(DB_PATH, request_id=row['id']) == 'sent':
                         rerun_admin_with_success('Уведомление отправлено в Telegram.')
                     else:
-                        st.warning(ui('Уведомление пока не отправлено. Проверьте подключение Telegram в Market → Витрина и повторите позже.'))
+                        st.warning(ui('Уведомление пока не отправлено. Проверьте подключение Telegram в shopping → Витрина и повторите позже.'))
 
 
 def render_crm() -> None:
@@ -1541,7 +1594,7 @@ def render_crm() -> None:
                     if result == 'sent':
                         rerun_admin_with_success('Уведомление отправлено в Telegram.')
                     else:
-                        st.warning(ui('Уведомление пока не отправлено. Проверьте подключение Telegram в Market → Витрина и повторите позже.'))
+                        st.warning(ui('Уведомление пока не отправлено. Проверьте подключение Telegram в shopping → Витрина и повторите позже.'))
             detail_columns = st.columns(2)
             details = [
                 ("Телефон", row["phone"]), ("Email", row["email"]), ('Telegram',row.get('contact_telegram','')),
@@ -1743,9 +1796,14 @@ def render_scene_admin(settings: dict[str, str]) -> None:
             with tab:
                 language_values['name_'+language] = st.text_input({'ru':ui('Имя и фамилия · RU'),'ro':'Nume · RO','en':'Name · EN'}[language], value=localized_name(settings,language))
                 language_values['bio_'+language] = st.text_area({'ru':ui('Текст RU'),'ro':'Text RO','en':'Story · EN'}[language], value=settings.get('bio' if language == 'ru' else 'bio_'+language,''), height=130)
+                language_values['services_title_'+language] = st.text_input(ui('Заголовок блока услуг')+' · '+language.upper(), value=settings.get('scene_services_title_'+language,''))
+                language_values['services_'+language] = st.text_area(ui('Описание услуг перед кнопкой')+' · '+language.upper(), value=settings.get('scene_services_text_'+language,''), height=150)
                 language_values['cta_'+language] = st.text_input({'ru':ui('Текст кнопки · RU'),'ro':'Text buton · RO','en':'Button text · EN'}[language],value=content_text(settings,'booking_cta',language,{'ru':'Записаться на макияж','ro':'Programare la machiaj','en':'Book makeup'}[language]))
+        st.caption(ui('Опишите, что вы предлагаете. Этот текст появится перед кнопкой выбора услуги и времени. Пустое описание не показывается.'))
         name, name_ro, name_en = (language_values['name_'+lang] for lang in ('ru','ro','en'))
         bio_ru, bio_ro, bio_en = (language_values['bio_'+lang] for lang in ('ru','ro','en'))
+        services_title_ru, services_title_ro, services_title_en = (language_values['services_title_'+lang] for lang in ('ru','ro','en'))
+        services_ru, services_ro, services_en = (language_values['services_'+lang] for lang in ('ru','ro','en'))
         cta_ru, cta_ro, cta_en = (language_values['cta_'+lang] for lang in ('ru','ro','en'))
         slug = settings['profile_slug']
         with st.expander(ui('Контакты и ссылки')):
@@ -1770,6 +1828,10 @@ def render_scene_admin(settings: dict[str, str]) -> None:
             errors.append("Адрес может содержать буквы, цифры, дефис и подчёркивание.")
         if profile_published and not (bio_ru.strip() and bio_ro.strip() and bio_approved):
             errors.append("Для публикации заполните и подтвердите текст RU/RO.")
+        if profile_published and any(text.strip() for text in (services_ru, services_ro, services_en)) and not (services_ru.strip() and services_ro.strip()):
+            errors.append("Для описания услуг заполните версии RU/RO.")
+        if profile_published and any(text.strip() for text in (services_title_ru, services_title_ro, services_title_en)) and not (services_title_ru.strip() and services_title_ro.strip()):
+            errors.append("Для заголовка услуг заполните версии RU/RO.")
         if errors:
             for error in errors:
                 st.error(error)
@@ -1784,6 +1846,8 @@ def render_scene_admin(settings: dict[str, str]) -> None:
                 "model_in_scene": "1" if model_in_scene else "0",
                 "pilot_notice": "1" if pilot_notice else "0",
                 "bio": bio_ru, "bio_ro": bio_ro, "bio_en": bio_en,
+                "scene_services_title_ru": services_title_ru, "scene_services_title_ro": services_title_ro, "scene_services_title_en": services_title_en,
+                "scene_services_text_ru": services_ru, "scene_services_text_ro": services_ro, "scene_services_text_en": services_en,
                 "booking_cta_ru": cta_ru, "booking_cta_ro": cta_ro, "booking_cta_en": cta_en,
                 "bio_translation_approved": "1" if bio_approved else "0",
             })
@@ -2821,17 +2885,21 @@ def render_individual_schedule(settings):
 
 def render_schedule_admin(settings: dict[str, str]) -> None:
     locale = st.session_state.get('scena_ui_locale','ru')
-    regular_tab, individual_tab, exceptions_tab = st.tabs([
-        tr(locale,'Общий график','Program general','Regular hours'),
+    calendar_tab, regular_tab, individual_tab, exceptions_tab = st.tabs([
+        tr(locale,'Календарь','Calendar','Calendar'),
+        tr(locale,'Повторение','Repetare','Repeat'),
         tr(locale,'Отдельный день','O anumită zi','Individual day'),
         tr(locale,'Исключения','Excepții','Exceptions')])
+    with calendar_tab:
+        from scena_schedule_ui import render_calendar
+        render_calendar(DB_PATH, settings, locale)
     with regular_tab:
         weekday_labels = {0: "Понедельник", 1: "Вторник", 2: "Среда", 3: "Четверг", 4: "Пятница", 5: "Суббота", 6: "Воскресенье"}
         selected_days = [int(value) for value in settings["schedule_weekdays"].split(",") if value.strip().isdigit()]
         with st.form("schedule_form"):
             st.subheader(ui("Регулярный график"))
             st.caption(tr(st.session_state.get("scena_ui_locale", "ru"), "Часы отдельного дня имеют приоритет над общим графиком.", "Orele unei zile au prioritate față de programul general.", "Individual day hours take precedence over the regular schedule."))
-            weekdays = st.multiselect(ui('Рабочие дни'), list(weekday_labels), default=selected_days, format_func=lambda value: ui(weekday_labels[value]))
+            weekdays = st.pills(ui('Рабочие дни'), list(weekday_labels), default=selected_days, selection_mode='multi', format_func=lambda value: ui(weekday_labels[value]))
             cols = st.columns(4)
             with cols[0]:
                 start = st.time_input(ui("Начало"), value=time.fromisoformat(settings["schedule_start"]))
@@ -2841,15 +2909,6 @@ def render_schedule_admin(settings: dict[str, str]) -> None:
                 break_start = st.time_input(ui("Перерыв с"), value=time.fromisoformat(settings["schedule_break_start"]))
             with cols[3]:
                 break_end = st.time_input(ui("Перерыв до"), value=time.fromisoformat(settings["schedule_break_end"]))
-            params = st.columns(4)
-            with params[0]:
-                interval = st.number_input(ui("Шаг слотов, мин."), min_value=5, max_value=60, value=int(settings["slot_interval_minutes"]), step=5)
-            with params[1]:
-                lead = st.number_input(ui("Минимум до записи, ч."), min_value=0, max_value=168, value=int(settings["minimum_lead_hours"]))
-            with params[2]:
-                horizon = st.number_input(ui("Глубина, дней"), min_value=1, max_value=365, value=int(settings["booking_horizon_days"]))
-            with params[3]:
-                hold = st.number_input(ui("Удержание, ч."), min_value=1, max_value=168, value=int(settings["pending_hold_hours"]))
             schedule_submit = st.form_submit_button(ui("Сохранить график"), type="primary")
         if schedule_submit:
             if not weekdays or start >= end or break_start >= break_end or break_start <= start or break_end >= end:
@@ -2859,8 +2918,6 @@ def render_schedule_admin(settings: dict[str, str]) -> None:
                     "schedule_weekdays": ",".join(str(day) for day in sorted(weekdays)),
                     "schedule_start": start.strftime("%H:%M"), "schedule_end": end.strftime("%H:%M"),
                     "schedule_break_start": break_start.strftime("%H:%M"), "schedule_break_end": break_end.strftime("%H:%M"),
-                    "slot_interval_minutes": interval, "minimum_lead_hours": lead,
-                    "booking_horizon_days": horizon, "pending_hold_hours": hold,
                 })
                 rerun_admin_with_success(
                     "График сохранён; кнопки времени пересчитаны автоматически."
@@ -2898,6 +2955,17 @@ def render_schedule_admin(settings: dict[str, str]) -> None:
             if st.button(ui("Удалить выбранное исключение")):
                 delete_schedule_exception(DB_PATH, delete_id)
                 rerun_admin_with_success("Исключение графика удалено.")
+
+    with st.expander(tr(locale,'Параметры записи','Setările programării','Booking settings')):
+        with st.form('booking_parameters'):
+            interval = st.number_input(tr(locale,'Интервал начала записи, минут','Intervalul orelor de început, minute','Start-time interval, minutes'), min_value=5, max_value=60, value=int(settings['slot_interval_minutes']), step=5)
+            lead = st.number_input(tr(locale,'За сколько часов можно записаться','Cu câte ore înainte se poate rezerva','Minimum notice, hours'), min_value=0, max_value=168, value=int(settings['minimum_lead_hours']))
+            horizon = st.number_input(tr(locale,'На сколько дней вперёд открыта запись','Câte zile în avans se poate rezerva','Days available in advance'), min_value=1, max_value=365, value=int(settings['booking_horizon_days']))
+            hold = st.number_input(tr(locale,'Ожидание подтверждения, часов','Așteptarea confirmării, ore','Confirmation hold, hours'), min_value=1, max_value=168, value=int(settings['pending_hold_hours']))
+            submitted = st.form_submit_button(ui('Сохранить'))
+        if submitted:
+            save_settings(DB_PATH, {'slot_interval_minutes':interval,'minimum_lead_hours':lead,'booking_horizon_days':horizon,'pending_hold_hours':hold})
+            rerun_admin_with_success(tr(locale,'Параметры записи сохранены.','Setările au fost salvate.','Booking settings saved.'))
 
 
 def render_posts_admin() -> None:
@@ -3050,9 +3118,10 @@ ADMIN_VIEWS = {
     },
     "pages": {
         "scene": "Моя Сцена",
+        "card": "Визитка",
         "professional": "Professional",
         "model": "Model",
-        "shop": "Market",
+        "shop": "shopping",
     },
     "work": {
         "overview": "Обзор",
@@ -3074,11 +3143,12 @@ ADMIN_VIEWS = {
 }
 
 ADMIN_VIEW_COPY = {
+    ("pages", "card"): ("Визитка", "Отдельные данные для визитки, QR-кода и NFC."),
     ("promotion", "search"): ("Поиск и индексация", ""),
     ("photos", "library"): ("Фото", "Все фотографии и места их использования."),
     ("work", "overview"): ("Ваша работа сегодня", "Записи, услуги и заказы — начните с важного."),
     ("pro", "subscription"): ("SCENA PRO", "Ваш образ, ваш магазин, ваши возможности."),
-    ("pages", "shop"): ("Ваш Market", "Товары, которые вы рекомендуете. Заказы от ваших клиентов."),
+    ("pages", "shop"): ("Ваш shopping", "Товары, которые вы рекомендуете. Заказы от ваших клиентов."),
     ("promotion", "prompts"): ("Промпты для вашего образа", "Выберите сцену, добавьте свои детали и сохраните задание для ИИ."),
     ("settings", "connections"): ("Подключения", "Настройка ассистента и связи с командой."),
     ("home", ""): (
@@ -3286,6 +3356,9 @@ def render_admin(settings: dict[str, str], locale: str) -> None:
     elif section == "settings" and view == "connections":
         from scena_connect_setup import render_connections
         render_connections(DB_PATH, APP_DIR, locale)
+    elif section == "pages" and view == "card":
+        from scena_business_card_ui import render_card_editor
+        render_card_editor(DB_PATH, APP_DIR, locale)
     elif section == "pages" and view == "scene":
         render_scene_admin(settings)
     elif section == "pages" and view == "professional":

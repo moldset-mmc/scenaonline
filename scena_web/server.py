@@ -15,6 +15,7 @@ import tornado.web
 from . import bootstrap, storage, media, page_cache
 from .context import RenderContext, Query, current, Rerun, Stop, FormError
 from .forms import apply
+from .business_card import card_routes
 from scena_cloud_auth import COOKIE, valid_session
 from deploy.serve_cloud import Login, Logout
 
@@ -65,7 +66,8 @@ def render_page(ctx, previous=None, values=None, files=None):
         favicon=resources.get('scena_web/static/favicon.png','')
         measure=(ROOT/'scena_web/measure.js').read_text()
         styles='\n'.join(ctx.styles)
-        body=ctx.root.render()
+        from scena_home_style import shopping_labels
+        body=shopping_labels(ctx.root.render())
         page = 'admin' if ctx.query.get('admin') == '1' else ctx.query.get('page','scene')
         from scena_seo import build_metadata, render_head, NOINDEX, public_base
         settings = ctx.seo_settings or {}
@@ -113,6 +115,10 @@ def render_page(ctx, previous=None, values=None, files=None):
 <form id="scena-page" method="post" action="{html.escape(ctx.url,quote=True)}" enctype="multipart/form-data" novalidate>
 <input type="hidden" name="_token" value="{form_token}">{body}</form></div></main></div>
 <div id="scena-operation" role="status" aria-live="polite" hidden></div></body></html>'''
+        if page == 'booking':
+            booking_css = resources.get('scena_web/static/booking.css', '')
+            if booking_css:
+                document = document.replace('</head>', f'<link rel="stylesheet" href="{booking_css}"></head>', 1)
         from scena_urls import enabled, rewrite_links
         if enabled(settings):
             document = rewrite_links(document, public_base(settings))
@@ -403,6 +409,7 @@ class TelegramWebhook(Base):
 
 def application():
     return tornado.web.Application([
+        *card_routes(),
         (r'/healthz',Health),(r'/auth/login',NativeLogin),(r'/auth/logout',NativeLogout),
         (r'/scena-telegram',TelegramWebhook),
         (r'/(robots\.txt|sitemap\.xml|llms\.txt)',SearchDocument),

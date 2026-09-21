@@ -104,10 +104,10 @@ async def main():
             schedule_path='/?page=admin&lang=ru&section=work&view=schedule'
             fresh,_=await request(schedule_path,owner=True)
             old_token,_=form(fresh)
-            invalid,_=await request(schedule_path,owner=True,data=payload(fresh,'Сохранить график',{'Шаг слотов, мин.':1}))
+            invalid,_=await request(schedule_path,owner=True,data=payload(fresh,'Сохранить',{'Интервал начала записи, минут':1}))
             assert invalid.code==409,invalid.body
             load_form(old_token,sid)
-            corrected,_=await request(schedule_path,owner=True,data=payload(fresh,'Сохранить график'))
+            corrected,_=await request(schedule_path,owner=True,data=payload(fresh,'Сохранить'))
             assert corrected.code==200,corrected.body
             assert 'data-cabinet-nav' in corrected.body.decode()
             scene_view,_=await request('/?page=admin&lang=ru&section=pages&view=scene',owner=True)
@@ -184,19 +184,130 @@ async def main():
             save_date_hours(os.environ['SCENA_DB_PATH'],selected,reset=True)
             print('PASS local day/time selection validated; stale slot blocked before contact step',flush=True)
 
+            # The author's placement choice is a native control and survives replicas.
+            path='/?page=admin&lang=ru&section=promotion&view=posts'
+            response,_=await request(path,owner=True)
+            response,_=await request(path,data=payload(response,'+ Новая публикация'),owner=True)
+            _,saved=form(response)
+            logo_choice=next(w for w in saved['widgets'].values() if w.get('key')=='post_logo_style_new')
+            assert logo_choice['options']==['editorial','compact']
+            response,_=await request(path,data=payload(response,None,{logo_choice['label']:'compact'},changed=logo_choice['label']),owner=True,instance=1)
+            response,_=await request(path,data=payload(response,'Сохранить черновик',{'Заголовок RU':'Logo choice test','Текст RU':'Текст','Text RO':'Text'}),owner=True)
+            from scena_publications import list_publications
+            logo_draft=next(p for p in list_publications(os.environ['SCENA_DB_PATH']) if p['title_ru']=='Logo choice test')
+            assert logo_draft['logo_style']=='compact'
+            response,_=await request(path,owner=True,instance=1)
+            response,_=await request(path,data=payload(response,f"№ {logo_draft['id']} · Logo choice test"),owner=True,instance=1)
+            _,saved=form(response)
+            assert next(w for w in saved['widgets'].values() if str(w.get('key','')).startswith('post_logo_style_'))['value']=='compact'
+            print('PASS native publication placement selector persists Compact across replicas',flush=True)
+
+            # Visibility and Trash operate on the live post without leaking draft text.
+            from scena_publications import save_draft, publish_local, get_publication, get_draft
+            pub=save_draft(os.environ['SCENA_DB_PATH'], title_ru='Visibility fixture', body_ru='Published text', body_ro='Text public', translations_approved=True)
+            publish_local(os.environ['SCENA_DB_PATH'],pub['id'],pub['revision'])
+            save_draft(os.environ['SCENA_DB_PATH'],pub['id'],body_ru='PRIVATE DRAFT')
+            response,_=await request(path,owner=True)
+            response,_=await request(path,owner=True,data=payload(response,f"№ {pub['id']} · Visibility fixture"))
+            capture('owner-publication-editor',response)
+            response,_=await request(path,owner=True,instance=1,data=payload(response,'Сохранить показ',{'Моя Сцена':False,'Услуги и курсы':False,'model SCENA':False}))
+            assert response.code==200
+            assert get_publication(os.environ['SCENA_DB_PATH'],pub['public_id']) is None
+            assert get_draft(os.environ['SCENA_DB_PATH'],pub['id'])['body_ru']=='PRIVATE DRAFT'
+            response,_=await request(path,owner=True,data=payload(response,'Сохранить показ',{'model SCENA':True}))
+            assert get_publication(os.environ['SCENA_DB_PATH'],pub['public_id'])['body_ru']=='Published text'
+            response,_=await request(path,owner=True,data=payload(response,None,{'Удалить эту публикацию в корзину':True},changed='Удалить эту публикацию в корзину'))
+            response,_=await request(path,owner=True,instance=1,data=payload(response,'Удалить публикацию'))
+            assert pub['id'] not in [p['id'] for p in list_publications(os.environ['SCENA_DB_PATH'])]
+            response,_=await request(path,owner=True,data=payload(response,'Восстановить'))
+            assert get_draft(os.environ['SCENA_DB_PATH'],pub['id'])['status']=='hidden'
+            capture('owner-publication-list',response)
+            print('PASS native visibility save, private draft retained, Trash and hidden restore across instances',flush=True)
+
+            # The month calendar submits selected dates as one bounded edit.
+            response,_=await request(schedule_path,owner=True)
+            _,saved=form(response)
+            targets=[w for w in saved['widgets'].values() if str(w.get('key','')).startswith('schedule_date_') and not w.get('disabled')][:2]
+            changes={w['label']:True for w in targets}
+            changes.update({'Выходной':False,'Начало работы':'10:00','Конец работы':'18:00','Добавить перерыв':True,'Перерыв с':'13:00','Перерыв до':'14:00'})
+            response,_=await request(schedule_path,owner=True,instance=1,data=payload(response,'Применить к выбранным датам',changes))
+            assert response.code==200
+            for target in targets:
+                assert len(schedule_periods(os.environ['SCENA_DB_PATH'],target['key'].removeprefix('schedule_date_')))==2
+            capture('owner-calendar',response)
+            print('PASS native calendar applies multiple dates and break together',flush=True)
+
+            # A real signed fixture code goes through the same HTTP form as Production.
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+            from cryptography.hazmat.primitives import serialization
+            from scena_licensing import sign_code, owner_id
+            issuer=Ed25519PrivateKey.generate()
+            (fixture/'config').mkdir(exist_ok=True)
+            (fixture/'config/pro-issuer-public.pem').write_bytes(issuer.public_key().public_bytes(serialization.Encoding.PEM,serialization.PublicFormat.SubjectPublicKeyInfo))
+            pro_path='/?page=admin&lang=ru&section=pro&view=subscription'
+            response,_=await request(pro_path,owner=True)
+            renewal=sign_code(issuer,owner_id(os.environ['SCENA_DB_PATH']),1)
+            response,_=await request(pro_path,owner=True,instance=1,data=payload(response,'Активировать код',{'Код продления':renewal}))
+            assert response.code==200 and 'Готово. PRO продлён до' in response.body.decode()
+            response,_=await request(pro_path,owner=True,data=payload(response,'Активировать код',{'Код продления':renewal}))
+            assert 'Код уже применён.' in response.body.decode()
+            response,_=await request(pro_path,owner=True,data=payload(response,'Обсудить продление с SCENA'))
+            assert 'Канал команды SCENA ещё не подключён.' in response.body.decode()
+            assert 'view=subscription' in response.headers.get('X-Scena-URL','')
+            capture('owner-pro-contact-unconfigured',response)
+            print('PASS signed PRO code accepted once through HTTP; contact stays on PRO and reports missing platform channel',flush=True)
+
             path='/?page=admin&lang=ru&section=pages&view=scene'
             response,_=await request(path,owner=True)
             _,saved=form(response)
             print('SCENE BUTTONS',[w['label'] for w in saved['widgets'].values() if w['kind']=='button'],flush=True)
             save_label=next(w['label'] for w in saved['widgets'].values() if w['kind']=='button' and 'Сохранить' in w['label'] and 'фотограф' not in w['label'])
-            data=payload(response,save_label,{'Имя и фамилия · RU':'Native acceptance owner'})
+            scene_copy={'ru':'Макияж <для вас>\nВыберите удобное время.',
+                        'ro':'Machiaj pentru tine.\nAlege ora potrivită.',
+                        'en':'Makeup for you.\nChoose a convenient time.'}
+            scene_titles={'ru':'Макияж и <обучение>', 'ro':'Machiaj și instruire', 'en':'Makeup and lessons'}
+            data=payload(response,save_label,{'Имя и фамилия · RU':'Native acceptance owner',
+                'Текст кнопки · RU':'Изучить мои услуги',
+                **{'Заголовок блока услуг · '+lang.upper():value for lang,value in scene_titles.items()},
+                **{'Описание услуг перед кнопкой · '+lang.upper():value for lang,value in scene_copy.items()}})
             saved_response,_=await request(path,owner=True,data=data,instance=1)
             assert saved_response.code==200,saved_response.body
             from scena_core import get_settings
             assert get_settings(os.environ['SCENA_DB_PATH'])['master_name_ru']=='Native acceptance owner','Profile save failed across instances'
+            from html import escape
+            for lang,text in scene_copy.items():
+                assert get_settings(os.environ['SCENA_DB_PATH'])['scene_services_text_'+lang]==text
+                assert get_settings(os.environ['SCENA_DB_PATH'])['scene_services_title_'+lang]==scene_titles[lang]
+                public,_=await request('/?page=scene&lang='+lang,instance=1)
+                assert '<div class="scene-service-intro"><p>'+escape(text)+'</p></div>' in public.body.decode()
+                assert '<h2 id="scene-services-title" class="scene-section-title">'+escape(scene_titles[lang])+'</h2>' in public.body.decode()
             duplicate,_=await request(path,owner=True,data=data)
             assert duplicate.code==409,'Duplicate action was accepted'
             print('PASS profile save across instances; duplicate rejected',flush=True)
+            reloaded,_=await request(path,owner=True)
+            _,saved=form(reloaded)
+            for lang,text in scene_copy.items():
+                field=next(w for w in saved['widgets'].values() if w['label']=='Описание услуг перед кнопкой · '+lang.upper())
+                assert field['value']==text
+                title_field=next(w for w in saved['widgets'].values() if w['label']=='Заголовок блока услуг · '+lang.upper())
+                assert title_field['value']==scene_titles[lang]
+            invalid=payload(reloaded,save_label,{'Описание услуг перед кнопкой · RO':''})
+            rejected,_=await request(path,owner=True,data=invalid,instance=1)
+            assert rejected.code==200 and 'Для описания услуг заполните версии RU/RO.' in rejected.body.decode()
+            assert get_settings(os.environ['SCENA_DB_PATH'])['scene_services_text_ro']==scene_copy['ro']
+            incomplete_title=payload(rejected,save_label,{'Описание услуг перед кнопкой · RO':scene_copy['ro'], 'Заголовок блока услуг · RO':''})
+            rejected,_=await request(path,owner=True,data=incomplete_title,instance=1)
+            assert rejected.code==200 and 'Для заголовка услуг заполните версии RU/RO.' in rejected.body.decode()
+            assert get_settings(os.environ['SCENA_DB_PATH'])['scene_services_title_ro']==scene_titles['ro']
+            cleared,_=await request(path,owner=True,data=payload(rejected,save_label,
+                {**{'Описание услуг перед кнопкой · '+lang.upper():'' for lang in scene_copy},
+                 **{'Заголовок блока услуг · '+lang.upper():'' for lang in scene_titles}}),instance=1)
+            assert cleared.code==200
+            public,_=await request('/?page=scene&lang=ru')
+            assert 'class="scene-service-intro"' not in public.body.decode()
+            assert 'id="scene-services-title"' not in public.body.decode()
+            assert '>Изучить мои услуги</a>' in public.body.decode()
+            print('PASS owner service heading and intro saved/reloaded in RU/RO/EN; incomplete translations rejected; clear hides both and preserves custom CTA',flush=True)
             # A multipart-size image is uploaded in independent chunks, then a
             # different instance saves it through the existing image validator.
             from PIL import Image
@@ -275,8 +386,11 @@ async def main():
                 assert list_orders(os.environ['SCENA_DB_PATH'])[0]['telegram_status']=='sent'
                 cabinet_orders,_=await request(market,owner=True)
                 assert 'href="tel:+37360000111"' in cabinet_orders.body.decode()
+                assert 'scena-order-products' in cabinet_orders.body.decode()
                 assert 'Телефон: +37360000111' in sender.call_args.args[1]['text']
                 order=list_orders(os.environ['SCENA_DB_PATH'])[0]
+                assert order['items'][0]['name_ru'] in cabinet_orders.body.decode()
+                capture('owner-order-list',cabinet_orders)
                 buttons=sender.call_args.args[1]['reply_markup']['inline_keyboard']
                 assert [row[0]['text'] for row in buttons]==['Открыть заказ','Сменить статус']
                 direct=tg.order_path(order['id'])
@@ -292,6 +406,7 @@ async def main():
                 assert 'st-key-scena_request_card' in focused.body.decode()
                 assert 'shop_product_editor_' not in focused.body.decode()
                 assert 'Все заказы' in focused.body.decode()
+                capture('owner-order-card',focused)
                 with patch.object(tg.TelegramBotAdapter,'_call',return_value=True) as refresh:
                     refreshed,_=await request(direct,owner=True,data=payload(focused,'Обновить карточку в Telegram'),instance=1)
                 assert refreshed.code==200 and 'Карточка в Telegram обновлена.' in refreshed.body.decode()
