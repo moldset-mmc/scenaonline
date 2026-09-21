@@ -63,15 +63,19 @@ class ServiceTelegramTests(unittest.TestCase):
         for channel,changes in [('telegram',{'telegram':''}),('telegram',{'telegram':'bad/name'}),('email',{'email':''}),('email',{'email':'bad'}),('other',{})]:
             with self.subTest(channel=channel,changes=changes),self.assertRaises(RequestValidationError):
                 self.book(channel,**changes)
-        for channel,prefix in [('phone','tel:'),('telegram','https://t.me/'),('sms','sms:'),('email','mailto:')]:
+        for channel,prefix in [('phone','tel:'),('telegram','https://t.me/'),('sms','sms:')]:
             identity=self.book(channel)
             row=self.row(identity)
             self.assertEqual(row['contact_channel'],channel)
             self.assertEqual(row['telegram_status'],'queued')
             self.assertTrue(service_tg.reply_link(row).startswith(prefix))
             self.assertEqual(len([m for m in list_sms_outbox(self.db) if m['request_id']==identity]),1 if channel=='sms' else 0)
+        identity=self.book('email')
+        row=self.row(identity)
+        self.assertEqual(row['contact_channel'],'email')
+        self.assertEqual(service_tg.reply_link(row),'')
+        self.assertEqual(len([m for m in list_sms_outbox(self.db) if m['request_id']==identity]),0)
         self.assertEqual(service_tg.validate_reply_contact('telegram','https://t.me/ClientName',''),'@clientname')
-        self.assertNotIn('?bcc=',service_tg.reply_link({'contact_channel':'email','phone':'060000001','email':'client?bcc=other@example.com'}))
 
     def test_one_lead_contains_booking_contacts_channel_and_supported_buttons(self):
         config,identity,payload=self.deliver()
@@ -87,7 +91,7 @@ class ServiceTelegramTests(unittest.TestCase):
         for channel in ('phone','sms','email'):
             row.update(contact_channel=channel,email='client@example.com')
             buttons=service_tg.lead_buttons(self.db,row,config)['reply_markup']['inline_keyboard']
-            if channel == 'phone':
+            if channel in ('phone','email'):
                 self.assertEqual([b[0]['text'] for b in buttons], ['Открыть заявку','Сменить статус'])
             else:
                 self.assertTrue(buttons[1][0]['url'].endswith('#request-contact'))
