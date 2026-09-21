@@ -96,14 +96,20 @@ class RuntimeBoundaryTests(unittest.TestCase):
 
 
 
-class LibsqlInitializationTests(unittest.TestCase):
+class CloudSchemaMarkerTests(unittest.TestCase):
     def test_publication_reads_keep_legacy_conversion_without_schema_writes(self):
         from scena_core import add_post, init_db
         from scena_publications import list_publications
         import scena_database
         with tempfile.TemporaryDirectory() as folder:
             database = str(Path(folder) / 'cloud.db')
-            with patch.dict(os.environ, {'SCENA_DB_DRIVER':'libsql'}, clear=False):
+            environment = {
+                'SCENA_CLOUD':'1',
+                'SCENA_DB_PATH':database,
+                'SCENA_TURSO_TURSO_DATABASE_URL':database,
+                'SCENA_TURSO_TURSO_AUTH_TOKEN':'fixture',
+            }
+            with patch.dict(os.environ, environment, clear=False):
                 init_db(database)
                 # Legacy records may still acquire publication metadata on read,
                 # but a read must not run schema DDL.

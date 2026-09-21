@@ -89,8 +89,13 @@ def _db(db_path):
     try:
         ensure_schema = True
         if getattr(connection, 'remote', False):
-            from scena_cloud_runtime import is_initialized
-            ensure_schema = not is_initialized(db_path)
+            try:
+                marker = connection.execute(
+                    "SELECT value FROM app_meta WHERE key='publications_schema_version'"
+                ).fetchone()
+            except sqlite3.DatabaseError:
+                marker = None
+            ensure_schema = marker is None
         with connection:
             initialize_publications(connection, ensure_schema=ensure_schema)
         yield connection
