@@ -14,6 +14,7 @@ from tornado.testing import AsyncHTTPTestCase, bind_unused_port, gen_test
 from tornado.httpclient import HTTPRequest
 
 from deploy import serve_cloud
+from scena_web import auth_handlers
 from scena_cloud_auth import COOKIE, make_session
 
 
@@ -63,6 +64,11 @@ class GatewayTests(AsyncHTTPTestCase):
         self.backend_patch.stop()
         self.environment.stop()
         super().tearDown()
+
+    def test_gateway_reuses_native_auth_handlers(self):
+        self.assertIs(serve_cloud.Login, auth_handlers.Login)
+        self.assertIs(serve_cloud.Logout, auth_handlers.Logout)
+        self.assertIs(serve_cloud._attempts, auth_handlers._attempts)
 
     def test_private_route_redirects_and_spoofed_header_is_removed(self):
         response = self.fetch('/?page=admin', follow_redirects=False)

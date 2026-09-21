@@ -17,7 +17,7 @@ from .context import RenderContext, Query, current, Rerun, Stop, FormError
 from .forms import apply
 from .business_card import card_routes
 from scena_cloud_auth import COOKIE, valid_session
-from deploy.serve_cloud import Login, Logout
+from .auth_handlers import Login, Logout
 
 ROOT=Path(__file__).resolve().parents[1]
 BROWSER_COOKIE='__Host-scena_web'
