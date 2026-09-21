@@ -234,8 +234,10 @@ def _confirmation(db_path: Path, settings: dict, locale: str, services: list[dic
             }
             st.error(_tr(locale,str(exc),*reply_errors[str(exc)]) if str(exc) in reply_errors else translate_literaltext(locale,str(exc)))
         else:
-            from scena_service_telegram import dispatch
-            dispatch(db_path, request_id=request_id)
+            from scena_service_telegram import dispatch as dispatch_telegram
+            from scena_service_email import dispatch as dispatch_email
+            dispatch_telegram(db_path, request_id=request_id)
+            dispatch_email(db_path, request_id=request_id)
             st.session_state["booking_receipt"] = {"id": request_id, "service": _name(item, locale), "service_ru": _name(item, "ru"), "service_ro": _name(item, "ro"), "service_en": _name(item, "en"), "date": confirmation["date"], "time": confirmation["time"]}
             st.session_state.pop("booking_confirmation", None)
             st.rerun()
