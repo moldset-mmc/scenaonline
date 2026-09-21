@@ -1467,21 +1467,135 @@ def render_course(settings: dict[str, str], locale: str) -> None:
             st.markdown(f'<span hidden data-scena-conversion="course_request" data-scena-conversion-key="{int(request_id)}"></span>', unsafe_allow_html=True)
 
 
-def render_request_status(row) -> None:
+def _sync_request_telegram_card(row, locale: str) -> str:
+    """Refresh an existing Telegram lead after a committed cabinet status change."""
+    if row.get('request_type') != 'service_request' or not row.get('telegram_message_id'):
+        return 'skipped'
+    from scena_shop_telegram import refresh_lead, ConnectionError
+    try:
+        refresh_lead(DB_PATH, 'service', row['id'])
+    except ConnectionError:
+        return 'failed'
+    return 'updated'
+
+
+def _change_request_status_with_notifications(row, status: str, locale: str) -> tuple[str, str]:
+    """Commit status first, then notify customer/Telegram without rolling it back."""
+    changed = status != row['status']
+    update_request_status(DB_PATH, row['id'], status, expected_revision=row['revision'])
+    if not changed:
+        return 'skipped', 'skipped'
+
+    email_result = 'skipped'
+    if (
+        row.get('request_type') == 'service_request'
+        and row.get('contact_channel') == 'email'
+        and status == 'Подтверждена'
+    ):
+        from scena_service_email import dispatch as dispatch_email
+        email_result = dispatch_email(DB_PATH, request_id=row['id'], event='confirmed')
+
+    telegram_result = _sync_request_telegram_card(row, locale)
+    return email_result, telegram_result
+
+
+def _status_change_notice(locale: str, email_result: str, telegram_result: str) -> tuple[str, str]:
+    problems = []
+    confirmations = []
+    if email_result == 'sent':
+        confirmations.append(tr(locale, 'Email клиенту отправлен.', 'Emailul către client a fost trimis.', 'Customer email sent.'))
+    elif email_result not in ('skipped',):
+        problems.append(tr(locale, 'Письмо клиенту не отправлено — его можно повторить кнопкой Email.', 'Emailul către client nu a fost trimis — îl puteți retrimite din butonul Email.', 'Customer email was not sent — you can retry it with the Email button.'))
+    if telegram_result == 'updated':
+        confirmations.append(tr(locale, 'Telegram обновлён.', 'Telegram a fost actualizat.', 'Telegram updated.'))
+    elif telegram_result == 'failed':
+        problems.append(tr(locale, 'Карточка Telegram не обновилась.', 'Cardul Telegram nu a fost actualizat.', 'Telegram card was not updated.'))
+    if problems:
+        detail = ' '.join(confirmations + problems)
+        return 'warning', tr(locale, 'Статус сохранён. ', 'Statutul a fost salvat. ', 'Status saved. ') + detail
+    detail = ' '.join(confirmations)
+    return 'success', (tr(locale, 'Статус заявки обновлён.', 'Statutul cererii a fost actualizat.', 'Request status updated.')
+                       + ((' ' + detail) if detail else ''))
+
+
+def render_email_confirmation_action(row, locale: str) -> None:
+    if (
+        row.get('request_type') != 'service_request'
+        or row.get('contact_channel') != 'email'
+        or not row.get('email')
+    ):
+        return
+    if row['status'] == 'Подтверждена':
+        if st.button(
+            tr(locale, 'Отправить подтверждение по Email ещё раз', 'Retrimite confirmarea prin Email', 'Send confirmation email again'),
+            key='service_email_confirm_retry_'+str(row['id']),
+            width='stretch',
+        ):
+            from scena_service_email import dispatch as dispatch_email
+            result = dispatch_email(DB_PATH, request_id=row['id'], event='confirmed')
+            if result == 'sent':
+                rerun_admin_with_notice('success', tr(locale, 'Письмо-подтверждение отправлено.', 'Emailul de confirmare a fost trimis.', 'Confirmation email sent.'))
+            else:
+                rerun_admin_with_notice('warning', tr(locale, 'Письмо не отправлено. Запись остаётся подтверждённой; повторите попытку позже.', 'Emailul nu a fost trimis. Programarea rămâne confirmată; încercați din nou mai târziu.', 'Email was not sent. The booking remains confirmed; try again later.'))
+        return
+
+    if st.button(
+        tr(locale, 'Подтвердить по Email', 'Confirmă prin Email', 'Confirm by Email'),
+        key='service_email_confirm_'+str(row['id']),
+        type='primary',
+        width='stretch',
+    ):
+        try:
+            email_result, telegram_result = _change_request_status_with_notifications(row, 'Подтверждена', locale)
+        except RequestValidationError as exc:
+            st.error(ui(str(exc)))
+        else:
+            kind, message = _status_change_notice(locale, email_result, telegram_result)
+            rerun_admin_with_notice(kind, message)
+
+
+def render_service_telegram_delivery(row, locale: str) -> None:
+    if row.get('request_type') != 'service_request':
+        return
+    status_text = {
+        'sent': tr(locale, 'отправлено', 'trimis', 'sent'),
+        'queued': tr(locale, 'ожидает отправки', 'în așteptare', 'queued'),
+        'retry': tr(locale, 'нужна повторная отправка', 'necesită retrimitere', 'retry needed'),
+        'sending': tr(locale, 'отправляется', 'se trimite', 'sending'),
+        'skipped': tr(locale, 'заявка до подключения уведомлений', 'cerere anterioară conectării notificărilor', 'request predates notifications'),
+    }.get(row.get('telegram_status'), tr(locale, 'ожидает отправки', 'în așteptare', 'queued'))
+    st.caption('Telegram: ' + status_text)
+    if row.get('telegram_status') in ('queued', 'retry'):
+        if st.button(
+            tr(locale, 'Повторить отправку заявки в Telegram', 'Retrimite cererea în Telegram', 'Retry Telegram delivery'),
+            key='service_telegram_retry_'+str(row['id']),
+            width='stretch',
+        ):
+            from scena_service_telegram import dispatch as dispatch_service
+            result = dispatch_service(DB_PATH, request_id=row['id'])
+            if result == 'sent':
+                rerun_admin_with_notice('success', tr(locale, 'Уведомление отправлено в Telegram.', 'Notificarea a fost trimisă în Telegram.', 'Notification sent to Telegram.'))
+            else:
+                rerun_admin_with_notice('warning', tr(locale, 'Уведомление пока не отправлено. Проверьте подключение Telegram и повторите позже.', 'Notificarea nu a fost încă trimisă. Verificați conexiunea Telegram și încercați din nou.', 'Notification was not sent yet. Check Telegram connection and try again.'))
+
+
+def render_request_status(row, locale: str | None = None) -> None:
+    locale = locale or st.session_state.get('scena_ui_locale', 'ru')
     with st.form('request_status_'+str(row['id'])+'_'+str(row['revision'])):
         status = st.selectbox(ui('Статус'), REQUEST_STATUSES, index=REQUEST_STATUSES.index(row['status']), format_func=ui)
         if st.form_submit_button(ui('Сохранить статус'), type='primary'):
             try:
-                update_request_status(DB_PATH,row['id'],status,expected_revision=row['revision'])
+                email_result, telegram_result = _change_request_status_with_notifications(row, status, locale)
             except RequestValidationError as exc:
                 st.error(ui(str(exc)))
             else:
-                rerun_admin_with_success('Статус заявки обновлён.')
+                kind, message = _status_change_notice(locale, email_result, telegram_result)
+                rerun_admin_with_notice(kind, message)
 
 
 def render_focused_request(row, locale) -> None:
     """A direct lead link opens its working card before cabinet navigation."""
-    from scena_service_telegram import CHANNEL_LABELS, reply_label, reply_link, dispatch
+    from scena_service_telegram import CHANNEL_LABELS, reply_label, reply_link
     from scena_shop import dial_number
 
     def formatted(value, timestamp=False):
@@ -1514,38 +1628,25 @@ def render_focused_request(row, locale) -> None:
         if row['request_type'] == 'service_request':
             channel = row.get('contact_channel', 'phone')
             st.caption(ui('Канал ответа')+': '+CHANNEL_LABELS.get(locale, CHANNEL_LABELS['ru']).get(channel, channel))
-            if channel != 'phone' and (contact := reply_link(row)):
+            if channel not in ('phone', 'email') and (contact := reply_link(row)):
                 st.link_button(reply_label(row, locale), contact)
         if row['message']:
             st.text(row['message'])
         if row['status'] in ('Ожидает подтверждения', 'Связались') and row['hold_expires_at']:
             st.caption(tr(locale, 'Подтвердить до: ', 'Confirmă până la: ', 'Confirm by: ')+formatted(row['hold_expires_at'], True))
-        render_request_status(row)
+        render_email_confirmation_action(row, locale)
+        render_request_status(row, locale)
+        render_service_telegram_delivery(row, locale)
         with st.expander(tr(locale, 'Дополнительно', 'Detalii suplimentare', 'More details')):
             st.caption(ui('Создано: ')+formatted(row['created_at'], True))
             for label, value in [('Email', row['email']), ('Telegram', row.get('contact_telegram', '')),
                                  ('Организация', row['organization']), ('Город', row['city']), ('Опыт', row['experience'])]:
                 if value:
                     st.text(ui(label)+': '+value)
-            if row['request_type'] == 'service_request':
-                st.caption('Telegram: '+ui({'sent':'отправлено','queued':'ожидает отправки','retry':'нужна повторная отправка','sending':'отправляется','skipped':'заявка до подключения уведомлений'}.get(row['telegram_status'],'ожидает отправки')))
-                if row.get('telegram_message_id') and st.button(ui('Обновить карточку в Telegram'), key='service_tg_refresh_'+str(row['id'])):
-                    from scena_shop_telegram import refresh_lead, ConnectionError, connection_error_text
-                    try:
-                        refresh_lead(DB_PATH, 'service', row['id'])
-                    except ConnectionError as error:
-                        st.warning(connection_error_text(error, locale))
-                    else:
-                        rerun_admin_with_success('Карточка в Telegram обновлена.')
-                if row['telegram_status'] in ('queued','retry') and st.button(ui('Повторить отправку заявки в Telegram'), key='service_telegram_retry_'+str(row['id'])):
-                    if dispatch(DB_PATH, request_id=row['id']) == 'sent':
-                        rerun_admin_with_success('Уведомление отправлено в Telegram.')
-                    else:
-                        st.warning(ui('Уведомление пока не отправлено. Проверьте подключение Telegram в shopping → Витрина и повторите позже.'))
 
 
 def render_crm() -> None:
-    from scena_service_telegram import CHANNEL_LABELS, reply_label, reply_link, dispatch as dispatch_service
+    from scena_service_telegram import CHANNEL_LABELS, reply_label, reply_link
     from scena_shop import dial_number
     locale = st.session_state.get('scena_ui_locale', 'ru')
     focused = str(st.query_params.get('request', ''))
@@ -1579,22 +1680,10 @@ def render_crm() -> None:
                 st.link_button(ui('Позвонить')+': '+row['phone'], 'tel:'+phone)
             if row['request_type'] == 'service_request':
                 st.caption(ui('Канал ответа')+': '+CHANNEL_LABELS.get(locale,CHANNEL_LABELS['ru']).get(row['contact_channel'],row['contact_channel']))
-                if (contact := reply_link(row)) and row['contact_channel'] != 'phone':
+                if row['contact_channel'] not in ('phone', 'email') and (contact := reply_link(row)):
                     st.link_button(reply_label(row,locale), contact)
-                st.caption('Telegram: '+ui({'sent':'отправлено','queued':'ожидает отправки','retry':'нужна повторная отправка','sending':'отправляется','skipped':'заявка до подключения уведомлений'}.get(row['telegram_status'],'ожидает отправки')))
-                if row.get('telegram_message_id') and st.button(ui('Обновить карточку в Telegram'), key='service_tg_refresh_'+str(row['id'])):
-                    from scena_shop_telegram import refresh_lead, ConnectionError, connection_error_text
-                    try:
-                        refresh_lead(DB_PATH, 'service', row['id'])
-                        st.success(ui('Карточка в Telegram обновлена.'))
-                    except ConnectionError as error:
-                        st.warning(connection_error_text(error, locale))
-                if row['telegram_status'] in ('queued','retry') and st.button(ui('Повторить отправку заявки в Telegram'), key='service_telegram_retry_'+str(row['id'])):
-                    result = dispatch_service(DB_PATH,request_id=row['id'])
-                    if result == 'sent':
-                        rerun_admin_with_success('Уведомление отправлено в Telegram.')
-                    else:
-                        st.warning(ui('Уведомление пока не отправлено. Проверьте подключение Telegram в shopping → Витрина и повторите позже.'))
+                render_email_confirmation_action(row, locale)
+                render_service_telegram_delivery(row, locale)
             detail_columns = st.columns(2)
             details = [
                 ("Телефон", row["phone"]), ("Email", row["email"]), ('Telegram',row.get('contact_telegram','')),
@@ -1608,7 +1697,7 @@ def render_crm() -> None:
                 with detail_columns[index % 2]:
                     st.caption(ui(label))
                     st.write(value or "—")
-            render_request_status(row)
+            render_request_status(row, locale)
         display_rows.append({
             "ID": row["id"], "Путь": ui(REQUEST_TYPES[row["request_type"]]),
             "Имя": row["name"], "Телефон": row["phone"], "Услуга": row["service"],
