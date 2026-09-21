@@ -15,6 +15,7 @@ from urllib.request import Request, urlopen
 
 MAIL_ROOT_DOMAIN = "scena.life"
 RESEND_ENDPOINT = "https://api.resend.com/emails"
+EVENTS = ("received", "confirmed")
 
 
 def sender_from_public_base(public_base_url: str) -> str:
@@ -82,7 +83,9 @@ def _snapshot(db, request_id: int):
     }
 
 
-def _payload(snapshot: dict) -> dict:
+def _payload(snapshot: dict, event: str = "received") -> dict:
+    if event not in EVENTS:
+        return {}
     row = snapshot["request"]
     service = snapshot["service"]
     settings = snapshot["settings"]
@@ -98,37 +101,46 @@ def _payload(snapshot: dict) -> dict:
 
     translations = {
         "ru": {
-            "subject": f"SCENA · Заявка №{row['id']} принята",
+            "received_subject": f"SCENA · Заявка №{row['id']} принята",
+            "confirmed_subject": f"SCENA · Запись №{row['id']} подтверждена",
             "hello": f"Здравствуйте, {row['name']}!",
             "received": "Мы получили вашу заявку на запись.",
+            "confirmed": "Ваша запись подтверждена.",
             "service": "Услуга",
             "date": "Дата и время",
             "duration": "Продолжительность",
             "price": "Стоимость",
             "minutes": "мин.",
-            "next": "Мастер свяжется с вами и подтвердит запись.",
+            "received_next": "Мастер свяжется с вами и подтвердит запись.",
+            "confirmed_next": "Ждём вас в выбранное время.",
         },
         "ro": {
-            "subject": f"SCENA · Cererea #{row['id']} a fost primită",
+            "received_subject": f"SCENA · Cererea #{row['id']} a fost primită",
+            "confirmed_subject": f"SCENA · Programarea #{row['id']} este confirmată",
             "hello": f"Bună, {row['name']}!",
             "received": "Am primit cererea dvs. de programare.",
+            "confirmed": "Programarea dvs. este confirmată.",
             "service": "Serviciu",
             "date": "Data și ora",
             "duration": "Durată",
             "price": "Preț",
             "minutes": "min.",
-            "next": "Specialistul vă va contacta și va confirma programarea.",
+            "received_next": "Specialistul vă va contacta și va confirma programarea.",
+            "confirmed_next": "Vă așteptăm la ora aleasă.",
         },
         "en": {
-            "subject": f"SCENA · Request #{row['id']} received",
+            "received_subject": f"SCENA · Request #{row['id']} received",
+            "confirmed_subject": f"SCENA · Booking #{row['id']} confirmed",
             "hello": f"Hello, {row['name']}!",
             "received": "We received your booking request.",
+            "confirmed": "Your booking is confirmed.",
             "service": "Service",
             "date": "Date and time",
             "duration": "Duration",
             "price": "Price",
             "minutes": "min",
-            "next": "Your artist will contact you and confirm the appointment.",
+            "received_next": "Your artist will contact you and confirm the appointment.",
+            "confirmed_next": "We look forward to seeing you at the selected time.",
         },
     }
     text = translations[locale]
@@ -137,17 +149,17 @@ def _payload(snapshot: dict) -> dict:
     lines = [
         text["hello"],
         "",
-        text["received"],
+        text[event],
         f"{text['service']}: {snapshot['service_name']}",
         f"{text['date']}: {when} · {row['preferred_time']}",
     ]
     if duration:
         lines.append(f"{text['duration']}: {duration} {text['minutes']}")
-    lines.extend((f"{text['price']}: {price}", "", text["next"], "", "SCENA"))
+    lines.extend((f"{text['price']}: {price}", "", text[event + "_next"], "", "SCENA"))
     return {
         "from": sender,
         "to": [str(row["email"]).strip()],
-        "subject": text["subject"],
+        "subject": text[event + "_subject"],
         "text": "\n".join(lines),
     }
 
@@ -174,16 +186,20 @@ class ResendAdapter:
             return json.loads(response.read().decode("utf-8") or "{}")
 
 
-def dispatch(db, *, request_id: int, adapter=None) -> str:
-    """Send one customer acknowledgement after the booking is already committed."""
+def dispatch(db, *, request_id: int, event: str = "received", adapter=None) -> str:
+    """Send a customer booking message after the booking/status is committed."""
     try:
+        if event not in EVENTS:
+            return "invalid_event"
         snapshot = _snapshot(db, request_id)
         if not snapshot:
             return "idle"
         row = snapshot["request"]
         if row.get("contact_channel") != "email" or not str(row.get("email", "")).strip():
             return "skipped"
-        payload = _payload(snapshot)
+        if event == "confirmed" and row.get("status") != "Подтверждена":
+            return "invalid_status"
+        payload = _payload(snapshot, event)
         if not payload:
             return "unconfigured"
         if adapter is None:
@@ -194,6 +210,6 @@ def dispatch(db, *, request_id: int, adapter=None) -> str:
         result = adapter.send(payload)
         return "sent" if isinstance(result, dict) else "failed"
     except Exception:
-        # Booking is already committed. Email delivery must never roll it back
-        # or expose provider credentials in a customer-facing error.
+        # Booking/status is already committed. Email delivery must never roll it
+        # back or expose provider credentials in a customer-facing error.
         return "failed"
