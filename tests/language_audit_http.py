@@ -154,7 +154,7 @@ async def main():
                                 cyrillic[text] += 1
                 evidence['cyrillic_inventory'][locale] = [{'text':text,'occurrences':count,'exact_platform_literal':text in CATALOG} for text,count in cyrillic.most_common()]
             # The sign-in page must retain the requested language and record.
-            from deploy.serve_cloud import LOGIN_NONCE
+            from scena_web.auth_handlers import LOGIN_NONCE
             for locale in ('ru','ro','en'):
                 target = '/?' + urlencode({'page':'admin','lang':locale,'section':'work','view':'requests','request':request_id})
                 response = await client.fetch(HTTPRequest(base+'/auth/login?'+urlencode({'next':target}), follow_redirects=False),raise_error=False)
