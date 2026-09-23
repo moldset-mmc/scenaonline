@@ -2072,6 +2072,12 @@ button:disabled {
   color: #c1b7c7;
   margin: 0 0 24px;
 }
+.example-links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
 .example-live-link {
   display: inline-flex;
   align-items: center;
