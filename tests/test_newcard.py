@@ -1,5 +1,10 @@
 """The public platform card must not redirect to or initialize the salon."""
 import re
+from html.parser import HTMLParser
+from io import BytesIO
+from urllib.parse import urlsplit
+
+from PIL import Image
 
 from tornado.testing import AsyncHTTPTestCase
 from tornado.web import Application, RequestHandler
@@ -46,3 +51,34 @@ class NewCardTests(AsyncHTTPTestCase):
             self.assertIn('immutable', response.headers['Cache-Control'])
         self.assertEqual(self.fetch('/newcard', method='POST', body='test=1').code, 405)
         self.assertEqual(self.fetch('/newcard/assets/%2e%2e/%2e%2e/scena_core.py').code, 403)
+
+    def test_link_preview_has_a_public_jpeg_without_javascript_or_session(self):
+        class Metadata(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.tags = {}
+
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if tag == 'meta':
+                    self.tags[attrs.get('property', attrs.get('name'))] = attrs.get('content')
+
+        page = self.fetch('/newcard', headers={'Host': 'scena.life', 'User-Agent': 'Viber'})
+        metadata = Metadata()
+        metadata.feed(page.body.decode())
+        tags = metadata.tags
+        image_url = urlsplit(tags['og:image'])
+        self.assertEqual((image_url.scheme, image_url.netloc), ('https', 'scena.life'))
+        self.assertTrue(image_url.path.startswith('/newcard/assets/'))
+        self.assertEqual(tags['twitter:image'], tags['og:image'])
+        self.assertEqual(tags['twitter:card'], 'summary_large_image')
+        self.assertTrue(tags['og:image:alt'])
+        response = self.fetch(image_url.path, headers={'Host': 'scena.life', 'User-Agent': 'Viber'})
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.headers['Content-Type'], 'image/jpeg')
+        self.assertNotIn('Set-Cookie', response.headers)
+        self.assertLess(len(response.body), 250000)
+        with Image.open(BytesIO(response.body)) as picture:
+            self.assertEqual(picture.format, 'JPEG')
+            self.assertEqual(picture.size, (int(tags['og:image:width']), int(tags['og:image:height'])))
+        self.assertEqual(self.fetch(image_url.path, method='HEAD').code, 200)
