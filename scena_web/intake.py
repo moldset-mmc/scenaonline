@@ -245,7 +245,10 @@ class Store:
 
 
 def receipt(row):
-    return {'stored': row['state'] != 'uploading', 'delivered': row['state'] == 'sent'}
+    result = {'stored': row['state'] != 'uploading', 'delivered': row['state'] == 'sent'}
+    if result['delivered']:
+        result['messageId'] = row['message_id']
+    return result
 
 
 def telegram_text(row, store):
@@ -409,7 +412,7 @@ class IntakeSend(IntakeHandler):
             # Claim persists before the external side effect; retries cannot duplicate a message.
             state, message_id = await self.telegram.send(telegram_text(row, self.store))
             await asyncio.to_thread(self.store.outcome, identifier, state, message_id)
-            self.finish({'stored': True, 'delivered': state == 'sent'})
+            self.finish(receipt({'state': state, 'message_id': message_id}))
         else:
             self.finish(receipt(row))
 

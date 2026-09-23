@@ -89,8 +89,8 @@ class IntakeTests(AsyncHTTPTestCase):
         p = payload(); token = self.start(p)
         path = f"/api/intake/{p['id']}/send"
         r = self.request(path, token=token)
-        self.assertEqual(json.loads(r.body), {'stored': True, 'delivered': True})
-        self.assertEqual(json.loads(self.request(path, token=token).body), {'stored': True, 'delivered': True})
+        self.assertEqual(json.loads(r.body), {'stored': True, 'delivered': True, 'messageId': 123})
+        self.assertEqual(json.loads(self.request(path, token=token).body), {'stored': True, 'delivered': True, 'messageId': 123})
         self.start(p)
         self.assertEqual(self.telegram.calls, 1)
         self.assertEqual(self.store.row(p['id'])['message_id'], 123)
