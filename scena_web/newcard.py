@@ -43,8 +43,21 @@ class NewCardAssets(StaticFileHandler):
         self.set_header('Cache-Control', 'public, max-age=31536000, immutable')
 
 
+class NewCardGallery(RequestHandler):
+    def get(self, identifier=None):
+        headers(self)
+        self.set_header('Cache-Control', 'no-store')
+        self.set_header('X-Robots-Tag', 'noindex, nofollow')
+        self.set_header('Referrer-Policy', 'no-referrer')
+        name = 'gallery.html' if identifier else 'gallery.js'
+        self.set_header('Content-Type', 'text/html; charset=utf-8' if identifier else 'text/javascript; charset=utf-8')
+        self.finish((ROOT / name).read_bytes())
+
+
 def newcard_routes():
     return [
         (r'/newcard/?', NewCard),
+        (r'/newcard/photos/([a-f0-9-]{36})', NewCardGallery),
+        (r'/newcard/gallery.js', NewCardGallery),
         (r'/newcard/assets/(.*)', NewCardAssets, {'path': str(ROOT / 'assets')}),
     ]

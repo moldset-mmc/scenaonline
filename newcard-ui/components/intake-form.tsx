@@ -93,12 +93,34 @@ export default function IntakeForm({previewOnly=false,onBack}:{previewOnly?:bool
   async function submit(){
     if(busy||!validate(false))return;if(deliveryReady!==true){setNotice("Приём заявок ещё не подключён.");return;}setBusy(true);setNotice("");id.current||=clientId();
     try{const {consent:_,...answers}=a;localStorage.setItem(DRAFT_KEY,JSON.stringify({answers,step,submissionId:id.current}));}catch{}
-    const body=new FormData();body.set("payload",JSON.stringify({id:id.current,answers:a,website}));photos.forEach(p=>body.append("photos",p.file));
-    try{const res=await fetch("/api/intake",{method:"POST",body});const data=await res.json() as {stored?:boolean;delivered?:boolean;error?:string};
-      if(data.stored){setReceipt({id:id.current,delivered:data.delivered===true});try{localStorage.removeItem(DRAFT_KEY);}catch{}photos.forEach(p=>URL.revokeObjectURL(p.url));setPhotos([]);}
-      else setNotice(data.error||"Не удалось отправить. Ответы и фотографии остались в форме.");
-    }catch{setNotice("Нет подтверждения от сервера. Ответы остались в форме. Проверьте интернет и повторите отправку — повторная заявка не создастся.");}finally{setBusy(false);}
+    try{
+      type Result={stored?:boolean;delivered?:boolean;error?:string;uploadToken?:string};
+      const request=async(url:string,options:RequestInit)=>{
+        const res=await fetch(url,options);const result=await res.json() as Result;
+        if(!res.ok){if(res.status===409&&url.endsWith("/start"))id.current="";throw new Error(result.error||"Не удалось отправить. Повторите попытку.");}
+        return result;
+      };
+      const manifest=[];
+      for(const p of photos){
+        const digest=await crypto.subtle.digest("SHA-256",await p.file.arrayBuffer());
+        manifest.push({sha256:Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join(""),bytes:p.file.size,type:p.file.type});
+      }
+      let data=await request("/api/intake/start",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:id.current,answers:a,website,photos:manifest})});
+      if(!data.stored){
+        if(!data.uploadToken)throw new Error("Сервер не подтвердил начало отправки.");
+        const authorization=`Bearer ${data.uploadToken}`;
+        for(let i=0;i<photos.length;i++){
+          setNotice(`Загружаем фотографии: ${i+1} из ${photos.length}…`);
+          await request(`/api/intake/${id.current}/photos/${i}`,{method:"PUT",headers:{Authorization:authorization,"Content-Type":photos[i].file.type},body:photos[i].file});
+        }
+        setNotice("Отправляем анкету…");
+        data=await request(`/api/intake/${id.current}/send`,{method:"POST",headers:{Authorization:authorization},body:""});
+      }
+      if(data.stored){setReceipt({id:id.current,delivered:data.delivered===true});try{localStorage.removeItem(DRAFT_KEY);}catch{}photos.forEach(p=>URL.revokeObjectURL(p.url));setPhotos([]);setNotice("");}
+      else setNotice("Нет подтверждения сохранения. Ответы и фотографии остались в форме.");
+    }catch(error){setNotice(error instanceof Error&&error.message!=="Failed to fetch"?error.message:"Нет подтверждения от сервера. Ответы остались в форме. Проверьте интернет и повторите отправку — повторная заявка не создастся.");}finally{setBusy(false);}
   }
+
   function field(key:keyof Answers,label:string,placeholder:string,max:number,required=false,type="text"){
     return <div className="field"><label htmlFor={key}>{label}{required&&<span className="required"> *</span>}</label><Input id={key} name={key} value={String(a[key])} onChange={e=>update(key,e.target.value as never)} placeholder={placeholder} maxLength={max} type={type} autoComplete={key==="name"?"name":key==="accountEmail"?"email":"off"} aria-invalid={!!errors[key]} aria-describedby={errors[key]?`${key}-error`:undefined}/>{errors[key]&&<p className="field-error" id={`${key}-error`}>{errors[key]}</p>}</div>;
   }

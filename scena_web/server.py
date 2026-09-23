@@ -17,6 +17,7 @@ from .context import RenderContext, Query, current, Rerun, Stop, FormError
 from .forms import apply
 from .business_card import card_routes
 from .newcard import newcard_routes
+from .intake import intake_routes
 from scena_cloud_auth import COOKIE, valid_session
 from deploy.serve_cloud import Login, Logout
 
@@ -411,6 +412,7 @@ class TelegramWebhook(Base):
 def application():
     return tornado.web.Application([
         *newcard_routes(),
+        *intake_routes(),
         *card_routes(),
         (r'/healthz',Health),(r'/auth/login',NativeLogin),(r'/auth/logout',NativeLogout),
         (r'/scena-telegram',TelegramWebhook),
