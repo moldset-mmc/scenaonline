@@ -1,9 +1,6 @@
 FROM python:3.12-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-WORKDIR /opt/scena
-COPY requirements-web.txt ./
-RUN python -m pip install --no-cache-dir -r requirements-web.txt
-COPY . ./
-RUN python deploy/build_web_assets.py
-CMD ["python", "deploy/start_web.py"]
+WORKDIR /opt/mbstudio-preview
+COPY public/design-preview/mbstudio-noir/ ./site/
+COPY preview/serve_mbstudio.py ./serve_mbstudio.py
+CMD ["python", "serve_mbstudio.py"]
