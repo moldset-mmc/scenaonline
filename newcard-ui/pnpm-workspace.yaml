@@ -1,0 +1,3 @@
+# Keep pnpm's resolution identical to the committed lockfile.
+overrides:
+  miniflare>sharp: 0.35.4

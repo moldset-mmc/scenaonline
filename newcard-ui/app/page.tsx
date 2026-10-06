@@ -14,6 +14,11 @@ export default function Home({previewOnly=false,allowPreviewSharing=false}:{prev
   const [sceneVisible,setSceneVisible]=useState(true);
   const sceneRef=useRef<HTMLElement>(null);
   const formTop=useRef<HTMLDivElement>(null);
+  const coverTitle=useRef<HTMLHeadingElement>(null);
+  const formOpener=useRef<HTMLElement|null>(null);
+  const currentView=useRef(view);
+  currentView.current=view;
+  const [navigation,setNavigation]=useState<{fragment:string;opener:HTMLElement|null}|null>(null);
   const timer=useRef<ReturnType<typeof setTimeout>|null>(null);
   useEffect(()=>{
     const preference=window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -25,30 +30,45 @@ export default function Home({previewOnly=false,allowPreviewSharing=false}:{prev
   },[]);
   useEffect(()=>{
     function followHash(){
-      const isForm=window.location.hash==="#anketa";
-      if(isForm)setFormOpened(true);
-      setView(isForm?"form":"cover");
-      if(isForm || !window.location.hash)window.scrollTo(0,0);
-      if(isForm)requestAnimationFrame(()=>formTop.current?.focus({preventScroll:true}));
+      showView(window.location.hash);
     }
-    followHash();window.addEventListener("hashchange",followHash);window.addEventListener("popstate",followHash);
-    return()=>{window.removeEventListener("hashchange",followHash);window.removeEventListener("popstate",followHash);if(timer.current)clearTimeout(timer.current);};
+    // Hash changes also cover browser Back/Forward; one listener avoids duplicate focus moves.
+    followHash();window.addEventListener("hashchange",followHash);
+    return()=>{window.removeEventListener("hashchange",followHash);if(timer.current)clearTimeout(timer.current);};
   },[]);
-  function navigate(fragment:string){
-    window.history.pushState(null,"",fragment);
+  useEffect(()=>{
+    if(!navigation)return;
+    if(navigation.fragment==="#anketa"){
+      window.scrollTo(0,0);formTop.current?.focus({preventScroll:true});
+    }else if(navigation.fragment==="#example"){
+      document.getElementById("example")?.scrollIntoView({block:"start"});
+      document.getElementById("example-title")?.focus({preventScroll:true});
+    }else if(navigation.opener?.isConnected){
+      navigation.opener.focus({preventScroll:true});
+      navigation.opener.scrollIntoView({block:"center"});
+    }else{
+      window.scrollTo(0,0);coverTitle.current?.focus({preventScroll:true});
+    }
+  },[navigation]);
+  function showView(fragment:string){
     const isForm=fragment==="#anketa";
+    const opener=currentView.current==="form"&&!isForm?formOpener.current:null;
     if(isForm)setFormOpened(true);
     setView(isForm?"form":"cover");
-    requestAnimationFrame(()=>{
-      if(fragment==="#example")document.getElementById("example")?.scrollIntoView({block:"start"});
-      else window.scrollTo(0,0);
-      if(isForm)formTop.current?.focus({preventScroll:true});
-    });
+    setNavigation({fragment,opener});
+  }
+  function navigate(fragment:string){
+    window.history.pushState(null,"",fragment);
+    showView(fragment);
   }
   function internalLink(event:React.MouseEvent<HTMLDivElement>){
+    if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
     const link=(event.target as Element).closest('a[href^="#"]');
     if(!link||event.defaultPrevented)return;
-    const href=link.getAttribute("href");if(href==="#"||href==="#anketa"||href==="#example"){event.preventDefault();navigate(href);}
+    const href=link.getAttribute("href");if(href==="#"||href==="#anketa"||href==="#example"){
+      if(href==="#anketa")formOpener.current=link as HTMLElement;
+      event.preventDefault();navigate(href);
+    }
   }
   async function shareCard(){
     setCopied(false);
@@ -75,7 +95,7 @@ export default function Home({previewOnly=false,allowPreviewSharing=false}:{prev
         <section ref={sceneRef} className={`cover-hero${motionPaused||reducedMotion||!sceneVisible||view!=="cover"?" is-paused":""}${reducedMotion?" reduced-motion":""}`} aria-labelledby="cover-title">
           <div className="stage-art"><img className="stage-image" src="/images/scena-stage.webp" alt="Большой подиум SCENA.LIVE: светящийся выход, софиты и модель в глубине сцены" width={1536} height={1024} fetchPriority="high"/><div className="stage-light stage-light-left"/><div className="stage-light stage-light-right"/></div>
           <div className="stage-shade" aria-hidden="true"/>
-          <div className="stage-brand"><p>МИР КРАСОТЫ. ЛЮДИ. ВОЗМОЖНОСТИ.</p><h1 id="cover-title">SCENA.LIVE</h1></div>
+          <div className="stage-brand"><p>МИР КРАСОТЫ. ЛЮДИ. ВОЗМОЖНОСТИ.</p><h1 id="cover-title" ref={coverTitle} tabIndex={-1}>SCENA.LIVE</h1></div>
           <div className="stage-bottom">
             <div className="stage-statement"><p className="stage-eyebrow">ВАШ ТАЛАНТ В ЦЕНТРЕ ВНИМАНИЯ</p><h2>Ваш выход.</h2><p className="stage-description">Платформа для мастеров, моделей и студий.<br/> Место, где начинается ваша сцена.</p></div>
             <div className="cover-actions"><Button asChild className="cover-primary"><a href="#example">Открыть SCENA.LIVE <ArrowUpRight size={20}/></a></Button><Button asChild variant="outline" className="cover-secondary"><a href="#anketa">Хочу свою сцену <ArrowRight size={20}/></a></Button></div>
@@ -84,7 +104,7 @@ export default function Home({previewOnly=false,allowPreviewSharing=false}:{prev
         </section>
         <div className="cover-ribbon" aria-label="Для кого SCENA.LIVE"><span>МАСТЕРА</span><i aria-hidden="true">✳</i><span>МОДЕЛИ</span><i aria-hidden="true">✳</i><span>СТУДИИ</span></div>
         <section className="cover-example" id="example" aria-labelledby="example-title">
-          <div className="example-heading"><p className="cover-kicker">ПЕРСОНАЛЬНЫЙ САЙТ В МИРЕ SCENA.LIVE</p><h2 id="example-title">Большая сцена.<br/><em>Ваша история.</em></h2><p className="example-intro">Начните со своего пространства: работы, услуги и запись к вам — по одной ссылке. Посмотрите, как это может выглядеть.</p></div>
+          <div className="example-heading"><p className="cover-kicker">ПЕРСОНАЛЬНЫЙ САЙТ В МИРЕ SCENA.LIVE</p><h2 id="example-title" tabIndex={-1}>Большая сцена.<br/><em>Ваша история.</em></h2><p className="example-intro">Начните со своего пространства: работы, услуги и запись к вам — по одной ссылке. Посмотрите, как это может выглядеть.</p></div>
           <div className="example-layout">
             <a className="example-image-link" href="https://sofileroux.scena.life/ru/" target="_blank" rel="noreferrer" aria-label="Открыть демонстрационный сайт Софи Леру в новой вкладке">
               <div className="example-browser-bar"><span className="browser-lights" aria-hidden="true"><i/><i/><i/></span><span>sofileroux.scena.life</span><ArrowUpRight size={16}/></div>
