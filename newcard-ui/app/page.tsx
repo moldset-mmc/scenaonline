@@ -32,8 +32,10 @@ export default function Home({previewOnly=false,allowPreviewSharing=false}:{prev
     function followHash(){
       showView(window.location.hash);
     }
+    // Leave focus alone on a normal landing; direct section links still need navigation.
+    if(window.location.hash==="#anketa"||window.location.hash==="#example")followHash();
     // Hash changes also cover browser Back/Forward; one listener avoids duplicate focus moves.
-    followHash();window.addEventListener("hashchange",followHash);
+    window.addEventListener("hashchange",followHash);
     return()=>{window.removeEventListener("hashchange",followHash);if(timer.current)clearTimeout(timer.current);};
   },[]);
   useEffect(()=>{

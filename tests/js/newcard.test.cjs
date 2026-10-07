@@ -40,6 +40,13 @@ async function setup(t,hash=''){
   return {w,d,click,button,field,requests};
 }
 
+test('initial cover load leaves focus alone; a direct example link focuses its heading',async t=>{
+  const {d}=await setup(t);
+  assert.equal(d.activeElement.tagName,'BODY','Opening the cover must not autofocus its large title');
+  const direct=await setup(t,'#example');
+  assert.equal(direct.d.activeElement.id,'example-title');
+});
+
 test('invalid first step focuses the required name, then the invalid choice group',async t=>{
   const {d,click,button,field}=await setup(t,'#anketa');
   await click(button('Продолжить'));
