@@ -1,5 +1,5 @@
 import {createRequire} from 'node:module';
-import {readFile,writeFile,mkdir,rm} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,rm,readdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -25,17 +25,20 @@ let js=result.outputFiles[0].text;
 for(const name of ['scena-stage.webp','sofi-site.jpg']){
   js=js.replaceAll(`/images/${name}`,await asset(name,await readFile(path.join(root,'public/images',name))));
 }
-const css=await postcss([tailwind({base:root})]).process(await readFile(path.join(root,'app/globals.css'),'utf8'),{from:path.join(root,'app/globals.css')});
+const fontUrl=await asset('manrope-regular.woff2',await readFile(path.resolve(root,'../public/card/assets/manrope-regular.woff2')));
+js=js.replaceAll('/fonts/manrope-regular.woff2',fontUrl);
+const cssSource=(await readFile(path.join(root,'app/globals.css'),'utf8'))+'\n'+(await readFile(path.join(root,'app/card-journey.css'),'utf8'));
+const css=await postcss([tailwind({base:root})]).process(cssSource,{from:path.join(root,'app/globals.css')});
 const jsUrl=await asset('app.js',Buffer.from(js));
-const cssUrl=await asset('style.css',Buffer.from(css.css));
+const cssUrl=await asset('style.css',Buffer.from(css.css.replaceAll('/fonts/manrope-regular.woff2',fontUrl)));
 const faviconUrl=await asset('favicon.svg',await readFile(path.join(root,'public/favicon.svg')));
 const shareImageUrl='https://scena.life'+await asset('scena-share.jpg',await readFile(path.join(root,'public/images/scena-share.jpg')));
 const shareImageAlt='SCENA.LIVE — светящийся подиум, софиты и модель в центре сцены';
 // Link crawlers read the initial HTML without executing the React application.
 const html=`<!doctype html><html lang="ru"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,follow"><title>SCENA.LIVE — ваш выход</title>
-<meta name="description" content="Большая сцена для вашего таланта. Визитка проекта SCENA.LIVE, пример персонального сайта и анкета.">
+<meta name="description" content="Ваше имя, фотография и характер. Создайте простую персональную визитку SCENA.LIVE и сохраните её себе.">
 <link rel="canonical" href="https://scena.life/newcard">
 <meta property="og:title" content="SCENA.LIVE — ваш выход">
 <meta property="og:description" content="Мастера. Модели. Студии. Ваша сцена начинается здесь.">
@@ -51,8 +54,9 @@ const html=`<!doctype html><html lang="ru"><head>
 <link rel="icon" href="${faviconUrl}"><link rel="stylesheet" href="${cssUrl}"><script src="${jsUrl}" defer></script>
 </head><body><div id="root"></div><noscript>Для просмотра визитки и заполнения анкеты включите JavaScript.</noscript></body></html>`;
 await mkdir(output,{recursive:true});
-await rm(path.join(output,'assets'),{recursive:true,force:true});
-await mkdir(path.join(output,'assets'));
+await mkdir(path.join(output,'assets'),{recursive:true});
+const currentAssets=new Set(assets.map(([name])=>name));
+for(const name of await readdir(path.join(output,'assets')))if(!currentAssets.has(name))await rm(path.join(output,'assets',name),{force:true});
 for(const [name,bytes] of assets)await writeFile(path.join(output,'assets',name),bytes);
 await writeFile(path.join(output,'index.html'),html);
 console.log(JSON.stringify({output,assets:assets.length,bytes:assets.reduce((n,[,b])=>n+b.length,Buffer.byteLength(html))}));
