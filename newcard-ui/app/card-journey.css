@@ -28,6 +28,6 @@
 
 /* Keep action labels readable even on narrow phones; allow two lines. */
 .journey-actions .journey-primary{font-size:14px}.role-options label{font-size:14px}.journey-no-signup{font-size:11px}.journey-feedback{scroll-margin-bottom:100px}
-.example-personal-card{display:flex;justify-content:center}.example-personal-card .personal-card{max-width:360px}
+
 @media(max-width:859px){.journey-body{display:block}.journey-preview{position:sticky;top:0;z-index:2;background:var(--j-bg);padding:8px 0 14px;margin-bottom:24px}.is-finale .journey-preview{position:static;padding-top:0;margin-bottom:30px}.journey-editor input,.journey-editor select,.journey-editor fieldset{scroll-margin-top:240px}.journey-body:has(.journey-field input:focus) .journey-preview{position:static}}
 @media(max-width:859px) and (max-height:600px){.journey-preview{position:static}.journey-editor input,.journey-editor select,.journey-editor fieldset{scroll-margin-top:20px}}

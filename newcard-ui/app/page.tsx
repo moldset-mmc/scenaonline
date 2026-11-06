@@ -103,22 +103,20 @@ export default function Home({previewOnly=false,allowPreviewSharing=false}:{prev
           <div className="stage-shade" aria-hidden="true"/>
           <div className="stage-brand"><p>МИР КРАСОТЫ. ЛЮДИ. ВОЗМОЖНОСТИ.</p><h1 id="cover-title" ref={coverTitle} tabIndex={-1}>SCENA.LIVE</h1></div>
           <div className="stage-bottom">
-            <div className="stage-statement"><h2>Ваш выход.</h2><p className="stage-description">Ваше имя. Ваша фотография. Ваш характер.<br/> Соберите визитку, которую хочется показать.</p></div>
-            <div className="cover-actions"><Button asChild className="cover-primary"><a href="#anketa">Собрать свою визитку <ArrowRight size={20}/></a></Button><Button asChild variant="outline" className="cover-secondary"><a href="#example">Посмотреть пример <ArrowUpRight size={20}/></a></Button></div>
+            <div className="stage-statement"><h2>Ваш выход.</h2><p className="stage-description">Ваше фото, имя и контакт.<br/> Создайте визитку и сохраните её себе.</p></div>
+            <div className="cover-actions"><Button asChild className="cover-primary"><a href="#anketa">Собрать свою визитку <ArrowRight size={20}/></a></Button></div>
           </div>
-          <div className="stage-controls"><a href="#example" className="stage-explore"><ChevronDown size={18}/><span>Познакомиться с проектом</span></a><Button type="button" variant="ghost" className="stage-motion" aria-label={reducedMotion?"Анимация выключена настройками устройства":motionPaused?"Продолжить анимацию":"Приостановить анимацию"} aria-pressed={motionPaused||reducedMotion} disabled={reducedMotion} onClick={()=>setMotionPaused(p=>!p)}>{motionPaused||reducedMotion?<Play size={16}/>:<Pause size={16}/>}<span>{reducedMotion?"Без анимации":motionPaused?"Продолжить":"Пауза"}</span></Button></div>
+          <div className="stage-controls"><a href="#example" className="stage-explore"><ChevronDown size={18}/><span>Посмотреть пример</span></a><Button type="button" variant="ghost" className="stage-motion" aria-label={reducedMotion?"Анимация выключена настройками устройства":motionPaused?"Продолжить анимацию":"Приостановить анимацию"} aria-pressed={motionPaused||reducedMotion} disabled={reducedMotion} onClick={()=>setMotionPaused(p=>!p)}>{motionPaused||reducedMotion?<Play size={16}/>:<Pause size={16}/>}<span>{reducedMotion?"Без анимации":motionPaused?"Продолжить":"Пауза"}</span></Button></div>
         </section>
-        <div className="cover-ribbon" aria-label="Для кого SCENA.LIVE"><span>МАСТЕРА</span><i aria-hidden="true">✳</i><span>МОДЕЛИ</span><i aria-hidden="true">✳</i><span>СТУДИИ</span></div>
         <section className="cover-example" id="example" aria-labelledby="example-title">
-          <div className="example-heading"><h2 id="example-title" tabIndex={-1}>Всё начинается<br/><em>с вас.</em></h2><p className="example-intro">Сначала — простая личная визитка: фотография, имя и контакт. Свой сайт можно обсудить позже.</p></div>
           <div className="example-layout">
-            <div className="example-personal-card"><PersonalCard draft={{...emptyCard,name:"Ваше имя",specialty:"Ваше направление",tagline:"Несколько слов, в которых узнают вас.",photo:"/images/scena-stage.webp",theme:"night"}} interactive={false}/></div>
-            <div className="example-copy"><h3>Первое впечатление.<br/>Личное.</h3><p>Фотография, которая нравится вам. Имя, которое запомнят. Контакт, по которому легко найти.</p><p>Примерьте три настроения и заберите готовую визитку — без регистрации.</p><div className="example-links"><a className="example-live-link" href="#anketa">Создать свою <ArrowRight size={18}/></a><a className="example-live-link" href="https://makeup.scena.life/card/" target="_blank" rel="noreferrer">Посмотреть действующую визитку <ArrowUpRight size={18}/></a></div><p className="example-disclaimer">Здесь показан пример с изображением сцены. В вашей визитке будет выбранное вами фото.</p></div>
+            <div className="example-heading"><h2 id="example-title" tabIndex={-1}>Ваша визитка.</h2><p className="example-intro">Три оформления. Без регистрации.</p></div>
+            <figure className="example-personal-card"><PersonalCard draft={{...emptyCard,name:"Ваше имя",specialty:"Ваше направление",photo:"/images/scena-stage.webp",theme:"night"}} interactive={false}/><figcaption>На визитке будет ваше фото.</figcaption></figure>
+            <div className="example-links"><Button asChild className="cover-primary"><a href="#anketa">Собрать свою визитку <ArrowRight size={20}/></a></Button><a className="example-live-link" href="https://makeup.scena.life/card/" target="_blank" rel="noreferrer">Действующая визитка <ArrowUpRight size={18}/></a></div>
           </div>
         </section>
-        <section className="cover-invitation" aria-labelledby="invitation-title"><span className="invitation-star" aria-hidden="true">✳</span><div><h2 id="invitation-title">Узнайте себя в SCENA.</h2><p>Выберите фото и настроение.<br/>Готовую визитку можно сразу сохранить.</p></div><Button asChild className="cover-primary"><a href="#anketa">Собрать свою визитку <ArrowRight size={19}/></a></Button></section>
       </main>
-      <footer className="cover-footer"><span>SCENA.LIVE · FASHION · BEAUTY · PEOPLE</span><Button type="button" variant="link" onClick={shareCard}><Share2 size={16}/>Переслать визитку</Button></footer>
+      <footer className="cover-footer">SCENA.LIVE · FASHION · BEAUTY · PEOPLE</footer>
       {shareNotice&&<div className="share-notice" role="status">{shareNotice}<Button type="button" variant="ghost" onClick={()=>setShareNotice("")}>Понятно</Button></div>}
     </div>
     {formOpened&&<div hidden={view!=="form"} id="anketa" ref={formTop} tabIndex={-1} className="intake-view"><CardJourney previewOnly={previewOnly} onBack={()=>navigate("#")}/></div>}
