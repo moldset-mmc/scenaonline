@@ -39,6 +39,16 @@ class DomainRedirectTests(AsyncHTTPTestCase):
             for path, target in cases.items():
                 with self.subTest(path=path, host=host):
                     response = self.request(path, host=host)
+                    platform_documents = {'/', '/robots.txt', '/sitemap.xml', '/llms.txt'}
+                    if host == 'scena.life' and path in platform_documents:
+                        self.assertEqual(response.code, 200)
+                        self.assertNotIn('Location', response.headers)
+                        self.assertIn(b'scena.life', response.body)
+                        continue
+                    if host == 'scena.life' and path == '/?page=scene&lang=ru':
+                        self.assertEqual(response.code, 308)
+                        self.assertEqual(response.headers['Location'], '/ru/?page=scene')
+                        continue
                     self.assertEqual(response.code, 308)
                     self.assertEqual(response.headers['Location'], 'https://mbstudio.scena.life' + target)
                     self.assertNotIn('X-Robots-Tag', response.headers)

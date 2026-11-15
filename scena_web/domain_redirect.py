@@ -44,6 +44,10 @@ class LegacyPublicRedirect(RequestHandler):
 
 
 def with_legacy_redirects(application):
+    from .platform import platform_rules
+    # Exact platform routes must precede the legacy salon redirects.
+    # MB Studio retains its own origin, database, SEO and application handlers.
+    application.add_handlers(re.escape('scena.life'), platform_rules())
     application.add_handlers('(?:' + re.escape(LEGACY_HOST) + '|' + re.escape('scena.life') + ')', [Rule(PublicReadMatcher(), LegacyPublicRedirect)])
     return application
 

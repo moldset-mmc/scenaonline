@@ -10,9 +10,9 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
        "object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'")
 
 
-def headers(handler):
+def headers(handler, *, indexable=False):
     handler.set_header('X-Content-Type-Options', 'nosniff')
-    handler.set_header('X-Robots-Tag', 'noindex, follow')
+    handler.set_header('X-Robots-Tag', 'index, follow, max-image-preview:large' if indexable else 'noindex, follow')
     handler.set_header('Referrer-Policy', 'strict-origin-when-cross-origin')
     handler.set_header('Content-Security-Policy', CSP)
 
@@ -28,10 +28,15 @@ class NewCard(RequestHandler):
             query = '?' + self.request.query if self.request.query else ''
             self.redirect('/newcard' + query, status=308)
             return
-        headers(self)
+        indexable = self.request.host_name.lower() == 'scena.life'
+        headers(self, indexable=indexable)
         self.set_header('Content-Type', 'text/html; charset=utf-8')
         self.set_header('Cache-Control', 'public, max-age=0, must-revalidate')
-        self.finish(document())
+        markup = document()
+        if indexable:
+            markup = markup.replace(b'SCENA.LIVE', b'SCENA.LIFE')
+            markup = markup.replace(b'content="noindex,follow"', b'content="index, follow, max-image-preview:large"', 1)
+        self.finish(markup)
 
     def head(self):
         self.get()

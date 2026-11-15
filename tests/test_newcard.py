@@ -24,16 +24,16 @@ class NewCardTests(AsyncHTTPTestCase):
             *newcard_routes(), (r'/ru/', ExistingPage),
         ]))
 
-    def test_apex_card_stays_on_platform_host_and_legacy_pages_keep_redirecting(self):
+    def test_apex_card_stays_on_platform_host_and_language_home_is_platform(self):
         page = self.fetch('/newcard', headers={'Host': 'scena.life'}, follow_redirects=False)
         self.assertEqual(page.code, 200)
         self.assertIn(b'https://scena.life/newcard', page.body)
-        self.assertIn(b'SCENA.LIVE', page.body)
+        self.assertIn(b'SCENA.LIFE', page.body)
         self.assertNotIn('Set-Cookie', page.headers)
         self.assertEqual(self.fetch('/newcard', method='HEAD').body, b'')
         existing = self.fetch('/ru/', headers={'Host': 'scena.life'}, follow_redirects=False)
-        self.assertEqual(existing.code, 308)
-        self.assertEqual(existing.headers['Location'], 'https://mbstudio.scena.life/ru/')
+        self.assertEqual(existing.code, 200)
+        self.assertIn(b'https://scena.life/ru/', existing.body)
 
     def test_slash_query_assets_and_no_writes(self):
         result = self.fetch('/newcard/?utm_source=telegram', follow_redirects=False)
