@@ -47,6 +47,18 @@ class PlatformIsolationTests(AsyncHTTPTestCase):
             for lang,url in [('ro','/'),('ru','/ru/'),('x-default','/')]:
                 self.assertIn(f'hreflang="{lang}" href="https://scena.life{url}"'.encode(),body)
 
+    def test_loading_keeps_the_localized_fallback_outside_the_react_root(self):
+        for path, heading in (('/', 'Mereu pe scenă'), ('/ru/', 'Всегда на сцене')):
+            with self.subTest(path=path):
+                initial_html = self.get(path).body.split(b'<body>', 1)[1].split(b'<script>', 1)[0]
+                self.assertIn(b'<div id="root"></div><noscript>', initial_html)
+                before_fallback, _, fallback = initial_html.partition(b'<noscript>')
+                self.assertNotIn(b'<main>', before_fallback)
+                self.assertIn(f'<h1>{heading}</h1>'.encode(), fallback)
+                self.assertIn(b'href="/" lang="ro"', fallback)
+                self.assertIn(b'href="/ru/" lang="ru"', fallback)
+                self.assertNotIn(b'href="#example"', fallback)
+
     def test_normalization_preserves_tracking_and_stays_on_platform(self):
         for path,target in [('/ro/','/'),('/ro','/'),('/ru','/ru/'),('/?lang=ru&utm_source=test','/ru/?utm_source=test'),('/?lang=ro','/')]:
             r=self.get(path)

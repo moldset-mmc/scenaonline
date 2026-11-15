@@ -75,11 +75,19 @@ def document(locale):
         'function eC(){return document.documentElement.lang==="ru"?"ru":"ro"}')
     markup = replace_once(markup, 'value:{locale:a,setLocale:t,t:(l,u)=>ot(a,l,u)}',
         'value:{locale:a,setLocale:l=>window.location.assign(l==="ru"?"/ru/":"/"),t:(l,u)=>ot(a,l,u)}')
-    # The language links and main offer are present even before JS runs.
+    # Keep the React mount empty so a slow script cannot expose a text-only page.
     heading = 'Всегда на сцене' if locale == 'ru' else 'Mereu pe scenă'
-    cta = 'Создать свою image card' if locale == 'ru' else 'Creează image card personală'
-    fallback = '<main><h1>'+heading+'</h1><p>'+html.escape(DESCRIPTIONS[locale])+'</p><a href="#example">'+cta+'</a><nav aria-label="Language"><a href="/" lang="ro" hreflang="ro">Română</a> <a href="/ru/" lang="ru" hreflang="ru">Русский</a></nav></main>'
-    markup = replace_once(markup, '<div id="root"></div>', '<div id="root">'+fallback+'</div>')
+    instruction = ('Включите JavaScript, чтобы создать свою image card.' if locale == 'ru'
+                   else 'Activează JavaScript pentru a crea image card personală.')
+    fallback = (
+        f'<noscript><main><h1>{heading}</h1><p>{html.escape(DESCRIPTIONS[locale])}</p>'
+        f'<p>{instruction}</p><nav aria-label="Language">'
+        '<a href="/" lang="ro" hreflang="ro">Română</a> '
+        '<a href="/ru/" lang="ru" hreflang="ru">Русский</a></nav></main></noscript>'
+    )
+    markup = replace_once(markup,
+        '<noscript>Activează JavaScript pentru a descoperi SCENA.LIFE și a crea image card personală.</noscript>',
+        fallback)
     return markup.encode('utf-8')
 
 
