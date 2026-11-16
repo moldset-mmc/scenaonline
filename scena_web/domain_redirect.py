@@ -45,9 +45,16 @@ class LegacyPublicRedirect(RequestHandler):
 
 def with_legacy_redirects(application):
     from .platform import platform_rules
+    from .tenants import TenantDocument, tenant_hosts
     # Exact platform routes must precede the legacy salon redirects.
     # MB Studio retains its own origin, database, SEO and application handlers.
     application.add_handlers(re.escape('scena.life'), platform_rules())
+    # Level-1 tenants: a static card per host, served by this deployment only.
+    for host, tenant in tenant_hosts().items():
+        application.add_handlers(re.escape(host), [
+            (r'/', TenantDocument, {'tenant': tenant}),
+            (r'/(.*)', TenantDocument, {'tenant': tenant}),
+        ])
     application.add_handlers('(?:' + re.escape(LEGACY_HOST) + '|' + re.escape('scena.life') + ')', [Rule(PublicReadMatcher(), LegacyPublicRedirect)])
     return application
 

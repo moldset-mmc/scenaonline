@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f4ede1">
+<title>София Леру · Model &amp; Makeup Artist · Кишинёв</title>
+<style>
+  :root{
+    --cream:#f4ede1; --cream-2:#ece2d2; --ink:#2b241d; --ink-soft:#5b5147;
+    --line:#d9cdb9; --gold:#c2a878; --beige:#e6d7bd; --white:#fffdf9;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--cream);color:var(--ink);font-family:"Inter","Segoe UI",system-ui,sans-serif;
+       -webkit-font-smoothing:antialiased;line-height:1.55}
+  .demo-bar{background:#2b241d;color:#d8c9b0;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    padding:9px 16px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .demo-bar b{color:#f0dfc2}
+
+  .card{max-width:430px;margin:0 auto;padding:22px 22px 40px}
+  .brand{display:flex;align-items:center;gap:8px;font-size:13px;letter-spacing:.16em;text-transform:uppercase;
+    border-bottom:1px solid var(--line);padding-bottom:14px}
+  .brand .mark{font-family:Georgia,serif;font-weight:700;letter-spacing:.02em;font-size:13px;
+    background:var(--beige);padding:2px 6px;border-radius:2px}
+  .brand .scena{font-weight:600}
+  .brand .live{color:var(--ink-soft);font-weight:400;letter-spacing:.06em;text-transform:none}
+  .brand .lang{margin-left:auto;font-size:12px;letter-spacing:.1em;color:var(--ink-soft)}
+
+  .photo{position:relative;margin:20px 0 22px;border-radius:4px;overflow:hidden;background:var(--cream-2)}
+  .photo img{display:block;width:100%;height:auto}
+  .photo .hint{position:absolute;left:12px;bottom:12px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:#fff;background:rgba(43,36,29,.55);padding:5px 9px;border-radius:999px;backdrop-filter:blur(4px)}
+
+  h1{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:34px;line-height:1.1;margin:0 0 4px;letter-spacing:-.01em}
+  .profession{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 18px}
+  .intro{font-family:Georgia,serif;font-size:16px;line-height:1.65;color:#3a3129;margin:0 0 8px}
+  .signature{font-family:"Segoe Script","Brush Script MT",cursive;font-size:26px;color:var(--ink-soft);
+    text-align:right;margin:0 0 20px}
+
+  .book{display:block;width:100%;text-align:center;background:var(--gold);color:#241d16;border:0;
+    border-radius:6px;padding:17px 18px;font-size:16px;font-weight:600;cursor:pointer;margin:0 0 10px}
+  .book:active{transform:translateY(1px)}
+  .book-note{font-size:12px;color:var(--ink-soft);text-align:center;margin:0 0 22px}
+
+  .actions{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0 0 20px}
+  .actions button{background:var(--white);border:1px solid var(--line);border-radius:8px;padding:11px 4px;
+    font-size:11px;color:var(--ink);cursor:pointer;display:grid;gap:6px;place-items:center}
+  .actions span{font-size:17px;line-height:1}
+
+  .contacts{list-style:none;margin:0 0 22px;padding:0;border-top:1px solid var(--line)}
+  .contacts li{display:flex;align-items:center;gap:12px;padding:14px 2px;border-bottom:1px solid var(--line);font-size:15px}
+  .contacts .ico{width:22px;text-align:center;color:var(--gold)}
+  .contacts .val{margin-left:auto;color:var(--ink-soft);font-size:13px}
+
+  .qr-block{display:flex;gap:16px;align-items:center;background:var(--white);border:1px solid var(--line);
+    border-radius:10px;padding:14px;margin:0 0 18px}
+  .qr-block .qr{width:74px;height:74px;flex:0 0 auto;border-radius:6px;
+    background:repeating-conic-gradient(var(--ink) 0 25%, #fff 0 50%) 0 0/8px 8px}
+  .qr-block p{margin:0;font-size:13px;color:var(--ink-soft)}
+  .qr-block b{color:var(--ink);display:block;font-size:14px;margin-bottom:3px}
+
+  .save{display:block;width:100%;text-align:center;background:transparent;color:var(--ink);
+    border:1px solid var(--ink);border-radius:6px;padding:15px;font-size:15px;font-weight:600;cursor:pointer;margin:0 0 26px}
+
+  .further{border-top:1px solid var(--line);padding-top:18px;margin:0 0 26px}
+  .further h2{font-family:Georgia,serif;font-weight:400;font-size:22px;margin:0 0 10px}
+  .further p{margin:0 0 12px;font-size:14px;color:var(--ink-soft)}
+  .further a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--gold);padding-bottom:1px;font-size:14px}
+
+  footer{font-size:11px;color:#8b7f70;text-align:center;letter-spacing:.06em}
+  .note{max-width:430px;margin:0 auto;padding:0 22px 40px;font-size:12px;color:#8b7f70}
+  .note b{color:#5b5147}
+</style>
+</head>
+<body>
+<div class="demo-bar"><b>Демо-макет</b><span>карточка сцены Софи · не продакшн</span></div>
+
+<main class="card">
+  <div class="brand">
+    <span class="mark">SOFI LEROUX</span>
+    <span class="scena">SCENA</span><span class="live">.life</span>
+    <span class="lang">RU · RO · EN</span>
+  </div>
+
+  <figure class="photo" id="photo">
+    <img src="sofi-portrait.jpg" alt="София Леру — портрет" width="627" height="844">
+    <span class="hint">Коснитесь фото</span>
+  </figure>
+
+  <h1>София Леру</h1>
+  <p class="profession">Model &amp; Makeup Artist · Кишинёв</p>
+
+  <p class="intro">Я София. Создаю макияж, в котором хочется быть собой, и образы, которые интересно
+    рассматривать. Моя студия — место для красоты, съёмок и новых идей.</p>
+  <p class="signature">София</p>
+
+  <button class="book" type="button">Записаться на макияж</button>
+  <p class="book-note">Свободное время и цена — при записи</p>
+
+  <div class="actions">
+    <button type="button"><span>✆</span>Позвонить</button>
+    <button type="button"><span>✉</span>Написать</button>
+    <button type="button"><span>◈</span>Работы</button>
+    <button type="button"><span>⌗</span>QR</button>
+  </div>
+
+  <ul class="contacts">
+    <li><span class="ico">✆</span>Телефон<span class="val">—</span></li>
+    <li><span class="ico">✉</span>WhatsApp<span class="val">написать</span></li>
+    <li><span class="ico">➤</span>Telegram<span class="val">@sofi</span></li>
+    <li><span class="ico">◎</span>Instagram<span class="val">@sofi.leroux</span></li>
+  </ul>
+
+  <div class="qr-block">
+    <div class="qr" role="img" aria-label="QR-код карточки"></div>
+    <p><b>Ваш QR — это дверь</b>Навели камеру — карточка открылась. Отсюда же сохраняется контакт.</p>
+  </div>
+
+  <button class="save" type="button">Сохранить контакт</button>
+
+  <section class="further">
+    <h2>Дальше — сцена</h2>
+    <p>Карточка — это вход. За ней: услуги и цены, курсы, портфолио, публикации.</p>
+    <a href="scene.html">Открыть сцену Софи →</a>
+  </section>
+
+  <footer>SOFI LEROUX · SCENA.LIFE · Кишинёв</footer>
+</main>
+
+<div class="note">
+  <b>Что это:</b> демонстрационная карточка, собранная по снимку прежней сцены <i>sofileroux.scena.life</i>
+  (кремовая палитра, антиква, подпись, «Записаться на макияж»). Структура — как у настоящих карточек
+  `/card`: фото, действия, каналы, QR, «Сохранить контакт», вход на сцену. Кнопки и контакты здесь
+  неактивны: это макет, а не рабочая карточка.
+</div>
+
+<script>
+  // «Коснитесь фото» — та же идея, что на живых карточках: фото переворачивается/увеличивается.
+  document.getElementById('photo').addEventListener('click', () => {
+    const img = document.querySelector('#photo img');
+    img.style.transition = 'transform .5s ease';
+    img.style.transform = img.style.transform === 'scale(1.6)' ? 'scale(1)' : 'scale(1.6)';
+    document.querySelector('#photo .hint').style.opacity = '.35';
+  });
+</script>
+</body>
+</html>
