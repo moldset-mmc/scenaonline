@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>София Леру · Model &amp; Makeup Artist · Кишинёв · демо-сцена</title>
+<meta name="description" content="Демонстрационная сцена SCENA:LIFE: личная страница с услугами, портфолио и записью. София Леру — вымышленная героиня демо-сцены.">
+<style>
+  :root{
+    --cream:#f5efe4; --cream-2:#ece2d2; --ink:#2a241d; --ink-soft:#6a5f52;
+    --line:#dbcfbb; --gold:#c2a878; --beige:#e7d8bd; --white:#fffdf8; --accent:#8c6f4a;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--cream);color:var(--ink);font-family:"Inter","Segoe UI",system-ui,sans-serif;
+       -webkit-font-smoothing:antialiased;line-height:1.6}
+  .demo-bar{background:#2a241d;color:#d9cab1;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    padding:10px 24px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .demo-bar b{color:#f2e2c6}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 28px}
+
+  header{position:sticky;top:0;z-index:20;background:rgba(245,239,228,.94);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line)}
+  .top{display:flex;align-items:center;gap:14px;padding:16px 0}
+  .lockup{display:flex;align-items:center;gap:8px;font-size:13px;letter-spacing:.16em;text-transform:uppercase}
+  .lockup .mark{font-family:Georgia,serif;font-weight:700;letter-spacing:.02em;background:var(--beige);
+    padding:3px 7px;border-radius:2px;text-transform:none;font-size:13px}
+  .lockup .scena{font-weight:600;letter-spacing:.1em}
+  .lockup .live{color:var(--ink-soft);letter-spacing:.06em;text-transform:none}
+  .lang{margin-left:auto;font-size:12px;letter-spacing:.1em;color:var(--ink-soft);display:flex;gap:10px}
+  .lang b{color:var(--ink)}
+  nav{display:flex;gap:26px;padding:0 0 14px;font-size:14px;border-bottom:1px solid transparent;overflow-x:auto}
+  nav a{color:var(--ink-soft);text-decoration:none;white-space:nowrap;padding-bottom:10px;border-bottom:2px solid transparent}
+  nav a.active{color:var(--ink);border-bottom-color:var(--ink)}
+  nav a.shop{font-style:italic;font-family:Georgia,serif;font-size:16px}
+
+  .hero{display:grid;grid-template-columns:.95fr 1.05fr;gap:44px;padding:46px 0 40px;align-items:start}
+  .hero figure{margin:0;border-radius:4px;overflow:hidden;background:var(--cream-2)}
+  .hero img{display:block;width:100%;height:auto}
+  h1{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:44px;line-height:1.1;margin:14px 0 4px;letter-spacing:-.01em}
+  .role{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 22px}
+  .intro{font-family:Georgia,serif;font-size:17px;line-height:1.7;color:#3b322a;margin:0 0 10px}
+  .signature{font-family:"Segoe Script","Brush Script MT",cursive;font-size:28px;color:var(--ink-soft);text-align:right;margin:0 0 26px}
+  .services-teaser{border-top:1px solid var(--line);padding-top:20px}
+  .services-teaser h2{font-family:Georgia,serif;font-weight:400;font-size:24px;margin:0 0 8px}
+  .services-teaser p{margin:0 0 18px;color:var(--ink-soft);font-size:15px}
+  .btn{display:inline-block;background:var(--gold);color:#241d16;border:0;border-radius:6px;
+    padding:16px 26px;font-size:15px;font-weight:600;text-decoration:none}
+  .btn.ghost{background:transparent;border:1px solid var(--ink);color:var(--ink)}
+  .scena-mark{margin-top:16px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-soft)}
+
+  section{padding:44px 0;border-top:1px solid var(--line)}
+  section h2{font-family:Georgia,serif;font-weight:400;font-size:30px;margin:0 0 6px}
+  section .sub{color:var(--ink-soft);margin:0 0 24px;font-size:15px}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .svc{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:18px}
+  .svc h3{font-family:Georgia,serif;font-weight:400;font-size:19px;margin:0 0 6px}
+  .svc .meta{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 10px}
+  .svc p{margin:0 0 14px;font-size:14px;color:var(--ink-soft)}
+  .svc .price{font-family:Georgia,serif;font-size:18px}
+  .pub{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .pub article{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--white)}
+  .pub img{display:block;width:100%;height:170px;object-fit:cover}
+  .pub .body{padding:14px}
+  .pub h3{font-family:Georgia,serif;font-weight:400;font-size:18px;margin:0 0 6px}
+  .pub p{margin:0;font-size:13px;color:var(--ink-soft)}
+  .pf{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .pf img{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px;background:var(--cream-2)}
+  footer{padding:40px 0 60px;border-top:1px solid var(--line);color:var(--ink-soft);font-size:13px}
+  footer .row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  footer a{color:var(--ink)}
+  .label{display:inline-block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    border:1px solid var(--line);border-radius:999px;padding:4px 10px;color:var(--ink-soft)}
+  @media (max-width:860px){
+    .hero{grid-template-columns:1fr;gap:26px;padding:28px 0}
+    h1{font-size:32px}
+    .grid-3,.pub{grid-template-columns:1fr}
+    .pf{grid-template-columns:repeat(2,1fr)}
+    .wrap{padding:0 18px}
+    nav{gap:18px;font-size:13px}
+  }
+</style>
+</head>
+<body>
+<div class="demo-bar"><b>Демо-сцена</b><span>София Леру — вымышленная героиня</span><span>не продакшн</span></div>
+
+<header>
+  <div class="wrap">
+    <div class="top">
+      <div class="lockup">
+        <span class="mark">SOFI LEROUX</span>
+        <span class="scena">SCENA</span><span class="live">.life</span>
+      </div>
+      <div class="lang"><b>RU</b><span>RO</span><span>EN</span></div>
+    </div>
+    <nav>
+      <a href="#scene" class="active">Моя Сцена</a>
+      <a href="#services">Услуги и курсы</a>
+      <a href="#shop" class="shop">shopping</a>
+      <a href="#portfolio">Портфолио</a>
+      <a href="#model">Model</a>
+      <a href="#join">Стать моделью</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="hero" id="scene">
+    <figure><img src="sofi-portrait.jpg" alt="София Леру — портрет" width="627" height="844"></figure>
+    <div>
+      <h1>София Леру</h1>
+      <p class="role">Model &amp; Makeup Artist · Кишинёв</p>
+      <p class="intro">Я София. Создаю макияж, в котором хочется быть собой, и образы, которые интересно
+        рассматривать. Моя студия — место для красоты, съёмок и новых идей.</p>
+      <p class="signature">София</p>
+      <div class="services-teaser">
+        <h2>Мои услуги</h2>
+        <p>От лёгкого сияния до вечернего образа — выберите свой повод.</p>
+        <a class="btn" href="#services">Записаться на макияж</a>
+        <div class="scena-mark">model · SCENA</div>
+      </div>
+    </div>
+  </div>
+
+  <section id="services">
+    <h2>Услуги и курсы</h2>
+    <p class="sub">Цена и длительность — сразу, запись по свободному интервалу.</p>
+    <div class="grid-3">
+      <div class="svc">
+        <h3>Дневной макияж</h3>
+        <p class="meta">60 минут</p>
+        <p>Лёгкий тон, естественные акценты — для съёмки, встречи или своего дня.</p>
+        <div class="price">700 MDL</div>
+      </div>
+      <div class="svc">
+        <h3>Вечерний образ</h3>
+        <p class="meta">75 минут</p>
+        <p>Выразительные глаза, стойкое покрытие — для события и выхода.</p>
+        <div class="price">900 MDL</div>
+      </div>
+      <div class="svc">
+        <h3>Свадебный макияж</h3>
+        <p class="meta">90 минут</p>
+        <p>Начните с даты свадьбы и времени, к которому нужно быть готовой.</p>
+        <div class="price">1 500 MDL</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="shop">
+    <h2>shopping</h2>
+    <p class="sub">Мой выбор инструментов и средств — с личной рекомендацией.</p>
+    <div class="pub">
+      <article><div class="tile">01</div><div class="body"><h3>База под макияж</h3><p>То, с чего начинается стойкость.</p></div></article>
+      <article><div class="tile">02</div><div class="body"><h3>Палетка теней</h3><p>Нейтральная база и два акцента.</p></div></article>
+      <article><div class="tile">03</div><div class="body"><h3>Кисти</h3><p>Минимум, который реально работает.</p></div></article>
+    </div>
+  </section>
+
+  <section id="portfolio">
+    <h2>Портфолио</h2>
+    <p class="sub">Работы: съёмки, показы, частные образы.</p>
+    <div class="pf">
+      <img src="sofi-portrait.jpg" alt="Работа 1" style="object-position:50% 12%">
+      <img src="sofi-portrait.jpg" alt="Работа 2" style="object-position:50% 32%">
+      <img src="sofi-portrait.jpg" alt="Работа 3" style="object-position:50% 58%">
+      <img src="sofi-portrait.jpg" alt="Работа 4" style="object-position:50% 82%">
+    </div>
+  </section>
+
+  <section id="model">
+    <h2>Model</h2>
+    <p class="sub">Съёмки, показы и коллаборации: пригласите меня в проект.</p>
+    <a class="btn ghost" href="#join">Пригласить модель</a>
+  </section>
+
+  <section id="join">
+    <h2>Стать моделью</h2>
+    <p class="sub">Нужны образы для практики, обучения или новых кадров? Оставьте заявку на съёмку.</p>
+    <a class="btn" href="/">Открыть визитку и записаться</a>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div><span class="label">демонстрационная сцена</span></div>
+    <div class="row" style="margin-top:16px">
+      <a href="/">Визитка</a><span>·</span>
+      <a href="#services">Услуги</a><span>·</span>
+      <a href="#portfolio">Портфолио</a><span>·</span>
+      <a href="#join">Запись</a>
+    </div>
+    <div>София Леру — вымышленная героиня демонстрационной сцены. Фотография — художественная визуализация.</div>
+  </div>
+</footer>
+</body>
+</html>
