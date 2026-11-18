@@ -75,12 +75,17 @@ class Config:
 
     @classmethod
     def from_env(cls):
-        # The booking store prefers its own credentials, then falls back to the
-        # Turso database the Vercel integration already provisions for the app.
+        # Order matters: an explicit booking database wins, then the dedicated
+        # Turso store connected by the Vercel integration (the `tulip` resource,
+        # transferable to a client team as one unit), then the platform database.
         database = (os.getenv('SCENA_BOOKING_TURSO_URL', '')
+                    or os.getenv('TULIP_TURSO_DATABASE_URL', '')
+                    or os.getenv('TURSO_DATABASE_URL', '')
                     or os.getenv('SCENA_TURSO_TURSO_DATABASE_URL', '')
                     or os.getenv('SCENA_INTAKE_TURSO_DATABASE_URL', ''))
         auth = (os.getenv('SCENA_BOOKING_TURSO_TOKEN', '')
+                or os.getenv('TULIP_TURSO_AUTH_TOKEN', '')
+                or os.getenv('TURSO_AUTH_TOKEN', '')
                 or os.getenv('SCENA_TURSO_TURSO_AUTH_TOKEN', '')
                 or os.getenv('SCENA_INTAKE_TURSO_AUTH_TOKEN', ''))
         return cls(
