@@ -91,7 +91,7 @@ h1 em{font-style:italic;color:var(--gold)}
 .row:hover .row-title{color:#fff}
 .row-title{font-family:var(--display);font-size:clamp(24px,2.6vw,34px);line-height:1.15;color:var(--paper);
   transition:color .3s ease}
-.row-meta{font-size:13px;color:var(--muted);margin-top:6px}
+.row-meta{display:block;font-size:13px;color:var(--muted);margin-top:6px}
 .row-price{font-family:var(--display);font-size:clamp(20px,2vw,26px);color:var(--gold);white-space:nowrap}
 .row-len{font-size:13px;color:var(--muted);white-space:nowrap;text-align:right;min-width:70px}
 
@@ -99,7 +99,7 @@ h1 em{font-style:italic;color:var(--gold)}
 .team{padding:clamp(50px,7vw,92px) 0;border-top:1px solid var(--rule)}
 .team .grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:clamp(28px,5vw,64px);align-items:start}
 .team figure{margin:0;position:relative}
-.team figure img{aspect-ratio:3/4;object-fit:cover;width:100%}
+.team figure img{aspect-ratio:3/4;object-fit:cover;object-position:50% 28%;width:100%}
 .team figcaption{position:absolute;left:0;right:0;bottom:0;padding:26px;
   background:linear-gradient(transparent,rgba(16,13,11,.92) 70%)}
 .team figcaption strong{font-family:var(--display);font-size:26px;font-weight:400;display:block}
@@ -140,7 +140,9 @@ h1 em{font-style:italic;color:var(--gold)}
 /* contacts */
 .contacts{padding:clamp(50px,7vw,92px) 0;border-top:1px solid var(--rule)}
 .contacts .grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(28px,5vw,72px);align-items:center}
-.contacts img{width:100%;aspect-ratio:16/10;object-fit:cover}
+.contacts figure{max-width:440px}
+.contacts img{width:100%;aspect-ratio:4/3;object-fit:cover;filter:saturate(.9)}
+.contacts figcaption{margin-top:10px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .addr{font-family:var(--display);font-size:clamp(24px,2.6vw,34px);line-height:1.2;margin:0 0 22px}
 .links a{display:inline-block;margin-right:22px;border-bottom:1px solid var(--rule);padding-bottom:3px;
   transition:border-color .3s ease}
@@ -285,7 +287,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
   <section class="contacts" id="contacts"><div class="wrap">
     <h2 class="h2">На Димо 1/1. Ищите тюльпан над входом.</h2>
     <div class="grid">
-      <img src="/tulip/assets/sign.webp" alt="Вывеска TULIP над входом в салон" width="1200" height="750" loading="lazy">
+      <figure><img src="/tulip/assets/sign.webp" alt="Вывеска TULIP над входом в салон" width="324" height="267" loading="lazy"><figcaption>Вывеска над входом</figcaption></figure>
       <div>
         <p class="addr">Strada Nicolae Dimo 1/1<br>Rîșcani · Chișinău</p>
         <p class="links">
