@@ -18,6 +18,7 @@ from .forms import apply
 from .business_card import card_routes
 from .newcard import newcard_routes
 from .booking import booking_routes
+from .templates_site import template_routes
 from .intake import intake_routes
 from scena_cloud_auth import COOKIE, valid_session
 from deploy.serve_cloud import Login, Logout
@@ -415,6 +416,7 @@ def application():
         *newcard_routes(),
         *intake_routes(),
         *booking_routes(),
+        *template_routes(),
         *card_routes(),
         (r'/healthz',Health),(r'/auth/login',NativeLogin),(r'/auth/logout',NativeLogout),
         (r'/scena-telegram',TelegramWebhook),
