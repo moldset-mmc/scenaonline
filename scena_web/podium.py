@@ -15,11 +15,13 @@ from __future__ import annotations
 
 import html
 from dataclasses import dataclass
+from pathlib import Path
 
 from tornado.routing import Matcher, Rule
-from tornado.web import RequestHandler
+from tornado.web import RequestHandler, StaticFileHandler, URLSpec
 
 ORIGIN = 'https://scena.life'
+ASSETS = Path(__file__).resolve().parents[1] / 'public' / 'podium'
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,7 @@ class Tenant:
     kind: str          # 'site' | 'card'
     status: str        # 'live' | 'demo'
     purpose: str       # key into COPY['purpose']
+    photo: str = ''    # file under public/podium/; empty renders a monogram
 
     @property
     def url(self) -> str:
@@ -46,9 +49,9 @@ TENANTS = (
     Tenant('Makeup Studio Life', 'Masha Kravcenko', 'Маша Кравченко', 'Chișinău', 'Кишинёв',
            'makeup.scena.life', 'site', 'live', 'site_live'),
     Tenant('MB Studio', 'Milana Borzova', 'Милана Борзова', 'Chișinău', 'Кишинёв',
-           'mbstudio.scena.life', 'site', 'demo', 'site_demo'),
+           'mbstudio.scena.life', 'site', 'demo', 'site_demo', 'milana-borzova.jpg'),
     Tenant('Sofi Leroux', 'Sofia Leroux', 'София Леру', 'Chișinău', 'Кишинёв',
-           'sofileroux.scena.life', 'card', 'demo', 'card_demo'),
+           'sofileroux.scena.life', 'card', 'demo', 'card_demo', 'sofi-leroux.jpg'),
 )
 
 COPY = {
@@ -132,8 +135,13 @@ h2{font-family:Georgia,serif;font-weight:400;font-size:32px;margin:0 0 6px}
 .sub{color:var(--muted);font-size:15px;margin:0 0 24px}
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
 .tenant{border:1px solid #2a1d23;border-radius:14px;padding:22px;background:#150d11;
-display:flex;flex-direction:column;gap:8px;text-decoration:none;color:inherit}
+display:flex;gap:16px;align-items:flex-start;text-decoration:none;color:inherit}
 .tenant:hover{border-color:#5a3b46;background:#1a1015}
+.thumb{width:58px;height:58px;border-radius:50%;overflow:hidden;flex:0 0 auto;background:#241820;
+display:grid;place-items:center;border:1px solid #33232b}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .mono{font-family:Georgia,serif;font-size:22px;color:#e9d3db}
+.body{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1}
 .brand{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--pink)}
 .name{font-family:Georgia,serif;font-size:24px;line-height:1.2}
 .meta{font-size:13px;color:var(--muted)}
@@ -169,14 +177,22 @@ def _card(tenant: Tenant, locale: str) -> str:
     note = c['purpose'][tenant.purpose]
     name = tenant.name_ru if ru else tenant.name_lat
     city = tenant.city_ru if ru else tenant.city_lat
+    if tenant.photo:
+        thumb = ('<span class="thumb"><img src="/podium/assets/'
+                 + html.escape(tenant.photo, quote=True) + '" alt="'
+                 + html.escape(name, quote=True) + '" width="58" height="58" loading="lazy"></span>')
+    else:
+        thumb = '<span class="thumb"><span class="mono">' + html.escape(tenant.brand[:1]) + '</span></span>'
     return (
         '<a class="tenant" href="' + html.escape(tenant.url, quote=True) + '">'
+        + thumb
+        + '<span class="body">'
         '<span class="brand">' + html.escape(tenant.brand) + '</span>'
         '<span class="name">' + html.escape(name) + '</span>'
         '<span class="meta">' + html.escape(city) + ' · ' + html.escape(note) + '</span>'
         '<span class="row"><span class="host">' + html.escape(tenant.host) + '</span>'
         '<span class="' + badge_class + '">' + html.escape(status_label) + '</span></span>'
-        '</a>'
+        '</span></a>'
     )
 
 
@@ -254,8 +270,20 @@ class Podium(RequestHandler):
         self.get()
 
 
+class PodiumAsset(StaticFileHandler):
+    """Portraits of the demo tenants, served from public/podium/."""
+
+    def set_extra_headers(self, path):
+        self.set_header('X-Robots-Tag', 'noindex, follow')
+        self.set_header('X-Content-Type-Options', 'nosniff')
+        self.set_header('Cache-Control', 'public, max-age=86400')
+
+
 def podium_rules():
-    return [Rule(PodiumMatcher(), Podium)]
+    return [
+        Rule(PodiumMatcher(), Podium),
+        URLSpec(r'/podium/assets/(.*)', PodiumAsset, {'path': str(ASSETS)}),
+    ]
 
 
 def sitemap_xml(origin: str) -> str:

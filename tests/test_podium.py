@@ -66,6 +66,17 @@ class PodiumRenderTest(unittest.TestCase):
         self.assertIn('Кишинёв', ru)
         self.assertNotIn('Кишинёв', ro)
 
+    def test_tenant_portraits_are_served_from_podium_assets(self):
+        html = podium.render('ro').decode('utf-8')
+        self.assertEqual(html.count('class="thumb"'), len(podium.TENANTS))
+        self.assertIn('/podium/assets/milana-borzova.jpg', html)
+        self.assertIn('/podium/assets/sofi-leroux.jpg', html)
+        # A tenant without a portrait falls back to a monogram, not a broken image.
+        self.assertIn('class="mono">M<', html)
+        for tenant in podium.TENANTS:
+            if tenant.photo:
+                self.assertTrue((podium.ASSETS / tenant.photo).is_file(), tenant.photo)
+
     def test_brands_are_independent(self):
         for locale in ('ro', 'ru'):
             html = podium.render(locale).decode('utf-8')
