@@ -1,6 +1,6 @@
 # SCENA.LIVE questionnaire / Telegram
 
-Public entry: https://scena.life/newcard. Bot: `@scenalive_bot`.
+Public entry: https://scena.life/newcard. Bot: `@scenalife_bot`.
 
 The questionnaire uses **its own Turso database and private Vercel Blob store**.
 It never falls back to the salon database, salon media store, salon bot or salon recipient.
@@ -20,7 +20,7 @@ including a read/write token. Required variable:
 
 In Vercel → scenaonline → Settings → Environment Variables, add these for **Production only**:
 
-- `SCENA_INTAKE_TELEGRAM_BOT_TOKEN`: token for `@scenalive_bot`, entered directly by the owner.
+- `SCENA_INTAKE_TELEGRAM_BOT_TOKEN`: token for `@scenalife_bot`, entered directly by the owner.
 - `SCENA_INTAKE_TELEGRAM_CHAT_ID`: owner's positive numeric **personal** Telegram chat ID.
 - `SCENA_INTAKE_ENABLED=1`: enable only after the owner has started the bot and confirmed the recipient.
 
@@ -29,7 +29,7 @@ No credentials are needed in the React bundle. No webhook is installed or change
 Redeploy the current commit after environment changes.
 
 `GET /api/intake/status` is ready only when all variables exist, the bot's `getMe`
-username is `scenalive_bot`, and `getChat` confirms the configured personal chat.
+username is `scenalife_bot`, and `getChat` confirms the configured personal chat.
 This check does not send a message. It caches the result for 60 seconds per instance.
 Readiness is not proof of database/blob availability or actual message delivery.
 
