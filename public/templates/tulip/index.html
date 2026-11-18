@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#14110f">
+<title>TULIP · Стилист и барбер в Кишинёве</title>
+<meta name="description" content="TULIP — авторский салон Лилии Котеля: стрижка, борода, цвет и форма, в которых вас видно точнее.">
+<style>
+:root{
+  --ink:#14110f; --ink-2:#1d1916; --line:#2e2723; --cream:#f3ece1; --cream-2:#e8dfd0;
+  --muted:#a89c8d; --rose:#b8324a; --rose-soft:#e06a7d; --gold:#c9a26a;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--ink);color:var(--cream);
+  font-family:"Inter","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.55}
+a{color:inherit}
+.wrap{max-width:1180px;margin:0 auto;padding:0 40px}
+header.top{position:sticky;top:0;z-index:10;background:rgba(20,17,15,.86);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;justify-content:space-between;height:74px;gap:24px}
+.logo{display:flex;align-items:baseline;gap:10px;text-decoration:none}
+.logo b{font-family:Georgia,serif;font-weight:400;font-size:26px;letter-spacing:.16em}
+.logo span{font-size:11px;letter-spacing:.22em;color:var(--muted);text-transform:uppercase}
+nav.main{display:flex;gap:26px;font-size:14px;color:var(--cream-2)}
+nav.main a{text-decoration:none;padding-bottom:3px;border-bottom:1px solid transparent}
+nav.main a:hover{border-bottom-color:var(--rose-soft)}
+.top .cta{border:1px solid var(--rose);color:var(--cream);padding:10px 18px;border-radius:999px;
+  font-size:13px;text-decoration:none;letter-spacing:.04em}
+.top .cta:hover{background:var(--rose)}
+.hero{padding:86px 0 64px;border-bottom:1px solid var(--line);position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;right:-160px;top:-120px;width:520px;height:520px;border-radius:50%;
+  background:radial-gradient(circle,rgba(184,50,74,.28),transparent 68%)}
+.eyebrow{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--rose-soft);margin:0 0 22px}
+h1{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:78px;line-height:.98;
+  letter-spacing:-.02em;margin:0 0 26px;max-width:900px}
+h1 em{font-style:italic;color:var(--gold)}
+.lead{font-size:19px;color:var(--cream-2);max-width:560px;margin:0 0 34px}
+.hero-actions{display:flex;gap:14px;flex-wrap:wrap}
+.btn{display:inline-block;text-decoration:none;padding:15px 26px;border-radius:2px;font-size:15px;letter-spacing:.03em}
+.btn.solid{background:var(--cream);color:#1a1512;font-weight:600}
+.btn.ghost{border:1px solid var(--line);color:var(--cream)}
+.btn.ghost:hover{border-color:var(--rose-soft)}
+.hero-meta{display:flex;gap:40px;margin-top:54px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.hero-meta b{display:block;color:var(--cream);font-family:Georgia,serif;font-weight:400;font-size:20px;margin-bottom:4px}
+section.band{padding:74px 0;border-bottom:1px solid var(--line)}
+.band h2{font-family:Georgia,serif;font-weight:400;font-size:38px;margin:0 0 10px;letter-spacing:-.01em}
+.band .sub{color:var(--muted);font-size:15px;margin:0 0 38px;max-width:520px}
+.services{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--line)}
+.service{background:var(--ink);padding:32px;text-decoration:none;display:block}
+.service:hover{background:var(--ink-2)}
+.service .num{font-size:12px;letter-spacing:.2em;color:var(--rose-soft)}
+.service h3{font-family:Georgia,serif;font-weight:400;font-size:27px;margin:12px 0 8px}
+.service p{margin:0;color:var(--muted);font-size:14px}
+.service .price{margin-top:18px;font-size:13px;color:var(--cream-2)}
+.masters{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.master{border:1px solid var(--line);padding:26px}
+.master .role{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--rose-soft)}
+.master h3{font-family:Georgia,serif;font-weight:400;font-size:23px;margin:10px 0 6px}
+.master p{margin:0;font-size:13px;color:var(--muted)}
+.master a{display:inline-block;margin-top:16px;font-size:13px;color:var(--cream-2);text-decoration:none;
+  border-bottom:1px solid var(--rose)}
+.booking{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:start}
+.field{display:flex;flex-direction:column;gap:7px;margin-bottom:16px}
+.field label{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.field input,.field select,.field textarea{background:transparent;border:1px solid var(--line);
+  color:var(--cream);padding:12px 14px;font:inherit;font-size:15px;border-radius:2px}
+.field input:focus,.field select:focus{outline:none;border-color:var(--rose-soft)}
+.slots{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 18px}
+.slot{border:1px solid var(--line);padding:8px 14px;font-size:14px;cursor:pointer;border-radius:2px;
+  background:transparent;color:var(--cream)}
+.slot[aria-pressed="true"]{background:var(--rose);border-color:var(--rose)}
+.slot:disabled{opacity:.28;cursor:default}
+.status{font-size:14px;color:var(--muted);min-height:22px;margin-top:8px}
+.status.ok{color:#8fd6a5}
+.status.err{color:var(--rose-soft)}
+footer{padding:52px 0 64px;color:var(--muted);font-size:13px}
+footer .cols{display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap}
+footer a{color:var(--cream-2);text-decoration:none}
+@media (max-width:900px){
+  .wrap{padding:0 22px}
+  h1{font-size:44px}
+  .services,.booking,.masters{grid-template-columns:1fr}
+  nav.main{display:none}
+  .hero{padding:54px 0 44px}
+}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="logo" href="/tulip"><b>TULIP</b><span>SCENA.LIFE</span></a>
+  <nav class="main">
+    <a href="#services">Услуги</a>
+    <a href="#masters">Мастера</a>
+    <a href="#booking">Запись</a>
+    <a href="#contacts">Контакты</a>
+  </nav>
+  <a class="cta" href="#booking">Записаться</a>
+</div></header>
+
+<div class="hero"><div class="wrap">
+  <p class="eyebrow">Лилия Котеля · Chișinău</p>
+  <h1>Хорошая стрижка<br>не спорит <em>с лицом</em>.</h1>
+  <p class="lead">Стрижка, борода, цвет и форма — не новые люди, а те же, только точнее.
+    Авторский салон Лилии Котеля на Димо 1/1.</p>
+  <div class="hero-actions">
+    <a class="btn solid" href="#booking">Выбрать время</a>
+    <a class="btn ghost" href="#services">Направления</a>
+  </div>
+  <div class="hero-meta">
+    <div><b>5</b>мастеров в команде</div>
+    <div><b>5★</b>27 отзывов</div>
+    <div><b>Dimo 1/1</b>Rîșcani · Chișinău</div>
+  </div>
+</div></div>
+
+<section class="band" id="services"><div class="wrap">
+  <h2>Форма, цвет и характер — без шаблонов.</h2>
+  <p class="sub">Выберите направление. Свободные окна и запись — здесь же, без звонков.</p>
+  <div class="services" id="services-grid"></div>
+</div></section>
+
+<section class="band" id="masters"><div class="wrap">
+  <h2>Небольшой состав. Понятная специализация.</h2>
+  <p class="sub">У каждого мастера своя визитка и свой календарь.</p>
+  <div class="masters" id="masters-grid"></div>
+</div></section>
+
+<section class="band" id="booking"><div class="wrap">
+  <div class="booking">
+    <div>
+      <h2>Записаться</h2>
+      <p class="sub">Выберите услугу, мастера и время. Заявка придёт мастеру в Telegram,
+        он подтвердит — вы получите ответ.</p>
+      <form id="booking-form">
+        <div class="field"><label for="service">Услуга</label><select id="service" name="service" required></select></div>
+        <div class="field"><label for="master">Мастер</label><select id="master" name="master" required></select></div>
+        <div class="field"><label for="date">Дата</label><input id="date" name="date" type="date" required></div>
+        <div class="field"><label>Время</label><div class="slots" id="slots"></div></div>
+        <div class="field"><label for="name">Имя</label><input id="name" name="name" required autocomplete="name"></div>
+        <div class="field"><label for="phone">Телефон</label><input id="phone" name="phone" type="tel" required autocomplete="tel"></div>
+        <button class="btn solid" type="submit" id="submit">Отправить заявку</button>
+        <p class="status" id="status"></p>
+      </form>
+    </div>
+    <div>
+      <h2>Как это работает</h2>
+      <p class="sub">Три шага, без звонка и ожидания.</p>
+      <p style="color:var(--cream-2);font-size:15px">1. Выбираете услугу и мастера.<br>
+        2. Видите только реально свободное время.<br>
+        3. Мастер подтверждает — время закреплено за вами.</p>
+      <p style="color:var(--muted);font-size:14px;margin-top:28px">
+        Если нужно перенести — напишите в Instagram, перенесём.</p>
+    </div>
+  </div>
+</div></section>
+
+<footer id="contacts"><div class="wrap">
+  <div class="cols">
+    <div><b style="font-family:Georgia,serif;font-size:20px;color:var(--cream)">TULIP</b><br>
+      Strada Nicolae Dimo 1/1, Chișinău</div>
+    <div>+373 22 44 19 81<br><a href="https://www.instagram.com/lilia_kotelya/">@lilia_kotelya</a></div>
+    <div>TULIP · SCENA.LIFE<br><span style="color:var(--muted)">Стиль — это личное</span></div>
+  </div>
+</div></footer>
+
+<script>
+const SALON = 'tulip';
+const $ = (id) => document.getElementById(id);
+let state = { services: [], masters: [], slot: null };
+
+function status(text, kind) {
+  const el = $('status'); el.textContent = text; el.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+async function loadServices() {
+  const r = await fetch('/api/booking/services?salon=' + SALON);
+  if (!r.ok) throw new Error('services');
+  return r.json();
+}
+
+function renderServices(data) {
+  state.services = data.services;
+  state.masters = data.masters;
+  $('services-grid').innerHTML = data.services.map((s, i) => `
+    <a class="service" href="#booking" data-service="${s.id}">
+      <div class="num">${String(i + 1).padStart(2, '0')}</div>
+      <h3>${s.title}</h3>
+      <p>${s.duration_min} минут · ${data.masters.filter(m => s.masters.includes(m.id)).map(m => m.name.split(' ')[0]).join(', ')}</p>
+      <div class="price">${(s.price_cents / 100).toFixed(0)} MDL</div>
+    </a>`).join('');
+
+  $('service').innerHTML = data.services.map(s => `<option value="${s.id}">${s.title}</option>`).join('');
+  syncMasters();
+
+  $('services-grid').addEventListener('click', (e) => {
+    const card = e.target.closest('[data-service]');
+    if (card) { $('service').value = card.dataset.service; syncMasters(); }
+  });
+}
+
+function syncMasters() {
+  const service = state.services.find(s => s.id === $('service').value);
+  const allowed = service ? service.masters : [];
+  const masters = state.masters.filter(m => allowed.includes(m.id));
+  $('master').innerHTML = masters.map(m => `<option value="${m.id}">${m.name}</option>`).join('')
+    || '<option value="">Нет мастеров</option>';
+  renderSlots();
+}
+
+function isoDay(offset) {
+  const d = new Date(); d.setDate(d.getDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+
+async function renderSlots() {
+  const master = $('master').value, service = $('service').value, date = $('date').value;
+  state.slot = null;
+  if (!master || !service || !date) { $('slots').innerHTML = '<span class="status">Выберите дату</span>'; return; }
+  status('Смотрим свободное время…');
+  const r = await fetch(`/api/booking/slots?salon=${SALON}&master=${master}&service=${service}&date=${date}`);
+  const data = await r.json().catch(() => ({ slots: [] }));
+  const slots = data.slots || [];
+  $('slots').innerHTML = slots.length
+    ? slots.map(s => `<button type="button" class="slot" data-start="${s.start}">${s.label}</button>`).join('')
+    : '<span class="status">На этот день свободных окон нет</span>';
+  status('');
+}
+
+function bind() {
+  $('service').addEventListener('change', syncMasters);
+  $('master').addEventListener('change', renderSlots);
+  $('date').addEventListener('change', renderSlots);
+  $('slots').addEventListener('click', (e) => {
+    const b = e.target.closest('.slot'); if (!b) return;
+    state.slot = Number(b.dataset.start);
+    [...$('slots').querySelectorAll('.slot')].forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  });
+
+  $('booking-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!state.slot) { status('Выберите время', 'err'); return; }
+    $('submit').disabled = true;
+    status('Отправляем…');
+    try {
+      const r = await fetch('/api/booking/request', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ salon: SALON, master: $('master').value, service: $('service').value,
+          start: state.slot, name: $('name').value.trim(), phone: $('phone').value.trim(),
+          source: 'tulip-landing' })
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || 'Не получилось');
+      status('Заявка отправлена. Мастер подтвердит её в Telegram.', 'ok');
+      $('booking-form').reset(); state.slot = null; $('slots').innerHTML = '';
+      $('date').value = isoDay(1);
+    } catch (err) {
+      status(err.message || 'Ошибка. Попробуйте ещё раз.', 'err');
+    } finally {
+      $('submit').disabled = false;
+    }
+  });
+
+  $('date').value = isoDay(1);
+  $('date').min = isoDay(0);
+}
+
+(async () => {
+  try {
+    const data = await loadServices();
+    renderServices(data); bind(); renderSlots();
+  } catch (e) {
+    status('Не удалось загрузить услуги. Обновите страницу.', 'err');
+  }
+})();
+</script>
+</body>
+</html>
