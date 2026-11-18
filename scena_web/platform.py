@@ -115,7 +115,7 @@ class PlatformDocument(RequestHandler):
         if path == '/sitemap.xml':
             self.set_header('Content-Type', 'application/xml; charset=utf-8')
             alternates = ''.join(f'<xhtml:link rel="alternate" hreflang="{lang}" href="{ORIGIN}{url}" />' for lang,url in [('ro','/'),('ru','/ru/'),('x-default','/')])
-            self.finish('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">'+''.join('<url><loc>'+ORIGIN+url+'</loc>'+alternates+'</url>' for url in PAGES)+'<url><loc>'+ORIGIN+'/newcard</loc></url></urlset>')
+            self.finish('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">'+''.join('<url><loc>'+ORIGIN+url+'</loc>'+alternates+'</url>' for url in PAGES)+'<url><loc>'+ORIGIN+'/newcard</loc></url>'+podium_urls()+'</urlset>')
             return
         if path == '/llms.txt':
             self.set_header('Content-Type', 'text/plain; charset=utf-8')
@@ -135,5 +135,13 @@ class PlatformDocument(RequestHandler):
         self.get()
 
 
+def podium_urls():
+    from .podium import sitemap_xml
+    return sitemap_xml(ORIGIN)
+
+
 def platform_rules():
-    return [Rule(PlatformReadMatcher(), PlatformDocument)]
+    from .podium import podium_rules
+    # The podium is a platform page too; its matcher answers only its own paths,
+    # so the reviewed landing artifact and the language roots keep their handler.
+    return [Rule(PlatformReadMatcher(), PlatformDocument)] + podium_rules()
