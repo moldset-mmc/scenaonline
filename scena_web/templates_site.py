@@ -7,9 +7,14 @@ build.
 """
 from __future__ import annotations
 
+import mimetypes
 from pathlib import Path
 
 from tornado.web import RequestHandler, StaticFileHandler
+
+mimetypes.add_type('image/webp', '.webp')
+mimetypes.add_type('font/woff2', '.woff2')
+mimetypes.add_type('image/svg+xml', '.svg')
 
 ROOT = Path(__file__).resolve().parents[1] / 'public' / 'templates'
 TEMPLATES = {'tulip'}
