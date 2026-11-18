@@ -61,6 +61,6 @@ python3 -m venv .venv
 ### SCENA.LIVE card and questionnaire
 
 The platform card is at `/newcard`. Its independent questionnaire backend and
-`@scenalive_bot` setup are documented in [deploy/SCENA-INTAKE.md](deploy/SCENA-INTAKE.md).
+`@scenalife_bot` setup are documented in [deploy/SCENA-INTAKE.md](deploy/SCENA-INTAKE.md).
 Telegram intake stays disabled until dedicated database, private photo storage,
 bot credentials and the owner's personal recipient are configured and verified.

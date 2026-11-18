@@ -114,6 +114,7 @@ class Config:
     bot: str
     chat: str
     enabled: bool
+    bot_username: str = 'scenalife_bot'
     origin: str = 'https://scena.life'
     max_bytes: int = 256 * 1024 * 1024
 
@@ -122,7 +123,8 @@ class Config:
         prefix = 'SCENA_INTAKE_'
         return cls(os.getenv(prefix + 'TURSO_DATABASE_URL', ''), os.getenv(prefix + 'TURSO_AUTH_TOKEN', ''),
                    os.getenv(prefix + 'BLOB_READ_WRITE_TOKEN', ''), os.getenv(prefix + 'TELEGRAM_BOT_TOKEN', ''),
-                   os.getenv(prefix + 'TELEGRAM_CHAT_ID', ''), os.getenv(prefix + 'ENABLED') == '1')
+                   os.getenv(prefix + 'TELEGRAM_CHAT_ID', ''), os.getenv(prefix + 'ENABLED') == '1',
+                   os.getenv(prefix + 'TELEGRAM_BOT_USERNAME', 'scenalife_bot').lstrip('@').strip().lower())
 
     def configured(self):
         return bool(self.enabled and self.database.startswith('libsql://') and self.auth and self.blob
@@ -293,7 +295,7 @@ class Telegram:
         try:
             me = await self.call('getMe', {})
             chat = await self.call('getChat', {'chat_id': self.config.chat})
-            self.valid = bool(me.get('ok') and me.get('result', {}).get('username', '').lower() == 'scenalive_bot'
+            self.valid = bool(me.get('ok') and me.get('result', {}).get('username', '').lower() == self.config.bot_username
                               and chat.get('ok') and chat.get('result', {}).get('type') == 'private'
                               and str(chat.get('result', {}).get('id')) == self.config.chat)
         except Exception:

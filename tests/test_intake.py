@@ -197,7 +197,7 @@ class IntakeTests(AsyncHTTPTestCase):
             self.assertFalse(await telegram.ready())
         telegram=Telegram(self.store.config)
         with patch.object(telegram,'call',new=AsyncMock(side_effect=[
-            {'ok':True,'result':{'username':'scenalive_bot'}},
+            {'ok':True,'result':{'username':'scenalife_bot'}},
             {'ok':True,'result':{'id':123456,'type':'private'}}])):
             self.assertTrue(await telegram.ready())
         for result, expected in [({'ok':True,'result':{}},'uncertain'),({'ok':False},'failed'),
