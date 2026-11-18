@@ -3,274 +3,440 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#14110f">
-<title>TULIP · Стилист и барбер в Кишинёве</title>
-<meta name="description" content="TULIP — авторский салон Лилии Котеля: стрижка, борода, цвет и форма, в которых вас видно точнее.">
+<meta name="theme-color" content="#100d0b">
+<title>TULIP — стрижка, борода и форма · Chișinău</title>
+<meta name="description" content="Авторский салон Лилии Котеля на Димо 1/1: мужская и женская стрижка, борода, камуфляж седины. Свободное время и запись — на сайте.">
+<link rel="preload" href="assets/font-05.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/fonts.css">
 <style>
 :root{
-  --ink:#14110f; --ink-2:#1d1916; --line:#2e2723; --cream:#f3ece1; --cream-2:#e8dfd0;
-  --muted:#a89c8d; --rose:#b8324a; --rose-soft:#e06a7d; --gold:#c9a26a;
+  --ink:#100d0b; --ink-soft:#191512; --rule:#2b2420; --paper:#f2ebe0; --paper-dim:#cdc2b3;
+  --muted:#9a8f81; --tulip:#b03a4a; --tulip-soft:#d9737f; --gold:#c2a069;
+  --display:'Cormorant Garamond',Georgia,serif; --body:'Inter',system-ui,-apple-system,sans-serif;
+  --pad:clamp(20px,5vw,72px); --maxw:1240px;
 }
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--ink);color:var(--cream);
-  font-family:"Inter","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.55}
-a{color:inherit}
-.wrap{max-width:1180px;margin:0 auto;padding:0 40px}
-header.top{position:sticky;top:0;z-index:10;background:rgba(20,17,15,.86);backdrop-filter:blur(10px);
-  border-bottom:1px solid var(--line)}
-.top .wrap{display:flex;align-items:center;justify-content:space-between;height:74px;gap:24px}
-.logo{display:flex;align-items:baseline;gap:10px;text-decoration:none}
-.logo b{font-family:Georgia,serif;font-weight:400;font-size:26px;letter-spacing:.16em}
-.logo span{font-size:11px;letter-spacing:.22em;color:var(--muted);text-transform:uppercase}
-nav.main{display:flex;gap:26px;font-size:14px;color:var(--cream-2)}
-nav.main a{text-decoration:none;padding-bottom:3px;border-bottom:1px solid transparent}
-nav.main a:hover{border-bottom-color:var(--rose-soft)}
-.top .cta{border:1px solid var(--rose);color:var(--cream);padding:10px 18px;border-radius:999px;
-  font-size:13px;text-decoration:none;letter-spacing:.04em}
-.top .cta:hover{background:var(--rose)}
-.hero{padding:86px 0 64px;border-bottom:1px solid var(--line);position:relative;overflow:hidden}
-.hero::before{content:"";position:absolute;right:-160px;top:-120px;width:520px;height:520px;border-radius:50%;
-  background:radial-gradient(circle,rgba(184,50,74,.28),transparent 68%)}
-.eyebrow{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--rose-soft);margin:0 0 22px}
-h1{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:78px;line-height:.98;
-  letter-spacing:-.02em;margin:0 0 26px;max-width:900px}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ink);color:var(--paper);font-family:var(--body);
+  font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+::selection{background:var(--tulip);color:#fff}
+::-webkit-scrollbar{width:10px}
+::-webkit-scrollbar-track{background:var(--ink)}
+::-webkit-scrollbar-thumb{background:#3a302a;border-radius:6px}
+:focus-visible{outline:2px solid var(--tulip-soft);outline-offset:3px}
+a{color:inherit;text-decoration:none}
+img{display:block;max-width:100%}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 var(--pad)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* header */
+.top{position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--ink) 88%,transparent);
+  backdrop-filter:blur(12px);border-bottom:1px solid var(--rule)}
+.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:20px;height:76px}
+.mark{display:flex;align-items:center;gap:12px}
+.mark svg{width:26px;height:30px;flex:0 0 auto}
+.mark b{font-family:var(--display);font-weight:600;font-size:27px;letter-spacing:.3em;line-height:1}
+.mark span{font-size:10px;letter-spacing:.3em;color:var(--muted);text-transform:uppercase;margin-left:2px}
+.nav{display:flex;gap:30px;font-size:14px;color:var(--paper-dim)}
+.nav a{position:relative;padding:4px 0}
+.nav a::after{content:"";position:absolute;left:0;right:100%;bottom:0;height:1px;background:var(--tulip-soft);
+  transition:right .35s cubic-bezier(.16,1,.3,1)}
+.nav a:hover::after{right:0}
+.book-link{border:1px solid var(--tulip);border-radius:999px;padding:10px 20px;font-size:13px;
+  letter-spacing:.06em;transition:background .3s ease,color .3s ease}
+.book-link:hover{background:var(--tulip);color:#fff}
+
+/* hero */
+.hero{padding:clamp(40px,6vw,84px) 0 clamp(56px,8vw,110px);position:relative}
+.hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:clamp(28px,5vw,72px);align-items:center}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(44px,6.6vw,92px);line-height:.94;
+  letter-spacing:-.02em;margin:0 0 26px;text-wrap:balance}
 h1 em{font-style:italic;color:var(--gold)}
-.lead{font-size:19px;color:var(--cream-2);max-width:560px;margin:0 0 34px}
-.hero-actions{display:flex;gap:14px;flex-wrap:wrap}
-.btn{display:inline-block;text-decoration:none;padding:15px 26px;border-radius:2px;font-size:15px;letter-spacing:.03em}
-.btn.solid{background:var(--cream);color:#1a1512;font-weight:600}
-.btn.ghost{border:1px solid var(--line);color:var(--cream)}
-.btn.ghost:hover{border-color:var(--rose-soft)}
-.hero-meta{display:flex;gap:40px;margin-top:54px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
-.hero-meta b{display:block;color:var(--cream);font-family:Georgia,serif;font-weight:400;font-size:20px;margin-bottom:4px}
-section.band{padding:74px 0;border-bottom:1px solid var(--line)}
-.band h2{font-family:Georgia,serif;font-weight:400;font-size:38px;margin:0 0 10px;letter-spacing:-.01em}
-.band .sub{color:var(--muted);font-size:15px;margin:0 0 38px;max-width:520px}
-.services{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--line)}
-.service{background:var(--ink);padding:32px;text-decoration:none;display:block}
-.service:hover{background:var(--ink-2)}
-.service .num{font-size:12px;letter-spacing:.2em;color:var(--rose-soft)}
-.service h3{font-family:Georgia,serif;font-weight:400;font-size:27px;margin:12px 0 8px}
-.service p{margin:0;color:var(--muted);font-size:14px}
-.service .price{margin-top:18px;font-size:13px;color:var(--cream-2)}
-.masters{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
-.master{border:1px solid var(--line);padding:26px}
-.master .role{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--rose-soft)}
-.master h3{font-family:Georgia,serif;font-weight:400;font-size:23px;margin:10px 0 6px}
-.master p{margin:0;font-size:13px;color:var(--muted)}
-.master a{display:inline-block;margin-top:16px;font-size:13px;color:var(--cream-2);text-decoration:none;
-  border-bottom:1px solid var(--rose)}
-.booking{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:start}
-.field{display:flex;flex-direction:column;gap:7px;margin-bottom:16px}
-.field label{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
-.field input,.field select,.field textarea{background:transparent;border:1px solid var(--line);
-  color:var(--cream);padding:12px 14px;font:inherit;font-size:15px;border-radius:2px}
-.field input:focus,.field select:focus{outline:none;border-color:var(--rose-soft)}
-.slots{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 18px}
-.slot{border:1px solid var(--line);padding:8px 14px;font-size:14px;cursor:pointer;border-radius:2px;
-  background:transparent;color:var(--cream)}
-.slot[aria-pressed="true"]{background:var(--rose);border-color:var(--rose)}
-.slot:disabled{opacity:.28;cursor:default}
-.status{font-size:14px;color:var(--muted);min-height:22px;margin-top:8px}
-.status.ok{color:#8fd6a5}
-.status.err{color:var(--rose-soft)}
-footer{padding:52px 0 64px;color:var(--muted);font-size:13px}
-footer .cols{display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap}
-footer a{color:var(--cream-2);text-decoration:none}
-@media (max-width:900px){
-  .wrap{padding:0 22px}
-  h1{font-size:44px}
-  .services,.booking,.masters{grid-template-columns:1fr}
-  nav.main{display:none}
-  .hero{padding:54px 0 44px}
+.hero p{max-width:44ch;color:var(--paper-dim);font-size:clamp(16px,1.35vw,19px);margin:0 0 34px}
+.actions{display:flex;gap:12px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:15px 28px;
+  border-radius:2px;font-size:15px;letter-spacing:.02em;border:1px solid transparent;cursor:pointer;
+  transition:transform .3s cubic-bezier(.16,1,.3,1),background .3s ease,color .3s ease,border-color .3s ease}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--paper);color:#171310;font-weight:600}
+.btn.primary:hover{background:#fff}
+.btn.quiet{border-color:var(--rule);color:var(--paper)}
+.btn.quiet:hover{border-color:var(--tulip-soft)}
+.btn[disabled]{opacity:.5;cursor:progress}
+.portrait{position:relative;aspect-ratio:4/5;overflow:hidden}
+.portrait img{width:100%;height:100%;object-fit:cover;object-position:50% 18%;
+  clip-path:inset(0 0 100% 0);animation:reveal 1.1s cubic-bezier(.16,1,.3,1) .15s forwards}
+.portrait::after{content:"";position:absolute;inset:0;background:linear-gradient(200deg,rgba(176,58,74,.18),transparent 55%)}
+@keyframes reveal{to{clip-path:inset(0 0 0 0)}}
+@media (prefers-reduced-motion:reduce){.portrait img{animation:none;clip-path:none}}
+
+/* manifesto */
+.manifesto{padding:clamp(50px,7vw,96px) 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.manifesto p{font-family:var(--display);font-size:clamp(26px,3.6vw,46px);line-height:1.16;margin:0;
+  max-width:22ch;letter-spacing:-.01em;text-wrap:balance}
+.manifesto .wrap{display:flex;justify-content:space-between;gap:40px;align-items:flex-end;flex-wrap:wrap}
+.manifesto small{display:block;max-width:34ch;color:var(--muted);font-size:14px;line-height:1.7}
+
+/* directions */
+.directions{padding:clamp(50px,7vw,92px) 0}
+.h2{font-family:var(--display);font-weight:400;font-size:clamp(30px,3.4vw,46px);line-height:1.1;
+  margin:0 0 8px;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:15px;margin:0 0 clamp(28px,4vw,46px);max-width:52ch}
+.rows{border-top:1px solid var(--rule)}
+.row{display:grid;grid-template-columns:1fr auto auto;gap:clamp(14px,3vw,40px);align-items:baseline;
+  padding:26px 0;border-bottom:1px solid var(--rule);cursor:pointer;background:none;border-left:0;border-right:0;
+  width:100%;text-align:left;color:inherit;font:inherit;transition:padding-left .35s cubic-bezier(.16,1,.3,1)}
+.row:hover{padding-left:14px}
+.row:hover .row-title{color:#fff}
+.row-title{font-family:var(--display);font-size:clamp(24px,2.6vw,34px);line-height:1.15;color:var(--paper);
+  transition:color .3s ease}
+.row-meta{font-size:13px;color:var(--muted);margin-top:6px}
+.row-price{font-family:var(--display);font-size:clamp(20px,2vw,26px);color:var(--gold);white-space:nowrap}
+.row-len{font-size:13px;color:var(--muted);white-space:nowrap;text-align:right;min-width:70px}
+
+/* team */
+.team{padding:clamp(50px,7vw,92px) 0;border-top:1px solid var(--rule)}
+.team .grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:clamp(28px,5vw,64px);align-items:start}
+.team figure{margin:0;position:relative}
+.team figure img{aspect-ratio:3/4;object-fit:cover;width:100%}
+.team figcaption{position:absolute;left:0;right:0;bottom:0;padding:26px;
+  background:linear-gradient(transparent,rgba(16,13,11,.92) 70%)}
+.team figcaption strong{font-family:var(--display);font-size:26px;font-weight:400;display:block}
+.team figcaption span{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--tulip-soft)}
+.people{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule)}
+.people li{display:flex;justify-content:space-between;gap:20px;padding:20px 0;border-bottom:1px solid var(--rule)}
+.people b{font-family:var(--display);font-size:22px;font-weight:400;display:block}
+.people span{font-size:13px;color:var(--muted)}
+.people a{font-size:13px;color:var(--tulip-soft);white-space:nowrap;border-bottom:1px solid transparent}
+.people a:hover{border-bottom-color:var(--tulip-soft)}
+.team .bio{color:var(--paper-dim);font-size:15px;margin:26px 0 0;max-width:46ch}
+
+/* booking */
+.booking{padding:clamp(50px,7vw,92px) 0;border-top:1px solid var(--rule)}
+.booking .grid{display:grid;grid-template-columns:1.05fr .95fr;gap:clamp(28px,5vw,72px);align-items:start}
+.field{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+.field label{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.field input,.field select{background:transparent;border:1px solid var(--rule);color:var(--paper);
+  padding:13px 14px;font:inherit;font-size:15px;border-radius:2px;transition:border-color .25s ease}
+.field input:hover,.field select:hover{border-color:#463a33}
+.field input:focus,.field select:focus{outline:none;border-color:var(--tulip-soft)}
+.field input::placeholder{color:#6f665c}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.slots{display:flex;flex-wrap:wrap;gap:8px;min-height:42px}
+.slot{border:1px solid var(--rule);background:transparent;color:var(--paper);padding:9px 15px;
+  font:inherit;font-size:14px;border-radius:2px;cursor:pointer;transition:background .2s ease,border-color .2s ease}
+.slot:hover{border-color:var(--tulip-soft)}
+.slot[aria-pressed="true"]{background:var(--tulip);border-color:var(--tulip);color:#fff}
+.state{font-size:14px;color:var(--muted);margin:10px 0 0;min-height:24px}
+.state.ok{color:#93d6a8}
+.state.bad{color:var(--tulip-soft)}
+.how{color:var(--paper-dim);font-size:15px}
+.how ol{margin:18px 0 0;padding-left:20px}
+.how li{margin-bottom:10px}
+.hours{margin-top:30px;border-top:1px solid var(--rule);padding-top:20px;font-size:14px;color:var(--muted)}
+.hours b{color:var(--paper);font-weight:500}
+
+/* contacts */
+.contacts{padding:clamp(50px,7vw,92px) 0;border-top:1px solid var(--rule)}
+.contacts .grid{display:grid;grid-template-columns:1fr 1fr;gap:clamp(28px,5vw,72px);align-items:center}
+.contacts img{width:100%;aspect-ratio:16/10;object-fit:cover}
+.addr{font-family:var(--display);font-size:clamp(24px,2.6vw,34px);line-height:1.2;margin:0 0 22px}
+.links a{display:inline-block;margin-right:22px;border-bottom:1px solid var(--rule);padding-bottom:3px;
+  transition:border-color .3s ease}
+.links a:hover{border-bottom-color:var(--tulip-soft)}
+footer{border-top:1px solid var(--rule);padding:34px 0 46px;color:var(--muted);font-size:13px}
+footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+
+@media (max-width:960px){
+  .hero .wrap,.team .grid,.booking .grid,.contacts .grid{grid-template-columns:1fr}
+  .hero .portrait{order:-1;aspect-ratio:5/6}
+  .nav{display:none}
+  .row{grid-template-columns:1fr auto;row-gap:6px}
+  .row-len{grid-column:2;grid-row:1;align-self:center}
 }
 </style>
 </head>
 <body>
+
 <header class="top"><div class="wrap">
-  <a class="logo" href="/tulip"><b>TULIP</b><span>SCENA.LIFE</span></a>
-  <nav class="main">
-    <a href="#services">Услуги</a>
-    <a href="#masters">Мастера</a>
+  <a class="mark" href="#top" aria-label="TULIP, на главную">
+    <svg viewBox="0 0 26 30" fill="none" aria-hidden="true">
+      <path d="M13 29c-6.2 0-9.8-4.3-9.8-9.6 0-4.1 2.4-7.7 5.2-9.9-.5 2.9.2 5.5 1.7 7.4.2-4.3 1.3-8.2 2.9-11.9 1.6 3.7 2.7 7.6 2.9 11.9 1.5-1.9 2.2-4.5 1.7-7.4 2.8 2.2 5.2 5.8 5.2 9.9C22.8 24.7 19.2 29 13 29Z" fill="#b03a4a"/>
+      <path d="M13 29V12" stroke="#f2ebe0" stroke-width="1" opacity=".55"/>
+    </svg>
+    <b>TULIP</b><span>SCENA.LIFE</span>
+  </a>
+  <nav class="nav">
+    <a href="#directions">Направления</a>
+    <a href="#team">Мастера</a>
     <a href="#booking">Запись</a>
     <a href="#contacts">Контакты</a>
   </nav>
-  <a class="cta" href="#booking">Записаться</a>
+  <a class="book-link" href="#booking">Записаться</a>
 </div></header>
 
-<div class="hero"><div class="wrap">
-  <p class="eyebrow">Лилия Котеля · Chișinău</p>
-  <h1>Хорошая стрижка<br>не спорит <em>с лицом</em>.</h1>
-  <p class="lead">Стрижка, борода, цвет и форма — не новые люди, а те же, только точнее.
-    Авторский салон Лилии Котеля на Димо 1/1.</p>
-  <div class="hero-actions">
-    <a class="btn solid" href="#booking">Выбрать время</a>
-    <a class="btn ghost" href="#services">Направления</a>
-  </div>
-  <div class="hero-meta">
-    <div><b>5</b>мастеров в команде</div>
-    <div><b>5★</b>27 отзывов</div>
-    <div><b>Dimo 1/1</b>Rîșcani · Chișinău</div>
-  </div>
-</div></div>
-
-<section class="band" id="services"><div class="wrap">
-  <h2>Форма, цвет и характер — без шаблонов.</h2>
-  <p class="sub">Выберите направление. Свободные окна и запись — здесь же, без звонков.</p>
-  <div class="services" id="services-grid"></div>
-</div></section>
-
-<section class="band" id="masters"><div class="wrap">
-  <h2>Небольшой состав. Понятная специализация.</h2>
-  <p class="sub">У каждого мастера своя визитка и свой календарь.</p>
-  <div class="masters" id="masters-grid"></div>
-</div></section>
-
-<section class="band" id="booking"><div class="wrap">
-  <div class="booking">
+<main id="top">
+  <section class="hero"><div class="wrap">
     <div>
-      <h2>Записаться</h2>
-      <p class="sub">Выберите услугу, мастера и время. Заявка придёт мастеру в Telegram,
-        он подтвердит — вы получите ответ.</p>
-      <form id="booking-form">
-        <div class="field"><label for="service">Услуга</label><select id="service" name="service" required></select></div>
-        <div class="field"><label for="master">Мастер</label><select id="master" name="master" required></select></div>
-        <div class="field"><label for="date">Дата</label><input id="date" name="date" type="date" required></div>
-        <div class="field"><label>Время</label><div class="slots" id="slots"></div></div>
-        <div class="field"><label for="name">Имя</label><input id="name" name="name" required autocomplete="name"></div>
-        <div class="field"><label for="phone">Телефон</label><input id="phone" name="phone" type="tel" required autocomplete="tel"></div>
-        <button class="btn solid" type="submit" id="submit">Отправить заявку</button>
-        <p class="status" id="status"></p>
-      </form>
+      <h1>Хорошая стрижка<br>не спорит <em>с лицом</em>.</h1>
+      <p>Стрижка, борода, цвет и линия — инструменты, а не маска. Авторский салон
+        Лилии Котеля на Димо 1/1: та же вы, только явнее.</p>
+      <div class="actions">
+        <a class="btn primary" href="#booking">Выбрать время</a>
+        <a class="btn quiet" href="#directions">Что здесь делают</a>
+      </div>
     </div>
-    <div>
-      <h2>Как это работает</h2>
-      <p class="sub">Три шага, без звонка и ожидания.</p>
-      <p style="color:var(--cream-2);font-size:15px">1. Выбираете услугу и мастера.<br>
-        2. Видите только реально свободное время.<br>
-        3. Мастер подтверждает — время закреплено за вами.</p>
-      <p style="color:var(--muted);font-size:14px;margin-top:28px">
-        Если нужно перенести — напишите в Instagram, перенесём.</p>
-    </div>
-  </div>
-</div></section>
+    <figure class="portrait">
+      <img src="assets/lilia-editorial.webp" alt="Лилия Котеля, основатель TULIP" width="900" height="1125" fetchpriority="high">
+    </figure>
+  </div></section>
 
-<footer id="contacts"><div class="wrap">
-  <div class="cols">
-    <div><b style="font-family:Georgia,serif;font-size:20px;color:var(--cream)">TULIP</b><br>
-      Strada Nicolae Dimo 1/1, Chișinău</div>
-    <div>+373 22 44 19 81<br><a href="https://www.instagram.com/lilia_kotelya/">@lilia_kotelya</a></div>
-    <div>TULIP · SCENA.LIFE<br><span style="color:var(--muted)">Стиль — это личное</span></div>
-  </div>
+  <section class="manifesto"><div class="wrap">
+    <p>Мы не делаем из человека другого. Мы делаем его явнее.</p>
+    <small>Форма, цвет и линия — три инструмента. Ими можно спрятать человека,
+      а можно вернуть ему лицо. Мы работаем вторым способом.</small>
+  </div></section>
+
+  <section class="directions" id="directions"><div class="wrap">
+    <h2 class="h2">Форма, цвет и характер — без шаблонов.</h2>
+    <p class="sub">Выберите направление — оно сразу подставится в запись. Цена и длительность
+      видны заранее, свободное время — настоящее.</p>
+    <div class="rows" id="rows"></div>
+  </div></section>
+
+  <section class="team" id="team"><div class="wrap">
+    <h2 class="h2">Пять мастеров. Понятная специализация.</h2>
+    <p class="sub">Лилия — основатель и мастер: стрижка, борода, камуфляж седины.
+      У каждого в команде своя визитка и свой календарь.</p>
+    <div class="grid">
+      <figure>
+        <img src="assets/lilia-evening.webp" alt="Лилия Котеля на вечернем событии" width="900" height="1200" loading="lazy">
+        <figcaption><span>Основатель</span><strong>Лилия Котеля</strong></figcaption>
+      </figure>
+      <div>
+        <ul class="people">
+          <li><div><b>Светлана Вранчану</b><span>Мастер маникюра и педикюра</span></div>
+              <a href="#booking">записаться</a></li>
+          <li><div><b>Инга Галатонова</b><span>Мужской мастер · стрижка, борода</span></div>
+              <a href="#booking">записаться</a></li>
+          <li><div><b>Виталий Канжа</b><span>Парикмахер-универсал</span></div>
+              <a href="#booking">записаться</a></li>
+          <li><div><b>Пятый мастер</b><span>Имя добавим, когда вы подтвердите</span></div>
+              <a href="#booking">записаться</a></li>
+        </ul>
+        <p class="bio">Мы не спорим с лицом и не гоняемся за трендом. Сначала смотрим на человека,
+          потом берём ножницы. Поэтому запись идёт к конкретному мастеру, а не «в салон».</p>
+      </div>
+    </div>
+  </div></section>
+
+  <section class="booking" id="booking"><div class="wrap">
+    <div class="grid">
+      <div>
+        <h2 class="h2">Запись</h2>
+        <p class="sub">Три шага. Мастер подтверждает заявку в Telegram — вы видите ответ здесь.</p>
+        <form id="form" novalidate>
+          <div class="field">
+            <label for="service">Услуга</label>
+            <select id="service" name="service" required></select>
+          </div>
+          <div class="field">
+            <label for="master">Мастер</label>
+            <select id="master" name="master" required></select>
+          </div>
+          <div class="two">
+            <div class="field">
+              <label for="date">Дата</label>
+              <input id="date" name="date" type="date" required>
+            </div>
+            <div class="field">
+              <label for="phone">Телефон</label>
+              <input id="phone" name="phone" type="tel" placeholder="+373 __ ___ ___" autocomplete="tel" required>
+            </div>
+          </div>
+          <div class="field">
+            <label id="slots-label">Время</label>
+            <div class="slots" id="slots" role="group" aria-labelledby="slots-label"></div>
+          </div>
+          <div class="field">
+            <label for="name">Имя</label>
+            <input id="name" name="name" placeholder="Как к вам обращаться" autocomplete="name" required>
+          </div>
+          <button class="btn primary" type="submit" id="submit">Отправить заявку</button>
+          <p class="state" id="state" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+      <div class="how">
+        <h2 class="h2">Как это работает</h2>
+        <ol>
+          <li>Выбираете услугу и мастера — видите только те окна, что действительно свободны.</li>
+          <li>Оставляете имя и телефон. Заявка уходит мастеру в Telegram мгновенно.</li>
+          <li>Мастер подтверждает — время закреплено. Если планы изменились, напишите в Instagram.</li>
+        </ol>
+        <div class="hours">
+          <b>Часы</b><br>Вт–Пт 09:00–19:00 · Сб 10:00–16:00 · Пн — выходной<br>
+          Strada Nicolae Dimo 1/1, Chișinău
+        </div>
+      </div>
+    </div>
+  </div></section>
+
+  <section class="contacts" id="contacts"><div class="wrap">
+    <h2 class="h2">На Димо 1/1. Ищите тюльпан над входом.</h2>
+    <div class="grid">
+      <img src="assets/sign.webp" alt="Вывеска TULIP над входом в салон" width="1200" height="750" loading="lazy">
+      <div>
+        <p class="addr">Strada Nicolae Dimo 1/1<br>Rîșcani · Chișinău</p>
+        <p class="links">
+          <a href="tel:+37322441981">+373 22 44 19 81</a>
+          <a href="https://www.instagram.com/lilia_kotelya/">@lilia_kotelya</a>
+          <a href="https://yandex.com/maps/org/tulip/87872615435/">маршрут</a>
+        </p>
+      </div>
+    </div>
+  </div></section>
+</main>
+
+<footer><div class="wrap">
+  <span>TULIP · SCENA.LIFE · Chișinău</span>
+  <span>Стиль — это личное</span>
 </div></footer>
 
 <script>
 const SALON = 'tulip';
 const $ = (id) => document.getElementById(id);
-let state = { services: [], masters: [], slot: null };
+const state = { services: [], masters: [], slot: null, loading: false };
 
-function status(text, kind) {
-  const el = $('status'); el.textContent = text; el.className = 'status' + (kind ? ' ' + kind : '');
+function say(text, kind) {
+  const el = $('state');
+  el.textContent = text;
+  el.className = 'state' + (kind ? ' ' + kind : '');
 }
 
-async function loadServices() {
-  const r = await fetch('/api/booking/services?salon=' + SALON);
-  if (!r.ok) throw new Error('services');
-  return r.json();
-}
-
-function renderServices(data) {
-  state.services = data.services;
-  state.masters = data.masters;
-  $('services-grid').innerHTML = data.services.map((s, i) => `
-    <a class="service" href="#booking" data-service="${s.id}">
-      <div class="num">${String(i + 1).padStart(2, '0')}</div>
-      <h3>${s.title}</h3>
-      <p>${s.duration_min} минут · ${data.masters.filter(m => s.masters.includes(m.id)).map(m => m.name.split(' ')[0]).join(', ')}</p>
-      <div class="price">${(s.price_cents / 100).toFixed(0)} MDL</div>
-    </a>`).join('');
-
-  $('service').innerHTML = data.services.map(s => `<option value="${s.id}">${s.title}</option>`).join('');
-  syncMasters();
-
-  $('services-grid').addEventListener('click', (e) => {
-    const card = e.target.closest('[data-service]');
-    if (card) { $('service').value = card.dataset.service; syncMasters(); }
-  });
-}
-
-function syncMasters() {
-  const service = state.services.find(s => s.id === $('service').value);
-  const allowed = service ? service.masters : [];
-  const masters = state.masters.filter(m => allowed.includes(m.id));
-  $('master').innerHTML = masters.map(m => `<option value="${m.id}">${m.name}</option>`).join('')
-    || '<option value="">Нет мастеров</option>';
-  renderSlots();
-}
-
-function isoDay(offset) {
-  const d = new Date(); d.setDate(d.getDate() + offset);
+function dayOffset(offset) {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
   return d.toISOString().slice(0, 10);
 }
 
-async function renderSlots() {
+function renderDirections(data) {
+  $('rows').innerHTML = data.services.map((s) => {
+    const who = data.masters.filter((m) => s.masters.includes(m.id)).map((m) => m.name.split(' ')[0]).join(', ');
+    return `<button class="row" type="button" data-service="${s.id}">
+      <span><span class="row-title">${s.title}</span><span class="row-meta">${who}</span></span>
+      <span class="row-len">${s.duration_min} мин</span>
+      <span class="row-price">${(s.price_cents / 100).toFixed(0)} MDL</span>
+    </button>`;
+  }).join('');
+}
+
+function fillSelects() {
+  $('service').innerHTML = state.services.map((s) =>
+    `<option value="${s.id}">${s.title} · ${s.duration_min} мин</option>`).join('');
+  syncMasters();
+}
+
+function syncMasters() {
+  const service = state.services.find((s) => s.id === $('service').value);
+  const allowed = service ? service.masters : [];
+  const list = state.masters.filter((m) => allowed.includes(m.id));
+  $('master').innerHTML = list.length
+    ? list.map((m) => `<option value="${m.id}">${m.name}</option>`).join('')
+    : '<option value="">—</option>';
+  loadSlots();
+}
+
+async function loadSlots() {
   const master = $('master').value, service = $('service').value, date = $('date').value;
   state.slot = null;
-  if (!master || !service || !date) { $('slots').innerHTML = '<span class="status">Выберите дату</span>'; return; }
-  status('Смотрим свободное время…');
-  const r = await fetch(`/api/booking/slots?salon=${SALON}&master=${master}&service=${service}&date=${date}`);
-  const data = await r.json().catch(() => ({ slots: [] }));
-  const slots = data.slots || [];
-  $('slots').innerHTML = slots.length
-    ? slots.map(s => `<button type="button" class="slot" data-start="${s.start}">${s.label}</button>`).join('')
-    : '<span class="status">На этот день свободных окон нет</span>';
-  status('');
+  if (!master || !service || !date) {
+    $('slots').innerHTML = '<span class="state">Выберите дату</span>';
+    return;
+  }
+  $('slots').innerHTML = '<span class="state">Смотрим свободное время…</span>';
+  try {
+    const res = await fetch(`/api/booking/slots?salon=${SALON}&master=${master}&service=${service}&date=${date}`);
+    const data = await res.json();
+    const slots = data.slots || [];
+    $('slots').innerHTML = slots.length
+      ? slots.map((s) => `<button class="slot" type="button" data-start="${s.start}" aria-pressed="false">${s.label}</button>`).join('')
+      : '<span class="state">В этот день окон нет — попробуйте другую дату</span>';
+  } catch {
+    $('slots').innerHTML = '<span class="state bad">Не удалось загрузить время</span>';
+  }
 }
 
-function bind() {
-  $('service').addEventListener('change', syncMasters);
-  $('master').addEventListener('change', renderSlots);
-  $('date').addEventListener('change', renderSlots);
-  $('slots').addEventListener('click', (e) => {
-    const b = e.target.closest('.slot'); if (!b) return;
-    state.slot = Number(b.dataset.start);
-    [...$('slots').querySelectorAll('.slot')].forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-  });
+$('slots').addEventListener('click', (event) => {
+  const button = event.target.closest('.slot');
+  if (!button) return;
+  state.slot = Number(button.dataset.start);
+  [...$('slots').querySelectorAll('.slot')].forEach((el) =>
+    el.setAttribute('aria-pressed', String(el === button)));
+});
 
-  $('booking-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!state.slot) { status('Выберите время', 'err'); return; }
-    $('submit').disabled = true;
-    status('Отправляем…');
-    try {
-      const r = await fetch('/api/booking/request', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ salon: SALON, master: $('master').value, service: $('service').value,
-          start: state.slot, name: $('name').value.trim(), phone: $('phone').value.trim(),
-          source: 'tulip-landing' })
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || 'Не получилось');
-      status('Заявка отправлена. Мастер подтвердит её в Telegram.', 'ok');
-      $('booking-form').reset(); state.slot = null; $('slots').innerHTML = '';
-      $('date').value = isoDay(1);
-    } catch (err) {
-      status(err.message || 'Ошибка. Попробуйте ещё раз.', 'err');
-    } finally {
-      $('submit').disabled = false;
-    }
-  });
+$('rows').addEventListener('click', (event) => {
+  const row = event.target.closest('[data-service]');
+  if (!row) return;
+  $('service').value = row.dataset.service;
+  syncMasters();
+  $('booking').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
 
-  $('date').value = isoDay(1);
-  $('date').min = isoDay(0);
-}
+$('service').addEventListener('change', syncMasters);
+$('master').addEventListener('change', loadSlots);
+$('date').addEventListener('change', loadSlots);
+
+$('form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!state.slot) { say('Выберите время в списке', 'bad'); return; }
+  if (!$('name').value.trim() || $('phone').value.trim().length < 7) {
+    say('Нужны имя и телефон', 'bad'); return;
+  }
+  if (state.loading) return;
+  state.loading = true;
+  const submit = $('submit');
+  submit.disabled = true;
+  submit.textContent = 'Отправляем…';
+  say('');
+  try {
+    const res = await fetch('/api/booking/request', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        salon: SALON, master: $('master').value, service: $('service').value, start: state.slot,
+        name: $('name').value.trim(), phone: $('phone').value.trim(), source: 'tulip-template'
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Не получилось отправить');
+    say('Заявка ушла мастеру. Он подтвердит — придёт ответ.', 'ok');
+    $('form').reset();
+    $('date').value = dayOffset(1);
+    state.slot = null;
+    $('slots').innerHTML = '';
+    loadSlots();
+  } catch (error) {
+    say(error.message || 'Ошибка сети. Попробуйте ещё раз.', 'bad');
+  } finally {
+    state.loading = false;
+    submit.disabled = false;
+    submit.textContent = 'Отправить заявку';
+  }
+});
 
 (async () => {
   try {
-    const data = await loadServices();
-    renderServices(data); bind(); renderSlots();
-  } catch (e) {
-    status('Не удалось загрузить услуги. Обновите страницу.', 'err');
+    const res = await fetch('/api/booking/services?salon=' + SALON);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    state.services = data.services;
+    state.masters = data.masters;
+    renderDirections(data);
+    fillSelects();
+    $('date').min = dayOffset(0);
+    $('date').value = dayOffset(1);
+    loadSlots();
+  } catch {
+    say('Не удалось загрузить услуги — обновите страницу', 'bad');
   }
 })();
 </script>

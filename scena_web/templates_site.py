@@ -9,13 +9,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tornado.web import RequestHandler
+from tornado.web import RequestHandler, StaticFileHandler
 
 ROOT = Path(__file__).resolve().parents[1] / 'public' / 'templates'
 TEMPLATES = {'tulip'}
 CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
        "img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; "
        "form-action 'self'; frame-ancestors 'self'")
+
+
+class TemplateAsset(StaticFileHandler):
+    def set_extra_headers(self, path):
+        self.set_header('X-Content-Type-Options', 'nosniff')
+        self.set_header('X-Robots-Tag', 'noindex, follow')
+        self.set_header('Cache-Control', 'public, max-age=86400')
 
 
 class TemplatePage(RequestHandler):
@@ -46,4 +53,8 @@ class TemplatePage(RequestHandler):
 
 
 def template_routes():
-    return [(rf'/{name}/?', TemplatePage, {'name': name}) for name in sorted(TEMPLATES)]
+    routes = []
+    for name in sorted(TEMPLATES):
+        routes.append((rf'/{name}/?', TemplatePage, {'name': name}))
+        routes.append((rf'/{name}/assets/(.*)', TemplateAsset, {'path': str(ROOT / name / 'assets')}))
+    return routes
