@@ -70,6 +70,7 @@ class Config:
     bot: str = ''
     chat: str = ''
     key: str = ''
+    tg_secret: str = ''
     origin: str = 'https://scena.life'
 
     @classmethod
@@ -89,6 +90,7 @@ class Config:
             os.getenv('SCENA_INTAKE_TELEGRAM_BOT_TOKEN', ''),
             os.getenv('SCENA_INTAKE_TELEGRAM_CHAT_ID', ''),
             os.getenv('SCENA_BOOKING_KEY', ''),
+            os.getenv('SCENA_BOOKING_TG_SECRET', ''),
         )
 
 
@@ -321,23 +323,41 @@ def notification_text(result):
     return '\n'.join(lines)
 
 
-async def notify(text, chat_id=''):
-    """Send one notification through the platform bot; never raises."""
+async def tg_call(method, params):
+    """Call one Telegram Bot API method; never raises."""
     config = _config()
-    chat = chat_id or config.chat
-    if not config.bot or not chat:
+    if not config.bot:
         return False
     from tornado.httpclient import AsyncHTTPClient, HTTPRequest
     from urllib.parse import urlencode
-    body = urlencode({'chat_id': chat, 'text': text, 'disable_web_page_preview': 'true'})
-    request = HTTPRequest(f'https://api.telegram.org/bot{config.bot}/sendMessage', method='POST',
-                          body=body, headers={'Content-Type': 'application/x-www-form-urlencoded'},
+    request = HTTPRequest(f'https://api.telegram.org/bot{config.bot}/{method}', method='POST',
+                          body=urlencode(params),
+                          headers={'Content-Type': 'application/x-www-form-urlencoded'},
                           request_timeout=8)
     try:
         response = await AsyncHTTPClient().fetch(request)
         return response.code == 200
     except Exception:
         return False
+
+
+async def notify(text, chat_id='', markup=None):
+    """Send one notification through the platform bot; never raises."""
+    config = _config()
+    chat = chat_id or config.chat
+    if not config.bot or not chat:
+        return False
+    params = {'chat_id': chat, 'text': text, 'disable_web_page_preview': 'true'}
+    if markup:
+        params['reply_markup'] = json.dumps(markup, ensure_ascii=False)
+    return await tg_call('sendMessage', params)
+
+
+def action_markup(salon, booking_id):
+    return {'inline_keyboard': [[
+        {'text': 'Подтвердить', 'callback_data': f'ok:{salon}:{booking_id}'},
+        {'text': 'Отменить', 'callback_data': f'no:{salon}:{booking_id}'},
+    ]]} 
 
 
 # --- HTTP -------------------------------------------------------------------
@@ -404,7 +424,8 @@ class BookingRequest(RequestHandler):
         except ValueError:
             _fail(self, 400, 'Проверьте имя, телефон и время.')
             return
-        notified = await notify(notification_text(result), result.get('chat_id', ''))
+        notified = await notify(notification_text(result), result.get('chat_id', ''),
+                                action_markup(result['salon'], result['id']))
         _json(self, {'id': result['id'], 'status': result['status'], 'start': result['start'],
                      'end': result['end'], 'notified': notified}, 201)
 
@@ -443,6 +464,45 @@ class BookingStatus(RequestHandler):
         _json(self, {'ok': True})
 
 
+class BookingTelegram(RequestHandler):
+    """Accept / cancel a request straight from the Telegram message."""
+
+    async def post(self):
+        config = _config()
+        secret = self.request.headers.get('X-Telegram-Bot-Api-Secret-Token', '')
+        if not config.tg_secret or secret != config.tg_secret:
+            _fail(self, 403, 'Нет доступа.')
+            return
+        try:
+            update = json.loads(self.request.body or b'{}')
+        except ValueError:
+            _fail(self, 400, 'Некорректный JSON.')
+            return
+        query = update.get('callback_query') or {}
+        parts = (query.get('data') or '').split(':')
+        if len(parts) != 3:
+            self.finish({'ok': True})
+            return
+        action, salon, booking_id = parts
+        status = 'confirmed' if action == 'ok' else 'cancelled'
+        message = query.get('message') or {}
+        try:
+            set_status(_store(self), salon, booking_id, status)
+        except (LookupError, ValueError):
+            await tg_call('answerCallbackQuery', {'callback_query_id': query.get('id', ''),
+                                                  'text': 'Заявка не найдена'})
+            self.finish({'ok': True})
+            return
+        stamp = '✓ Подтверждено' if status == 'confirmed' else '✕ Отменено'
+        await tg_call('answerCallbackQuery', {'callback_query_id': query.get('id', ''), 'text': stamp})
+        await tg_call('editMessageText', {
+            'chat_id': (message.get('chat') or {}).get('id', ''),
+            'message_id': message.get('message_id', ''),
+            'text': (message.get('text') or '') + '\n\n' + stamp,
+        })
+        self.finish({'ok': True})
+
+
 class BookingSeed(RequestHandler):
     """Create the pilot tenant once; idempotent and key-protected."""
 
@@ -462,6 +522,7 @@ def booking_routes():
         (r'/api/booking/request', BookingRequest),
         (r'/api/booking/requests', BookingList),
         (r'/api/booking/status', BookingStatus),
+        (r'/api/booking/telegram', BookingTelegram),
         (r'/api/booking/seed', BookingSeed),
     ]
 
