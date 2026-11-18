@@ -25,8 +25,10 @@ ORIGIN = 'https://scena.life'
 @dataclass(frozen=True)
 class Tenant:
     brand: str
-    name: str
-    city: str
+    name_lat: str
+    name_ru: str
+    city_lat: str
+    city_ru: str
     host: str
     kind: str          # 'site' | 'card'
     status: str        # 'live' | 'demo'
@@ -37,13 +39,16 @@ class Tenant:
         return f'https://{self.host}/'
 
 
+# Tenants are separate brands; the only thing they share is the SCENA platform.
+# The live makeup project belongs to its own master, the demo site shows
+# fictional people, and no brand is borrowed from another site.
 TENANTS = (
-    Tenant('M|B Makeup Studio', 'Maria Cravcenco', 'Chișinău', 'makeup.scena.life', 'site', 'live',
-           'site_live'),
-    Tenant('M|B Makeup Studio', 'Maria Cravcenco', 'Chișinău', 'mbstudio.scena.life', 'site', 'demo',
-           'site_demo'),
-    Tenant('Sofi Leroux', 'Sofia Leroux', 'Chișinău', 'sofileroux.scena.life', 'card', 'demo',
-           'card_demo'),
+    Tenant('Makeup Studio Life', 'Masha Kravcenko', 'Маша Кравченко', 'Chișinău', 'Кишинёв',
+           'makeup.scena.life', 'site', 'live', 'site_live'),
+    Tenant('MB Studio', 'Milana Borzova', 'Милана Борзова', 'Chișinău', 'Кишинёв',
+           'mbstudio.scena.life', 'site', 'demo', 'site_demo'),
+    Tenant('Sofi Leroux', 'Sofia Leroux', 'София Леру', 'Chișinău', 'Кишинёв',
+           'sofileroux.scena.life', 'card', 'demo', 'card_demo'),
 )
 
 COPY = {
@@ -158,14 +163,17 @@ def _page_url(locale: str) -> str:
 
 def _card(tenant: Tenant, locale: str) -> str:
     c = COPY[locale]
+    ru = locale == 'ru'
     status_label = c['live'] if tenant.status == 'live' else c['demo']
     badge_class = 'badge live' if tenant.status == 'live' else 'badge'
     note = c['purpose'][tenant.purpose]
+    name = tenant.name_ru if ru else tenant.name_lat
+    city = tenant.city_ru if ru else tenant.city_lat
     return (
         '<a class="tenant" href="' + html.escape(tenant.url, quote=True) + '">'
         '<span class="brand">' + html.escape(tenant.brand) + '</span>'
-        '<span class="name">' + html.escape(tenant.name) + '</span>'
-        '<span class="meta">' + html.escape(tenant.city) + ' · ' + html.escape(note) + '</span>'
+        '<span class="name">' + html.escape(name) + '</span>'
+        '<span class="meta">' + html.escape(city) + ' · ' + html.escape(note) + '</span>'
         '<span class="row"><span class="host">' + html.escape(tenant.host) + '</span>'
         '<span class="' + badge_class + '">' + html.escape(status_label) + '</span></span>'
         '</a>'
