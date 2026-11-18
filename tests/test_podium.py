@@ -56,6 +56,25 @@ class PodiumRenderTest(unittest.TestCase):
         for path in ('/', '/ru/', '/newcard', '/podium/x'):
             self.assertIsNone(matcher.match(Request(path)), path)
 
+    def test_names_follow_locale(self):
+        ro = podium.render('ro').decode('utf-8')
+        ru = podium.render('ru').decode('utf-8')
+        self.assertIn('Masha Kravcenko', ro)
+        self.assertNotIn('Маша Кравченко', ro)
+        self.assertIn('Маша Кравченко', ru)
+        self.assertIn('Милана Борзова', ru)
+        self.assertIn('Кишинёв', ru)
+        self.assertNotIn('Кишинёв', ro)
+
+    def test_brands_are_independent(self):
+        for locale in ('ro', 'ru'):
+            html = podium.render(locale).decode('utf-8')
+            self.assertIn('Makeup Studio Life', html)
+            self.assertIn('MB Studio', html)
+            # No brand is borrowed from another site.
+            self.assertNotIn('M|B', html)
+            self.assertNotIn('Maria Cravcenco', html)
+
 
 if __name__ == '__main__':
     unittest.main()
