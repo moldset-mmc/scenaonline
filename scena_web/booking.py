@@ -74,9 +74,17 @@ class Config:
 
     @classmethod
     def from_env(cls):
+        # The booking store prefers its own credentials, then falls back to the
+        # Turso database the Vercel integration already provisions for the app.
+        database = (os.getenv('SCENA_BOOKING_TURSO_URL', '')
+                    or os.getenv('SCENA_TURSO_TURSO_DATABASE_URL', '')
+                    or os.getenv('SCENA_INTAKE_TURSO_DATABASE_URL', ''))
+        auth = (os.getenv('SCENA_BOOKING_TURSO_TOKEN', '')
+                or os.getenv('SCENA_TURSO_TURSO_AUTH_TOKEN', '')
+                or os.getenv('SCENA_INTAKE_TURSO_AUTH_TOKEN', ''))
         return cls(
-            os.getenv('SCENA_BOOKING_TURSO_URL', ''),
-            os.getenv('SCENA_BOOKING_TURSO_TOKEN', ''),
+            database,
+            auth,
             os.getenv('SCENA_BOOKING_DB_PATH', ''),
             os.getenv('SCENA_INTAKE_TELEGRAM_BOT_TOKEN', ''),
             os.getenv('SCENA_INTAKE_TELEGRAM_CHAT_ID', ''),
@@ -435,6 +443,18 @@ class BookingStatus(RequestHandler):
         _json(self, {'ok': True})
 
 
+class BookingSeed(RequestHandler):
+    """Create the pilot tenant once; idempotent and key-protected."""
+
+    def post(self):
+        key = _config().key
+        if not key or self.request.headers.get('X-Booking-Key', '') != key:
+            _fail(self, 403, 'Нет доступа.')
+            return
+        seed_tulip(_store(self), _config().chat)
+        _json(self, {'ok': True})
+
+
 def booking_routes():
     return [
         (r'/api/booking/services', BookingServices),
@@ -442,6 +462,7 @@ def booking_routes():
         (r'/api/booking/request', BookingRequest),
         (r'/api/booking/requests', BookingList),
         (r'/api/booking/status', BookingStatus),
+        (r'/api/booking/seed', BookingSeed),
     ]
 
 
